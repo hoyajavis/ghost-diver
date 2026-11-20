@@ -1,5 +1,4 @@
 import React from 'react';
-import { CombatActionBar, CombatActionBarProps } from './CombatActionBar';
 
 interface Props {
   choices?: string[];
@@ -9,7 +8,6 @@ interface Props {
   onSelectChoice: (choice: string) => void;
   onSubmitMultiSelect: () => void;
   disabled: boolean;
-  actionBarProps?: Omit<CombatActionBarProps, 'orientation'>;
 }
 
 export const MultipleChoiceInput: React.FC<Props> = ({
@@ -20,16 +18,10 @@ export const MultipleChoiceInput: React.FC<Props> = ({
   onSelectChoice,
   onSubmitMultiSelect,
   disabled,
-  actionBarProps,
 }) => {
   if (choices) {
     return (
       <div className="flex flex-col gap-2 mt-1">
-        {actionBarProps && (
-          <div className="flex justify-end">
-            <CombatActionBar {...actionBarProps} orientation="row" />
-          </div>
-        )}
         {choices.map((choice, idx) => {
           const letter = String.fromCharCode(65 + idx);
           return (
@@ -54,11 +46,6 @@ export const MultipleChoiceInput: React.FC<Props> = ({
   if (multiSelectOptions) {
     return (
       <div className="flex flex-col gap-2 mt-1">
-        {actionBarProps && (
-          <div className="flex justify-end">
-            <CombatActionBar {...actionBarProps} orientation="row" />
-          </div>
-        )}
         <div className="grid grid-cols-2 gap-2">
           {multiSelectOptions.map((option, idx) => {
             const isSelected = selectedOptions.includes(option);

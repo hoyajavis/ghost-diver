@@ -1,6 +1,6 @@
 import React from 'react';
 import { InputType } from '../../types';
-import { CombatActionBarProps } from './CombatActionBar';
+import { CombatActionBar, CombatActionBarProps } from './CombatActionBar';
 import { CoordinateInput } from './CoordinateInput';
 import { DefaultInput } from './DefaultInput';
 import { FractionInput } from './FractionInput';
@@ -42,72 +42,76 @@ export const ProblemInputRouter: React.FC<Props> = ({
   disabled,
   actionBarProps,
 }) => {
-  if (choices || multiSelectOptions) {
-    return (
-      <MultipleChoiceInput
-        choices={choices}
-        multiSelectOptions={multiSelectOptions}
-        selectedOptions={selectedOptions}
-        onToggleOption={onToggleOption}
-        onSelectChoice={(choice) => {
-          setInput(choice);
-          onSubmit(choice);
-        }}
-        onSubmitMultiSelect={() => onSubmit()}
-        disabled={disabled}
-        actionBarProps={actionBarProps}
-      />
-    );
-  }
+  const renderInputWidget = () => {
+    if (choices || multiSelectOptions) {
+      return (
+        <MultipleChoiceInput
+          choices={choices}
+          multiSelectOptions={multiSelectOptions}
+          selectedOptions={selectedOptions}
+          onToggleOption={onToggleOption}
+          onSelectChoice={(choice) => {
+            setInput(choice);
+            onSubmit(choice);
+          }}
+          onSubmitMultiSelect={() => onSubmit()}
+          disabled={disabled}
+        />
+      );
+    }
 
-  if (currentInputType === 'RELATIONSHIP') {
-    return (
-      <RelationshipInput
-        onSelect={(sym) => {
-          setInput(sym);
-          onSubmit(sym);
-        }}
-        disabled={disabled}
-        includeInclusive={includeInclusiveRelationship}
-        actionBarProps={actionBarProps}
-      />
-    );
-  }
+    if (currentInputType === 'RELATIONSHIP') {
+      return (
+        <RelationshipInput
+          onSelect={(sym) => {
+            setInput(sym);
+            onSubmit(sym);
+          }}
+          disabled={disabled}
+          includeInclusive={includeInclusiveRelationship}
+        />
+      );
+    }
 
-  if (currentInputType === 'FRACTION' || currentInputType === 'RATIO') {
-    return (
-      <FractionInput
-        type={currentInputType}
-        fractionInput={fractionInput}
-        fractionFocus={fractionFocus}
-        setFractionFocus={setFractionFocus}
-        setFractionInput={setFractionInput}
-        onSubmit={() => onSubmit()}
-        disabled={disabled}
-        actionBarProps={actionBarProps}
-      />
-    );
-  }
+    if (currentInputType === 'FRACTION' || currentInputType === 'RATIO') {
+      return (
+        <FractionInput
+          type={currentInputType}
+          fractionInput={fractionInput}
+          fractionFocus={fractionFocus}
+          setFractionFocus={setFractionFocus}
+          setFractionInput={setFractionInput}
+          onSubmit={() => onSubmit()}
+          disabled={disabled}
+        />
+      );
+    }
 
-  if (currentInputType === 'COORDINATE') {
+    if (currentInputType === 'COORDINATE') {
+      return (
+        <CoordinateInput
+          input={input}
+          setInput={setInput}
+          onSubmit={() => onSubmit()}
+        />
+      );
+    }
+
     return (
-      <CoordinateInput
+      <DefaultInput
         input={input}
         setInput={setInput}
+        currentInputType={currentInputType}
         onSubmit={() => onSubmit()}
-        actionBarProps={actionBarProps}
+        disabled={disabled}
       />
     );
-  }
+  };
 
   return (
-    <DefaultInput
-      input={input}
-      setInput={setInput}
-      currentInputType={currentInputType}
-      onSubmit={() => onSubmit()}
-      disabled={disabled}
-      actionBarProps={actionBarProps}
-    />
+    <div className="flex flex-col gap-2">
+      {actionBarProps && <CombatActionBar {...actionBarProps} orientation="row" />}
+      {renderInputWidget()}
+    </div>
   );
 };

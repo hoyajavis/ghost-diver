@@ -1,7 +1,6 @@
 import React from 'react';
 import { InputType } from '../../types';
 import { NumberPad } from '../NumberPad';
-import { CombatActionBar, CombatActionBarProps } from './CombatActionBar';
 
 interface Props {
   input: string;
@@ -9,7 +8,6 @@ interface Props {
   currentInputType: InputType;
   onSubmit: () => void;
   disabled?: boolean;
-  actionBarProps?: Omit<CombatActionBarProps, 'orientation'>;
 }
 
 export const DefaultInput: React.FC<Props> = ({
@@ -18,15 +16,13 @@ export const DefaultInput: React.FC<Props> = ({
   currentInputType,
   onSubmit,
   disabled = false,
-  actionBarProps,
 }) => {
   return (
     <>
-      <div className="flex gap-2">
-        <div className="flex-1 bg-gb-0 border-2 border-gb-3 p-1 text-xl text-center text-neon-cyan min-h-[40px] flex items-center justify-center gb-border-sm">
+      <div className="min-h-[92px] flex items-center">
+        <div className="w-full bg-gb-0 border-2 border-gb-3 p-2 text-2xl font-bold text-center text-neon-cyan min-h-[56px] flex items-center justify-center gb-border-sm">
           {input || <span className="opacity-30 animate-pulse">_</span>}
         </div>
-        {actionBarProps && <CombatActionBar {...actionBarProps} orientation="row" />}
       </div>
 
       <NumberPad

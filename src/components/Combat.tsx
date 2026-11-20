@@ -3,30 +3,39 @@ import { PlayerStats, Enemy, MathProblem } from '../types';
 import { generateProblem } from '../lib/mathEngine';
 import { ENEMY_TIERS } from '../lib/enemyData';
 import {
+  APEX_INTRO_MS,
   applyMeditationRecovery,
+  applyTacticalHint,
   calculateCombatReward,
-  calculateEnemyCounterDamage,
-  calculateFpGain,
-  calculatePlayerAttackDamage,
-  consumeHintPack,
+  canToggleDirectStrike,
+  CombatTurnState,
+  createCombatTurnState,
   formatMultiSelectAnswer,
+  getAtkUpStacks,
   getTotalHints,
+  isApexEnemy,
   MEDITATION_FP_COST,
+  PATROL_INTRO_MS,
+  PROBLEM_ADVANCE_MS,
+  resolveCorrectAttack,
+  resolveWrongAttack,
+  toggleStrikeMode,
 } from '../lib/combatLogic';
+import { getPatrolBaseHpForTier } from '../lib/dungeonLogic';
 import {
   getActiveChoices,
   getActiveMultiSelectOptions,
   getCurrentStep,
   getExpectedAnswer,
   getRequireSimplified,
-  hasProblemSteps,
   inferInputType,
 } from '../lib/inputUtils';
 import { validateAnswer } from '../lib/answerValidator';
 import { getScarName } from '../lib/scarData';
 import { recordProblemTelemetry } from '../lib/storage';
-import { ShieldAlert, Skull, Terminal, Zap, User, Settings, X, LogOut } from 'lucide-react';
+import { Shield, ShieldAlert, Skull, Zap, User, Settings, X, LogOut } from 'lucide-react';
 import { ProblemInputRouter } from './inputs/ProblemInputRouter';
+import { ProblemPromptCard } from './ProblemPromptCard';
 import { motion, AnimatePresence } from 'motion/react';
 import { useCombatInput } from '../hooks/useCombatInput';
 import { useSafeTimeout } from '../hooks/useSafeTimeout';
@@ -52,15 +61,27 @@ export const Combat: React.FC<Props> = ({
   onLose,
   onUpdateStats,
 }) => {
+  const isApex = isApexEnemy(enemy);
+  const isBossIntro = isApex || floor % 5 === 0;
+  const patrolBaseHp = getPatrolBaseHpForTier(tier);
+  const atkUpStacks = getAtkUpStacks(stats.runBuffs);
+
   const [currentEnemyHp, setCurrentEnemyHp] = useState(enemy.hp);
   const [problem, setProblem] = useState<MathProblem>(() => generateProblem(tier, 'ATTACK', enemy.variant));
+  const [mode, setMode] = useState<'ATTACK' | 'MEDITATION'>('ATTACK');
+  const [turn, setTurn] = useState<CombatTurnState>(() =>
+    createCombatTurnState({
+      problem,
+      mode: 'ATTACK',
+      isApex,
+      runBuffs: stats.runBuffs,
+    })
+  );
+  const [shieldActive, setShieldActive] = useState(false);
+  const [activeClue, setActiveClue] = useState<string | null>(null);
   const [input, setInput] = useState('');
   const [feedback, setFeedback] = useState<'IDLE' | 'CORRECT' | 'WRONG'>('IDLE');
-  const [mode, setMode] = useState<'ATTACK' | 'MEDITATION'>('ATTACK');
-  const [lastDamage, setLastDamage] = useState<number | null>(null);
-  const [lastExpectedAnswer, setLastExpectedAnswer] = useState<string | null>(null);
-  const [hintMissCount, setHintMissCount] = useState(0);
-  const [hintStepIndex, setHintStepIndex] = useState<number | null>(null);
+  const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const [isIntro, setIsIntro] = useState(true);
   const [isAttacking, setIsAttacking] = useState<'PLAYER' | 'ENEMY' | null>(null);
   const [showSystemMenu, setShowSystemMenu] = useState(false);
@@ -74,13 +95,29 @@ export const Combat: React.FC<Props> = ({
   const [fractionInput, setFractionInput] = useState({ num: '', den: '' });
   const [fractionFocus, setFractionFocus] = useState<'num' | 'den'>('num');
 
+  const resetInputs = () => {
+    setInput('');
+    setSelectedOptions([]);
+    setFractionInput({ num: '', den: '' });
+    setFractionFocus('num');
+  };
+
+  const skipIntro = () => {
+    if (!isIntro) return;
+    clearAllTimeouts();
+    setIsIntro(false);
+    problemStartTimeRef.current = Date.now();
+    hadWrongAttemptRef.current = false;
+  };
+
   useEffect(() => {
+    const introDelayMs = isBossIntro ? APEX_INTRO_MS : PATROL_INTRO_MS;
     scheduleTimeout(() => {
       setIsIntro(false);
       problemStartTimeRef.current = Date.now();
       hadWrongAttemptRef.current = false;
-    }, 1200);
-  }, [scheduleTimeout]);
+    }, introDelayMs);
+  }, [scheduleTimeout, isBossIntro]);
 
   const emitProblemTelemetry = (firstTryCorrect: boolean, activeMode: 'ATTACK' | 'MEDITATION') => {
     const solveMs = Math.max(0, Date.now() - problemStartTimeRef.current);
@@ -92,14 +129,14 @@ export const Combat: React.FC<Props> = ({
     });
   };
 
-  const isHintMode = hintStepIndex !== null;
-  const currentStep = getCurrentStep(problem, hintStepIndex);
-  const expectedAnswer = getExpectedAnswer(problem, hintStepIndex);
+  const activeStepIndex = turn.strikeMode === 'COMBO' ? turn.stepIndex : null;
+  const currentStep = getCurrentStep(problem, activeStepIndex);
+  const expectedAnswer = getExpectedAnswer(problem, activeStepIndex);
   const currentInputType = inferInputType(problem, currentStep);
-  const problemHasSteps = hasProblemSteps(problem);
   const activeChoices = getActiveChoices(problem, currentStep);
   const activeMultiSelectOptions = getActiveMultiSelectOptions(problem, currentStep);
   const requireSimplified = getRequireSimplified(problem, currentStep);
+  const directStrikeAvailable = canToggleDirectStrike({ problem, mode, turn });
   const includeInclusiveRelationship =
     expectedAnswer === '≤' ||
     expectedAnswer === '≥' ||
@@ -110,10 +147,43 @@ export const Combat: React.FC<Props> = ({
   const enemyDisplayName =
     ENEMY_TIERS[tier]?.variants[enemy.variant]?.fullName || enemy.type || `Sentinel T${tier}`;
 
+  const scheduleNextProblem = (
+    nextMode: 'ATTACK' | 'MEDITATION',
+    delayMs: number,
+    runBuffs: string[]
+  ) => {
+    scheduleTimeout(() => {
+      const nextProblem = generateProblem(tier, nextMode, enemy.variant);
+      setFeedback('IDLE');
+      setFeedbackMessage(null);
+      setIsAttacking(null);
+      setActiveClue(null);
+      setProblem(nextProblem);
+      setTurn(
+        createCombatTurnState({
+          problem: nextProblem,
+          mode: nextMode,
+          isApex,
+          runBuffs,
+        })
+      );
+      resetInputs();
+      problemStartTimeRef.current = Date.now();
+      hadWrongAttemptRef.current = false;
+    }, delayMs);
+  };
+
   const handleToggleOption = (option: string) => {
     setSelectedOptions((prev) =>
       prev.includes(option) ? prev.filter((o) => o !== option) : [...prev, option]
     );
+  };
+
+  const handleToggleDirectStrike = () => {
+    if (feedback !== 'IDLE' || isIntro || !directStrikeAvailable) return;
+    setTurn((prev) => toggleStrikeMode(problem, mode, prev));
+    setActiveClue(null);
+    resetInputs();
   };
 
   const handleSubmit = (overrideInput?: string) => {
@@ -143,149 +213,228 @@ export const Combat: React.FC<Props> = ({
       requireSimplified,
       isMultiSelect: Boolean(activeMultiSelectOptions),
     });
-    let nextMode: 'ATTACK' | 'MEDITATION' = mode;
 
     if (isCorrect) {
       setFeedback('CORRECT');
-      setLastExpectedAnswer(null);
-      setHintMissCount(0);
+
       if (mode === 'ATTACK') {
         setIsAttacking('PLAYER');
-        const stepCount = problemHasSteps ? problem.steps.length : 0;
-        const isFinalHintStep = isHintMode && problemHasSteps && hintStepIndex === problem.steps.length - 1;
-        const damage = calculatePlayerAttackDamage({
-          isHintMode,
-          stepCount,
-          isFinalHintStep,
-          enemyMaxHp: enemy.maxHp,
+        const res = resolveCorrectAttack({
+          problem,
+          turn,
           currentEnemyHp,
+          patrolBaseHp,
+          neuralScars: stats.neuralScars,
+          isApex,
           runBuffs: stats.runBuffs,
         });
 
-        setLastDamage(damage);
-        const newEnemyHp = Math.max(0, currentEnemyHp - damage);
-        setCurrentEnemyHp(newEnemyHp);
+        setCurrentEnemyHp(res.newEnemyHp);
+        setTurn(res.nextTurn);
+        setFeedbackMessage(
+          res.skippedFinalStepWithOverclock
+            ? `Overclock Surge: -${res.damage} INT · Apex Step Skipped`
+            : res.nextTurn.directStrikeUsedOnKill
+              ? `Direct Strike Kill: -${res.damage} INT (+50% Shards)`
+              : res.nextTurn.comboStreak >= 2
+                ? `${res.nextTurn.comboStreak}× Combo Hit: -${res.damage} INT`
+                : `Critical Hit: -${res.damage} INT`
+        );
 
         onUpdateStats({
           ...stats,
-          fp: Math.min(stats.maxFp, stats.fp + calculateFpGain(stats.neuralScars)),
+          fp: Math.min(stats.maxFp, stats.fp + res.fpGain),
         });
 
-        if (newEnemyHp <= 0) {
+        if (res.isVictory) {
           emitProblemTelemetry(!hadWrongAttemptRef.current, 'ATTACK');
           scheduleTimeout(() => {
-            setHintStepIndex(null);
-            onWin(calculateCombatReward(tier));
-          }, 1200);
+            onWin(
+              calculateCombatReward({
+                tier,
+                directStrikeBonus: res.nextTurn.directStrikeUsedOnKill,
+                runBuffs: stats.runBuffs,
+                isApex,
+              })
+            );
+          }, res.delayMs);
           return;
         }
 
-        if (isHintMode && problemHasSteps && hintStepIndex < problem.steps.length - 1) {
+        if (res.advanceToNextStep) {
           scheduleTimeout(() => {
             setFeedback('IDLE');
-            setInput('');
-            setFractionInput({ num: '', den: '' });
-            setFractionFocus('num');
-            setSelectedOptions([]);
-            setLastDamage(null);
+            setFeedbackMessage(null);
             setIsAttacking(null);
-            setHintMissCount(0);
-            setHintStepIndex(hintStepIndex + 1);
-          }, 800);
+            setActiveClue(null);
+            resetInputs();
+          }, res.delayMs);
           return;
         }
 
         emitProblemTelemetry(!hadWrongAttemptRef.current, 'ATTACK');
-      } else {
-        emitProblemTelemetry(!hadWrongAttemptRef.current, 'MEDITATION');
-        onUpdateStats(applyMeditationRecovery(stats));
-        nextMode = 'ATTACK';
-        setMode('ATTACK');
-      }
-    } else {
-      hadWrongAttemptRef.current = true;
-      setFeedback('WRONG');
-      setIsAttacking('ENEMY');
-      const damage = calculateEnemyCounterDamage(tier);
-      setLastDamage(damage);
-      setLastExpectedAnswer(expectedAnswer);
-      const newHp = Math.max(0, stats.hp - damage);
-      onUpdateStats({
-        ...stats,
-        hp: newHp,
-      });
-
-      if (newHp <= 0) {
-        emitProblemTelemetry(false, mode);
-        scheduleTimeout(onLose, 1200);
+        scheduleNextProblem('ATTACK', res.delayMs, stats.runBuffs);
         return;
       }
 
-      if (isHintMode) {
-        const nextMissCount = hintMissCount + 1;
-        setHintMissCount(nextMissCount);
-        scheduleTimeout(() => {
-          setFeedback('IDLE');
-          setInput('');
-          setFractionInput({ num: '', den: '' });
-          setFractionFocus('num');
-          setSelectedOptions([]);
-          setLastDamage(null);
-          setLastExpectedAnswer(null);
-          setIsAttacking(null);
-        }, nextMissCount >= 2 ? 1600 : 1000);
-        return;
-      }
-
-      emitProblemTelemetry(false, mode);
+      emitProblemTelemetry(!hadWrongAttemptRef.current, 'MEDITATION');
+      onUpdateStats(applyMeditationRecovery(stats));
+      setFeedbackMessage('System Recovery Complete');
+      setMode('ATTACK');
+      scheduleNextProblem('ATTACK', PROBLEM_ADVANCE_MS, stats.runBuffs);
+      return;
     }
 
-    scheduleTimeout(() => {
-      setFeedback('IDLE');
-      setInput('');
-      setFractionInput({ num: '', den: '' });
-      setFractionFocus('num');
-      setSelectedOptions([]);
-      setLastDamage(null);
-      setLastExpectedAnswer(null);
-      setHintMissCount(0);
-      setIsAttacking(null);
-      setHintStepIndex(null);
-      setProblem(generateProblem(tier, nextMode, enemy.variant));
-      problemStartTimeRef.current = Date.now();
-      hadWrongAttemptRef.current = false;
-    }, isCorrect ? 800 : 1800);
+    hadWrongAttemptRef.current = true;
+    setFeedback('WRONG');
+    setIsAttacking('ENEMY');
+
+    const res = resolveWrongAttack({
+      problem,
+      mode,
+      turn,
+      tier,
+      isApex,
+      currentPlayerHp: stats.hp,
+      shieldActive,
+    });
+
+    setShieldActive(res.nextShieldActive);
+    setTurn(res.nextTurn);
+    onUpdateStats({
+      ...stats,
+      hp: res.newPlayerHp,
+    });
+
+    const hitPrefix = res.shieldAbsorbed
+      ? 'Shield Absorbed Counter-Hit (0 HP)'
+      : `Counter Hit: -${res.damage} HP`;
+    const hitSuffix = res.fellBackToCombo
+      ? ' · Falling back to Combo Step 1'
+      : res.revealAnswer
+        ? turn.strikeMode === 'COMBO'
+          ? ` · Step Answer: ${expectedAnswer}`
+          : ` · Answer: ${expectedAnswer}`
+        : res.keepSameProblem
+          ? ' · Retry Step'
+          : '';
+    setFeedbackMessage(`${hitPrefix}${hitSuffix}`);
+
+    if (res.isDefeat) {
+      emitProblemTelemetry(false, mode);
+      scheduleTimeout(onLose, res.delayMs);
+      return;
+    }
+
+    if (res.keepSameProblem) {
+      scheduleTimeout(() => {
+        setFeedback('IDLE');
+        setFeedbackMessage(null);
+        setIsAttacking(null);
+        if (res.fellBackToCombo) {
+          setActiveClue(null);
+        }
+        resetInputs();
+      }, res.delayMs);
+      return;
+    }
+
+    emitProblemTelemetry(false, mode);
+    scheduleNextProblem(mode, res.delayMs, stats.runBuffs);
   };
 
   const handleMeditationClick = () => {
-    if (stats.fp >= MEDITATION_FP_COST && mode !== 'MEDITATION') {
+    if (stats.fp >= MEDITATION_FP_COST && mode !== 'MEDITATION' && feedback === 'IDLE' && !isIntro) {
       clearAllTimeouts();
+      const nextProblem = generateProblem(tier, 'MEDITATION', enemy.variant);
       setMode('MEDITATION');
-      setHintStepIndex(null);
-      setHintMissCount(0);
-      setLastExpectedAnswer(null);
+      setProblem(nextProblem);
+      setTurn(
+        createCombatTurnState({
+          problem: nextProblem,
+          mode: 'MEDITATION',
+          isApex,
+          runBuffs: stats.runBuffs,
+        })
+      );
+      setActiveClue(null);
       setFeedback('IDLE');
-      setProblem(generateProblem(tier, 'MEDITATION', enemy.variant));
+      setFeedbackMessage(null);
       problemStartTimeRef.current = Date.now();
       hadWrongAttemptRef.current = false;
-      setInput('');
-      setFractionInput({ num: '', den: '' });
-      setFractionFocus('num');
-      setSelectedOptions([]);
+      resetInputs();
     }
   };
 
   const handleHintClick = () => {
-    if (totalHints > 0 && hintStepIndex === null && problemHasSteps) {
-      onUpdateStats(consumeHintPack(stats));
-      setHintStepIndex(0);
-      setHintMissCount(0);
-      setLastExpectedAnswer(null);
-      setInput('');
-      setFractionInput({ num: '', den: '' });
-      setFractionFocus('num');
-      setSelectedOptions([]);
+    if (totalHints <= 0 || mode !== 'ATTACK' || feedback !== 'IDLE' || isIntro) return;
+
+    const hintResult = applyTacticalHint({
+      stats,
+      problem,
+      turn,
+      currentEnemyHp,
+      patrolBaseHp,
+      isApex,
+      shieldActive,
+    });
+
+    const statsAfterHint = hintResult.nextStats;
+    setShieldActive(hintResult.nextShieldActive);
+    if (hintResult.clueText) {
+      setActiveClue(hintResult.clueText);
     }
+
+    if (hintResult.autoCompletedStep && hintResult.attackResolution) {
+      const res = hintResult.attackResolution;
+      setFeedback('CORRECT');
+      setIsAttacking('PLAYER');
+      setCurrentEnemyHp(res.newEnemyHp);
+      setTurn(res.nextTurn);
+      setFeedbackMessage(
+        res.skippedFinalStepWithOverclock
+          ? `Tactical Breach + Overclock Skip: -${res.damage} INT · Shield Armed`
+          : `Tactical Breach: -${res.damage} INT · Shield Armed`
+      );
+
+      onUpdateStats({
+        ...statsAfterHint,
+        fp: Math.min(statsAfterHint.maxFp, statsAfterHint.fp + res.fpGain),
+      });
+
+      if (res.isVictory) {
+        emitProblemTelemetry(!hadWrongAttemptRef.current, 'ATTACK');
+        scheduleTimeout(() => {
+          onWin(
+            calculateCombatReward({
+              tier,
+              directStrikeBonus: res.nextTurn.directStrikeUsedOnKill,
+              runBuffs: statsAfterHint.runBuffs,
+              isApex,
+            })
+          );
+        }, res.delayMs);
+        return;
+      }
+
+      if (res.advanceToNextStep) {
+        scheduleTimeout(() => {
+          setFeedback('IDLE');
+          setFeedbackMessage(null);
+          setIsAttacking(null);
+          setActiveClue(null);
+          resetInputs();
+        }, res.delayMs);
+        return;
+      }
+
+      emitProblemTelemetry(!hadWrongAttemptRef.current, 'ATTACK');
+      scheduleNextProblem('ATTACK', res.delayMs, statsAfterHint.runBuffs);
+      return;
+    }
+
+    onUpdateStats(statsAfterHint);
+    setFeedbackMessage('Tactical Shield Armed · Next Counter-Hit Blocked');
   };
 
   useCombatInput({
@@ -293,6 +442,10 @@ export const Combat: React.FC<Props> = ({
     setShowSystemMenu,
     feedback,
     isIntro,
+    onSkipIntro: skipIntro,
+    onToggleDirectStrike: directStrikeAvailable ? handleToggleDirectStrike : undefined,
+    onTacticalHint: handleHintClick,
+    onMeditation: handleMeditationClick,
     activeChoices,
     activeMultiSelectOptions,
     onToggleOption: handleToggleOption,
@@ -309,8 +462,10 @@ export const Combat: React.FC<Props> = ({
     onHintClick: handleHintClick,
     onMeditationClick: handleMeditationClick,
     totalHints,
-    hintDisabled: totalHints <= 0 || hintStepIndex !== null || !problemHasSteps || mode === 'MEDITATION',
-    meditationDisabled: stats.fp < MEDITATION_FP_COST || mode === 'MEDITATION',
+    hintDisabled: totalHints <= 0 || mode !== 'ATTACK' || feedback !== 'IDLE' || isIntro,
+    meditationDisabled:
+      stats.fp < MEDITATION_FP_COST || mode === 'MEDITATION' || feedback !== 'IDLE' || isIntro,
+    shieldActive,
   };
 
   return (
@@ -321,14 +476,21 @@ export const Combat: React.FC<Props> = ({
             initial={{ opacity: 0, scale: 1.3 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 1.5 }}
-            className="absolute inset-0 z-[100] flex items-center justify-center bg-gb-0/90 backdrop-blur-sm p-4"
+            onClick={skipIntro}
+            role="button"
+            tabIndex={0}
+            aria-label="Skip battle intro"
+            className="absolute inset-0 z-[100] flex items-center justify-center bg-gb-0/90 backdrop-blur-sm p-4 cursor-pointer"
           >
             <div className="text-center">
               <div className="text-4xl md:text-6xl font-bold text-neon-cyan mb-2 tracking-tight italic uppercase">
-                Battle Start
+                {isBossIntro ? 'Apex Encounter' : 'Battle Start'}
               </div>
               <div className="text-base md:text-xl text-gb-2 tracking-widest uppercase">
                 {enemyDisplayName}
+              </div>
+              <div className="text-xs text-gb-2/70 mt-3 uppercase tracking-wider">
+                Tap or press Enter to engage
               </div>
             </div>
           </motion.div>
@@ -422,9 +584,9 @@ export const Combat: React.FC<Props> = ({
                     <Zap className="w-4 h-4" />
                     Active Buffs
                   </div>
-                  {stats.runBuffs.length > 0 ? (
+                  {atkUpStacks > 0 ? (
                     <div className="text-xs font-bold text-neon-cyan">
-                      Neural Overclock (+{stats.runBuffs.length * 10}% Attack)
+                      Neural Overclock (+{atkUpStacks * 15}% Shards · Apex Step-Skip)
                     </div>
                   ) : (
                     <div className="text-xs text-gb-2">None</div>
@@ -467,10 +629,22 @@ export const Combat: React.FC<Props> = ({
               className="flex flex-col items-center gap-2"
             >
               <div className="relative">
-                <div className="w-16 h-16 lg:w-20 lg:h-20 bg-gb-0 border-2 border-gb-3 rounded-lg flex items-center justify-center gb-border overflow-hidden">
+                <div
+                  className={`w-16 h-16 lg:w-20 lg:h-20 bg-gb-0 border-2 ${
+                    shieldActive ? 'border-neon-cyan shadow-[0_0_12px_rgba(34,211,238,0.45)]' : 'border-gb-3'
+                  } rounded-lg flex items-center justify-center gb-border overflow-hidden transition-all`}
+                >
                   <User className="w-9 h-9 lg:w-11 lg:h-11 text-neon-cyan" />
                   <div className="absolute inset-0 bg-neon-cyan/10 pointer-events-none" />
                 </div>
+                {shieldActive && (
+                  <div
+                    aria-label="Tactical Shield active"
+                    className="absolute -top-2 -right-2 px-1 py-0.5 bg-gb-0 border border-neon-cyan text-neon-cyan text-[10px] font-black flex items-center gap-0.5"
+                  >
+                    <Shield className="w-3 h-3" />
+                  </div>
+                )}
                 {isAttacking === 'ENEMY' && feedback === 'WRONG' && (
                   <motion.div
                     initial={{ opacity: 0 }}
@@ -573,7 +747,7 @@ export const Combat: React.FC<Props> = ({
                   exit={{ y: -8, opacity: 0 }}
                   className="text-neon-cyan font-bold text-xs sm:text-sm text-center"
                 >
-                  {mode === 'ATTACK' ? `Critical Hit: -${lastDamage} INT` : 'System Recovery Complete'}
+                  {feedbackMessage ?? 'Critical Hit'}
                 </motion.div>
               )}
               {feedback === 'WRONG' && (
@@ -584,13 +758,7 @@ export const Combat: React.FC<Props> = ({
                   exit={{ y: -8, opacity: 0 }}
                   className="text-neon-magenta font-bold text-xs sm:text-sm text-center"
                 >
-                  {!isHintMode && lastExpectedAnswer
-                    ? `Counter Hit: -${lastDamage} HP · Answer: ${lastExpectedAnswer}`
-                    : isHintMode && hintMissCount >= 2 && lastExpectedAnswer
-                      ? `Counter Hit: -${lastDamage} HP · Step Answer: ${lastExpectedAnswer}`
-                      : isHintMode
-                        ? `Counter Hit: -${lastDamage} HP · Retry Step`
-                        : `Counter Hit: -${lastDamage} HP`}
+                  {feedbackMessage ?? 'Counter Hit'}
                 </motion.div>
               )}
               {feedback === 'IDLE' && !isIntro && (
@@ -600,7 +768,7 @@ export const Combat: React.FC<Props> = ({
                   animate={{ opacity: 1 }}
                   className="text-gb-2 text-xs text-center"
                 >
-                  Solve the problem to breach Sentinel shields.
+                  {feedbackMessage ?? 'Solve the problem to breach Sentinel shields.'}
                 </motion.div>
               )}
             </AnimatePresence>
@@ -610,27 +778,43 @@ export const Combat: React.FC<Props> = ({
         {/* Right / Bottom: Scrollable Problem & Input Terminal */}
         <div className="lg:col-span-6 flex-1 min-h-0 overflow-y-auto custom-scrollbar p-3 lg:p-6 bg-gb-1 border-t-2 lg:border-t-0 border-gb-3 dither flex flex-col justify-start lg:justify-center">
           <div className="w-full max-w-md mx-auto flex flex-col gap-3">
-            <div className="flex flex-col gap-1.5">
-              <div className="flex justify-between items-center text-xs text-gb-2 font-bold">
-                <div className="flex items-center gap-1.5">
-                  <Terminal className="w-3.5 h-3.5" />
-                  <span>{mode === 'ATTACK' ? 'Cipher Attack' : 'Meditation Recovery'}</span>
-                </div>
-                {hintStepIndex !== null && problemHasSteps && (
-                  <span className="text-neon-cyan tabular-nums">
-                    Hint Step {hintStepIndex + 1} / {problem.steps.length}
-                  </span>
-                )}
-              </div>
-              <div className="bg-gb-0 p-3 gb-border text-center relative">
-                <div className="text-lg sm:text-xl font-bold text-gb-3 tracking-tight leading-snug">
-                  {currentStep ? currentStep.prompt : problem.question}
-                </div>
-                {stats.neuralScars.includes('THE_BLUR') && (
-                  <div className="absolute inset-0 backdrop-blur-[1.5px] pointer-events-none" />
-                )}
-              </div>
-            </div>
+            <ProblemPromptCard
+              problem={problem}
+              modeLabel={mode === 'ATTACK' ? 'Cipher Attack' : 'Meditation Recovery'}
+              strikeMode={turn.strikeMode}
+              stepIndex={activeStepIndex}
+              effectiveStepCount={turn.effectiveStepCount}
+              comboStreak={turn.comboStreak}
+              solvedBreadcrumbs={turn.solvedBreadcrumbs}
+              activeClue={activeClue}
+              isBlurred={stats.neuralScars.includes('THE_BLUR')}
+              feedback={feedback}
+              accent="cyan"
+            />
+
+            {directStrikeAvailable && (
+              <button
+                type="button"
+                disabled={feedback !== 'IDLE' || isIntro}
+                onClick={handleToggleDirectStrike}
+                aria-pressed={turn.strikeMode === 'DIRECT'}
+                className={`w-full min-h-10 px-3 py-1.5 border text-xs font-bold uppercase tracking-wide flex items-center justify-center gap-2 transition-colors disabled:opacity-40 ${
+                  turn.strikeMode === 'DIRECT'
+                    ? 'bg-amber-400/20 border-amber-400 text-amber-200 hover:bg-amber-400/30'
+                    : 'bg-gb-0 border-amber-400/60 text-amber-300 hover:bg-amber-400/15'
+                }`}
+              >
+                <Zap className="w-3.5 h-3.5 shrink-0" />
+                <span>
+                  {turn.strikeMode === 'DIRECT'
+                    ? 'Direct Strike ARMED · 1-Shot · +50% Shards · Click for Combo'
+                    : 'Direct Strike · 1-Shot · +50% Shards'}
+                </span>
+                <kbd className="hidden sm:inline-block px-1 py-0.5 text-[10px] font-mono border border-current/40 opacity-80 leading-none">
+                  ⇧D
+                </kbd>
+              </button>
+            )}
 
             <ProblemInputRouter
               choices={activeChoices}

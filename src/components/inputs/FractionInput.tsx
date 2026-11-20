@@ -1,6 +1,5 @@
 import React from 'react';
 import { NumberPad } from '../NumberPad';
-import { CombatActionBar, CombatActionBarProps } from './CombatActionBar';
 
 interface Props {
   type: 'FRACTION' | 'RATIO';
@@ -10,7 +9,6 @@ interface Props {
   setFractionInput: React.Dispatch<React.SetStateAction<{ num: string; den: string }>>;
   onSubmit: () => void;
   disabled?: boolean;
-  actionBarProps?: Omit<CombatActionBarProps, 'orientation'>;
 }
 
 export const FractionInput: React.FC<Props> = ({
@@ -21,11 +19,18 @@ export const FractionInput: React.FC<Props> = ({
   setFractionInput,
   onSubmit,
   disabled = false,
-  actionBarProps,
 }) => {
+  const handlePadSubmit = () => {
+    if (fractionFocus === 'num' && fractionInput.num.length > 0 && fractionInput.den.length === 0) {
+      setFractionFocus('den');
+      return;
+    }
+    onSubmit();
+  };
+
   return (
     <>
-      <div className="flex gap-2">
+      <div className="min-h-[92px] flex items-center gap-2">
         <div className={`flex-1 flex ${type === 'RATIO' ? 'flex-row' : 'flex-col'} items-center justify-center gap-1`}>
           <div
             onClick={() => !disabled && setFractionFocus('num')}
@@ -50,17 +55,16 @@ export const FractionInput: React.FC<Props> = ({
             type="button"
             disabled={disabled}
             onClick={() => setFractionFocus((prev) => (prev === 'num' ? 'den' : 'num'))}
-            className="w-10 h-10 bg-gb-0 border border-gb-3 flex items-center justify-center hover:bg-gb-2 hover:text-gb-0 transition-colors text-[10px] font-bold disabled:opacity-40"
+            className="min-w-11 min-h-11 px-2 bg-gb-0 border border-gb-3 flex items-center justify-center hover:bg-gb-2 hover:text-gb-0 transition-colors text-[10px] font-bold disabled:opacity-40"
           >
             SWAP
           </button>
-          {actionBarProps && <CombatActionBar {...actionBarProps} orientation="column" />}
         </div>
       </div>
       <NumberPad
         onKeyPress={(k) => setFractionInput((prev) => ({ ...prev, [fractionFocus]: prev[fractionFocus] + k }))}
         onDelete={() => setFractionInput((prev) => ({ ...prev, [fractionFocus]: prev[fractionFocus].slice(0, -1) }))}
-        onSubmit={onSubmit}
+        onSubmit={handlePadSubmit}
         allowDecimal={false}
         allowNegative={type === 'FRACTION'}
         disabled={disabled}

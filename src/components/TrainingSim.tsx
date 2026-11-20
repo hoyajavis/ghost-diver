@@ -1,8 +1,14 @@
 import React, { useState, useRef } from 'react';
-import { MathProblem } from '../types';
+import { MathProblem, SolvedBreadcrumb, StrikeMode } from '../types';
 import { generateProblem } from '../lib/mathEngine';
 import { ENEMY_TIERS } from '../lib/enemyData';
-import { formatMultiSelectAnswer } from '../lib/combatLogic';
+import {
+  COMBO_STEP_ADVANCE_MS,
+  formatMultiSelectAnswer,
+  MISS_RETRY_MS,
+  MISS_REVEAL_MS,
+  PROBLEM_ADVANCE_MS,
+} from '../lib/combatLogic';
 import {
   getActiveChoices,
   getActiveMultiSelectOptions,
@@ -17,12 +23,17 @@ import { recordProblemTelemetry } from '../lib/storage';
 import { useCombatInput } from '../hooks/useCombatInput';
 import { useSafeTimeout } from '../hooks/useSafeTimeout';
 import { ProblemInputRouter } from './inputs/ProblemInputRouter';
-import { BrainCircuit, X, ChevronRight } from 'lucide-react';
+import { ProblemPromptCard } from './ProblemPromptCard';
+import { BrainCircuit, X, ChevronRight, Lightbulb, Zap } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface Props {
   variantId: string;
   onClose: () => void;
+}
+
+function getDefaultStrikeMode(problem: MathProblem): StrikeMode {
+  return problem.complexity === 'COMBO' && hasProblemSteps(problem) ? 'COMBO' : 'DIRECT';
 }
 
 export const TrainingSim: React.FC<Props> = ({ variantId, onClose }) => {
@@ -31,7 +42,11 @@ export const TrainingSim: React.FC<Props> = ({ variantId, onClose }) => {
   const variant = parseInt(variantStr, 10) as 1 | 2 | 3 | 4 | 5;
 
   const [problem, setProblem] = useState<MathProblem>(() => generateProblem(tier, 'ATTACK', variant));
-  const [hintStepIndex, setHintStepIndex] = useState<number>(0);
+  const [strikeMode, setStrikeMode] = useState<StrikeMode>(() => getDefaultStrikeMode(problem));
+  const [stepIndex, setStepIndex] = useState<number>(0);
+  const [comboStreak, setComboStreak] = useState<number>(0);
+  const [solvedBreadcrumbs, setSolvedBreadcrumbs] = useState<SolvedBreadcrumb[]>([]);
+  const [showClue, setShowClue] = useState<boolean>(false);
   const [input, setInput] = useState('');
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   const [fractionInput, setFractionInput] = useState({ num: '', den: '' });
@@ -50,20 +65,9 @@ export const TrainingSim: React.FC<Props> = ({ variantId, onClose }) => {
     setFractionFocus('num');
   };
 
-  const handleNextProblem = () => {
-    clearAllTimeouts();
-    setProblem(generateProblem(tier, 'ATTACK', variant));
-    problemStartTimeRef.current = Date.now();
-    hadWrongAttemptRef.current = false;
-    setHintStepIndex(0);
-    setStepMissCount(0);
-    resetInputs();
-    setFeedback('IDLE');
-    setIsComplete(false);
-  };
-
   const problemHasSteps = hasProblemSteps(problem);
-  const activeStepIndex = problemHasSteps ? hintStepIndex : null;
+  const supportsModeToggle = problem.complexity === 'COMBO' && problemHasSteps;
+  const activeStepIndex = strikeMode === 'COMBO' && problemHasSteps ? stepIndex : null;
   const currentStep = getCurrentStep(problem, activeStepIndex);
   const expectedAnswer = getExpectedAnswer(problem, activeStepIndex);
   const currentInputType = inferInputType(problem, currentStep);
@@ -75,6 +79,50 @@ export const TrainingSim: React.FC<Props> = ({ variantId, onClose }) => {
     expectedAnswer === '≥' ||
     problem.question.includes('≤') ||
     problem.question.includes('≥');
+
+  const availableClue =
+    currentStep?.clue ?? (problemHasSteps ? problem.steps[0]?.clue ?? null : null);
+
+  const applyStrikeMode = (nextMode: StrikeMode) => {
+    if (!supportsModeToggle || feedback !== 'IDLE' || isComplete) return;
+    if (nextMode === strikeMode) return;
+    clearAllTimeouts();
+    setStrikeMode(nextMode);
+    setStepIndex(0);
+    setComboStreak(0);
+    setSolvedBreadcrumbs([]);
+    setStepMissCount(0);
+    setShowClue(false);
+    resetInputs();
+    setFeedback('IDLE');
+  };
+
+  const handleToggleStrikeMode = () => {
+    if (!supportsModeToggle || feedback !== 'IDLE' || isComplete) return;
+    applyStrikeMode(strikeMode === 'COMBO' ? 'DIRECT' : 'COMBO');
+  };
+
+  const handleToggleClue = () => {
+    if (!availableClue || isComplete) return;
+    setShowClue((prev) => !prev);
+  };
+
+  const handleNextProblem = () => {
+    clearAllTimeouts();
+    const nextProblem = generateProblem(tier, 'ATTACK', variant);
+    setProblem(nextProblem);
+    setStrikeMode(getDefaultStrikeMode(nextProblem));
+    problemStartTimeRef.current = Date.now();
+    hadWrongAttemptRef.current = false;
+    setStepIndex(0);
+    setComboStreak(0);
+    setSolvedBreadcrumbs([]);
+    setShowClue(false);
+    setStepMissCount(0);
+    resetInputs();
+    setFeedback('IDLE');
+    setIsComplete(false);
+  };
 
   const handleToggleOption = (option: string) => {
     setSelectedOptions((prev) =>
@@ -112,8 +160,22 @@ export const TrainingSim: React.FC<Props> = ({ variantId, onClose }) => {
     if (isCorrect) {
       setFeedback('CORRECT');
       setStepMissCount(0);
+      setComboStreak((prev) => prev + 1);
 
-      const isFinalStep = !(problemHasSteps && hintStepIndex < problem.steps.length - 1);
+      const isComboMode = strikeMode === 'COMBO' && problemHasSteps;
+      const isFinalStep = !(isComboMode && stepIndex < problem.steps.length - 1);
+
+      if (isComboMode && currentStep) {
+        setSolvedBreadcrumbs((prev) => [
+          ...prev,
+          {
+            stepIndex,
+            label: currentStep.resultLabel ?? String(currentStep.answer),
+            answer: String(currentStep.answer),
+          },
+        ]);
+      }
+
       if (isFinalStep) {
         recordProblemTelemetry({
           tierVariant: variantId,
@@ -124,22 +186,24 @@ export const TrainingSim: React.FC<Props> = ({ variantId, onClose }) => {
 
       scheduleTimeout(() => {
         if (!isFinalStep) {
-          setHintStepIndex(hintStepIndex + 1);
+          setStepIndex((prev) => prev + 1);
+          setShowClue(false);
           resetInputs();
           setFeedback('IDLE');
         } else {
           setIsComplete(true);
         }
-      }, 800);
+      }, isFinalStep ? PROBLEM_ADVANCE_MS : COMBO_STEP_ADVANCE_MS);
     } else {
       hadWrongAttemptRef.current = true;
       const nextMissCount = stepMissCount + 1;
       setStepMissCount(nextMissCount);
+      setComboStreak(0);
       setFeedback('WRONG');
       scheduleTimeout(() => {
         resetInputs();
         setFeedback('IDLE');
-      }, nextMissCount >= 2 ? 1500 : 900);
+      }, nextMissCount >= 2 ? MISS_REVEAL_MS : MISS_RETRY_MS);
     }
   };
 
@@ -153,6 +217,8 @@ export const TrainingSim: React.FC<Props> = ({ variantId, onClose }) => {
     },
     feedback,
     isIntro: isComplete,
+    onToggleDirectStrike: supportsModeToggle ? handleToggleStrikeMode : undefined,
+    onTacticalHint: availableClue ? handleToggleClue : undefined,
     activeChoices,
     activeMultiSelectOptions,
     onToggleOption: handleToggleOption,
@@ -176,7 +242,7 @@ export const TrainingSim: React.FC<Props> = ({ variantId, onClose }) => {
       className="absolute inset-0 z-50 bg-gb-0/95 backdrop-blur-sm flex flex-col items-center justify-center p-4 font-mono"
     >
       <div className="w-full max-w-md max-h-[92vh] overflow-y-auto custom-scrollbar bg-gb-1 border-2 border-purple-400 p-5 shadow-[0_0_30px_rgba(168,85,247,0.3)]">
-        <div className="flex justify-between items-center mb-5 border-b border-purple-400/30 pb-3 gap-2">
+        <div className="flex justify-between items-center mb-4 border-b border-purple-400/30 pb-3 gap-2">
           <div className="flex items-center gap-2 text-purple-300 min-w-0">
             <BrainCircuit className="w-5 h-5 shrink-0" />
             <h2 id="training-sim-title" className="text-base font-black italic tracking-tight uppercase truncate">
@@ -197,34 +263,90 @@ export const TrainingSim: React.FC<Props> = ({ variantId, onClose }) => {
         </div>
 
         {!isComplete ? (
-          <div className="space-y-4">
-            <div className="text-center space-y-2">
-              <div className="text-xs text-purple-300 uppercase tracking-wider font-bold tabular-nums">
-                Guided Step {hintStepIndex + 1} of {problemHasSteps ? problem.steps.length : 1}
-              </div>
-              <div
-                className={`bg-gb-0 p-4 border text-lg sm:text-xl font-bold tracking-tight transition-colors ${
-                  feedback === 'CORRECT'
-                    ? 'border-neon-green text-neon-green'
-                    : feedback === 'WRONG'
-                      ? 'border-neon-magenta text-neon-magenta'
-                      : 'border-gb-3 text-gb-3'
-                }`}
-              >
-                {currentStep ? currentStep.prompt : problem.question}
-              </div>
-              <div aria-live="polite" className="min-h-[20px] text-xs font-bold uppercase tracking-wider">
-                {feedback === 'CORRECT' && (
-                  <span className="text-neon-green">Step Verified</span>
+          <div className="space-y-3">
+            {/* Untimed Mode Toggle & Clue Controls */}
+            {(supportsModeToggle || availableClue) && (
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                {supportsModeToggle && (
+                  <div
+                    role="group"
+                    aria-label="Practice strike mode"
+                    className="inline-flex border border-purple-400/50 bg-gb-0 text-xs font-bold"
+                  >
+                    <button
+                      type="button"
+                      disabled={feedback !== 'IDLE'}
+                      onClick={() => applyStrikeMode('COMBO')}
+                      className={`px-2.5 py-1.5 transition-colors disabled:opacity-40 ${
+                        strikeMode === 'COMBO'
+                          ? 'bg-purple-500 text-gb-0'
+                          : 'text-gb-2 hover:text-gb-3'
+                      }`}
+                    >
+                      Combo Chain
+                    </button>
+                    <button
+                      type="button"
+                      disabled={feedback !== 'IDLE'}
+                      onClick={() => applyStrikeMode('DIRECT')}
+                      className={`px-2.5 py-1.5 flex items-center gap-1 transition-colors disabled:opacity-40 ${
+                        strikeMode === 'DIRECT'
+                          ? 'bg-amber-400 text-gb-0'
+                          : 'text-gb-2 hover:text-gb-3'
+                      }`}
+                    >
+                      <Zap className="w-3 h-3" />
+                      Direct Strike
+                      <kbd className="hidden sm:inline-block px-1 text-[10px] border border-current/40 opacity-75">
+                        ⇧D
+                      </kbd>
+                    </button>
+                  </div>
                 )}
-                {feedback === 'WRONG' && (
-                  <span className="text-neon-magenta">
-                    {stepMissCount >= 2
-                      ? `Incorrect · Expected: ${expectedAnswer}`
-                      : 'Incorrect · Try Again'}
-                  </span>
+
+                {availableClue && (
+                  <button
+                    type="button"
+                    onClick={handleToggleClue}
+                    aria-pressed={showClue}
+                    className={`px-2.5 py-1.5 border text-xs font-bold flex items-center gap-1 transition-colors ${
+                      showClue
+                        ? 'border-amber-400 bg-amber-400/20 text-amber-200'
+                        : 'border-gb-3 bg-gb-0 text-gb-2 hover:text-amber-200 hover:border-amber-400/60'
+                    }`}
+                  >
+                    <Lightbulb className="w-3.5 h-3.5" />
+                    {showClue ? 'Hide Clue' : 'Clue'}
+                  </button>
                 )}
               </div>
+            )}
+
+            <ProblemPromptCard
+              problem={problem}
+              modeLabel="Training Sim"
+              strikeMode={strikeMode}
+              stepIndex={activeStepIndex}
+              comboStreak={comboStreak}
+              solvedBreadcrumbs={solvedBreadcrumbs}
+              activeClue={showClue ? availableClue : null}
+              feedback={feedback}
+              accent="purple"
+            />
+
+            <div aria-live="polite" className="min-h-[20px] text-xs font-bold uppercase tracking-wider text-center">
+              {feedback === 'CORRECT' && (
+                <span className="text-neon-green">
+                  {strikeMode === 'COMBO' ? 'Step Verified' : 'Direct Strike Verified'}
+                </span>
+              )}
+              {feedback === 'WRONG' && (
+                <span className="text-neon-magenta">
+                  {stepMissCount >= 2
+                    ? `Incorrect · Expected: ${expectedAnswer}`
+                    : 'Incorrect · Try Again'}
+                </span>
+              )}
             </div>
 
             <ProblemInputRouter

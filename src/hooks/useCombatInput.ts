@@ -6,6 +6,10 @@ interface UseCombatInputProps {
   setShowSystemMenu: (show: boolean) => void;
   feedback: 'IDLE' | 'CORRECT' | 'WRONG';
   isIntro: boolean;
+  onSkipIntro?: () => void;
+  onToggleDirectStrike?: () => void;
+  onTacticalHint?: () => void;
+  onMeditation?: () => void;
   activeChoices?: string[];
   activeMultiSelectOptions?: string[];
   onToggleOption?: (option: string) => void;
@@ -23,6 +27,10 @@ export function useCombatInput({
   setShowSystemMenu,
   feedback,
   isIntro,
+  onSkipIntro,
+  onToggleDirectStrike,
+  onTacticalHint,
+  onMeditation,
   activeChoices,
   activeMultiSelectOptions,
   onToggleOption,
@@ -32,29 +40,66 @@ export function useCombatInput({
   fractionInput,
   setFractionInput,
   fractionFocus,
-  setFractionFocus
+  setFractionFocus,
 }: UseCombatInputProps) {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.repeat) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+
       if (showSystemMenu) {
         if (e.key === 'Escape') setShowSystemMenu(false);
         return;
       }
-      if (feedback !== 'IDLE' || isIntro) return;
+
+      if (isIntro) {
+        if ((e.key === 'Enter' || e.key === ' ') && onSkipIntro) {
+          e.preventDefault();
+          onSkipIntro();
+        }
+        return;
+      }
+
+      if (feedback !== 'IDLE') return;
+
+      if (e.shiftKey) {
+        const upper = e.key.toUpperCase();
+        if (upper === 'D' && onToggleDirectStrike) {
+          e.preventDefault();
+          onToggleDirectStrike();
+          return;
+        }
+        if (upper === 'H' && onTacticalHint) {
+          e.preventDefault();
+          onTacticalHint();
+          return;
+        }
+        if (upper === 'F' && onMeditation) {
+          e.preventDefault();
+          onMeditation();
+          return;
+        }
+      }
 
       if (activeChoices && activeChoices.length > 0) {
-        const key = e.key.toUpperCase();
-        const choiceIndex = ['A', 'B', 'C', 'D'].indexOf(key);
-        if (choiceIndex !== -1 && choiceIndex < activeChoices.length) {
-          setInput(activeChoices[choiceIndex]);
-          handleSubmit(activeChoices[choiceIndex]);
-        } else if (['1', '2', '3', '4'].includes(key)) {
-          const numIndex = parseInt(key, 10) - 1;
-          if (numIndex < activeChoices.length) {
-            setInput(activeChoices[numIndex]);
-            handleSubmit(activeChoices[numIndex]);
+        if (!e.shiftKey) {
+          const key = e.key.toUpperCase();
+          const choiceIndex = ['A', 'B', 'C', 'D'].indexOf(key);
+          if (choiceIndex !== -1 && choiceIndex < activeChoices.length) {
+            setInput(activeChoices[choiceIndex]);
+            handleSubmit(activeChoices[choiceIndex]);
+            return;
           }
-        } else if (e.key === 'Escape') {
+          if (['1', '2', '3', '4'].includes(key)) {
+            const numIndex = parseInt(key, 10) - 1;
+            if (numIndex < activeChoices.length) {
+              setInput(activeChoices[numIndex]);
+              handleSubmit(activeChoices[numIndex]);
+              return;
+            }
+          }
+        }
+        if (e.key === 'Escape') {
           setShowSystemMenu(true);
         }
         return;
@@ -92,7 +137,11 @@ export function useCombatInput({
           setFractionFocus(prev => prev === 'num' ? 'den' : 'num');
         } else if (e.key === 'Enter') {
           e.preventDefault();
-          handleSubmit();
+          if (fractionFocus === 'num' && fractionInput.num.length > 0 && fractionInput.den.length === 0) {
+            setFractionFocus('den');
+          } else {
+            handleSubmit();
+          }
         } else if (e.key === 'Escape') {
           setShowSystemMenu(true);
         }
@@ -152,8 +201,9 @@ export function useCombatInput({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
-    showSystemMenu, setShowSystemMenu, feedback, isIntro, activeChoices,
-    activeMultiSelectOptions, onToggleOption, currentInputType, setInput,
-    handleSubmit, fractionInput, setFractionInput, fractionFocus, setFractionFocus
+    showSystemMenu, setShowSystemMenu, feedback, isIntro,
+    onSkipIntro, onToggleDirectStrike, onTacticalHint, onMeditation,
+    activeChoices, activeMultiSelectOptions, onToggleOption, currentInputType,
+    setInput, handleSubmit, fractionInput, setFractionInput, fractionFocus, setFractionFocus
   ]);
 }

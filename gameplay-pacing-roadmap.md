@@ -60,55 +60,55 @@ Each phase below ends with a **mandatory Playtest Gate**. Do not start the next 
 **Goal:** Align combat pacing with the arcade aesthetic by turning multi-step problems into fast, rhythmic **Combo Chains** by default, rewarding confident calculators with a high-risk **Direct Strike** toggle, fixing step-context visibility, tightening keyboard/touch ergonomics, and rebalancing patrol HP/economy.
 
 ### Generators & Data Contracts
-- [ ] **Fix Context-Dependent Step Prompts across Tiers 1–12:**
+- [x] **Fix Context-Dependent Step Prompts across Tiers 1–12:**
   - Audit and rewrite step prompts that currently omit the problem's numbers/context (e.g., `arithmetic.ts` T4 V3/V4 `"IDENTIFY SHARED DENOMINATOR"`, T5 V5 `"IDENTIFY CONVERSION FACTOR"`; `preAlgebra.ts` T7 V1 `"IDENTIFY FIRST QUANTITY"`, T8 V1 `"SIGN OF RESULT?"`, T10 V1–V4 `"SUBTRACT b FROM BOTH SIDES"` / `"SUM ALL 5 VALUES"`; `modeling.ts` T12 V1 `"ALIGN DECIMALS AND ADD"`).
-- [ ] **Extend `MathStep` (`src/types.ts`):**
+- [x] **Extend `MathStep` (`src/types.ts`):**
   - Add optional `clue?: string` (formula/strategy clue surfaced by repurposed Hint Packs and Training Sim).
   - Add optional `resultLabel?: string` (compact breadcrumb label rendered after a step succeeds, e.g., `LCD = 12`, `3x = 18`).
 
 ### Combat Logic & Encounter Balance (`combatLogic.ts`, `dungeonLogic.ts`)
-- [ ] **Explicit `strikeMode: 'COMBO' | 'DIRECT'` State:**
+- [x] **Explicit `strikeMode: 'COMBO' | 'DIRECT'` State:**
   - Replace the overloaded `hintStepIndex !== null` flag in `Combat.tsx` with explicit `strikeMode` state.
   - Multi-step (`complexity: 'COMBO'`) problems start in `'COMBO'` mode by default: each step lands a fast strike (`2×`, `3×` combo) with incremental Sentinel INT damage.
   - Single-step (`complexity: 'QUICK'`) problems remain immediate 1-hit strikes.
   - **Miss Rules:** Missing a **Direct Strike** deals normal counter-damage and **falls back to Step 1 of the Combo Chain on the same problem** (rather than discarding the problem). Missing a **Step 2+ mid-chain step** deals counter-damage, keeps the player on that step to retry (revealing the step answer after 2 misses on the same step), and resets the bonus combo streak without discarding solved breadcrumbs.
-- [ ] **Repurpose Hint Packs into a Single Clear Tactical Tool:**
+- [x] **Repurpose Hint Packs into a Single Clear Tactical Tool:**
   - Convert Hint Packs into a one-tap **Tactical Clue + Shield** (reveals `step.clue` / auto-completes the current step and absorbs the next counter-hit) so players don't have to navigate a sub-menu mid-battle.
   - Update `WorkbenchStation.tsx` (`AI Preload` and `Hint Pack` descriptions) to match the new tactical behavior.
-- [ ] **Rebalance Patrol Sentinel HP, Density, Red Chests & Shard Economy:**
+- [x] **Rebalance Patrol Sentinel HP, Density, Red Chests & Shard Economy:**
   - Tune standard patrol Sentinel HP so each hallway fight resolves in **1 full Combo Chain or 1–2 Quick Strikes** (~15–25 seconds per battle) instead of 3–4 repetitive full problems.
   - Scale standard floor enemy density progressively: **2–3 Sentinels** in Sector 1, **3–4** in Sectors 2–4, and **capped at 5** in Sector 5+ (down from up to 8 at deep floors) so a full floor clears in ~1.5–2 minutes.
   - Redefine Red Chest `ATK_UP` (`runBuffs`) so it stays relevant under default Combo Chains (e.g., `+15%` Shard bonus per stack and skipping 1 final step on high-HP / Apex encounters).
   - Calibrate base Shard rewards & Direct Strike `+50%` bonus against Workbench upgrade costs to prevent Shard inflation.
   - Tune Sentinel counter-damage slightly to preserve extraction tension once unfair scratch-paper misses are removed.
-- [ ] **Polish Combat Feedback Timing:**
+- [x] **Polish Combat Feedback Timing:**
   - Speed up successful combo-step transitions to `400ms–500ms` while keeping the `1800ms` expected-answer reveal on misses.
 
 ### UI & Presentation Layer
-- [ ] **Extract Shared `ProblemPromptCard` & Pinned Breadcrumb (`Combat.tsx`, `TrainingSim.tsx`):**
+- [x] **Extract Shared `ProblemPromptCard` & Pinned Breadcrumb (`Combat.tsx`, `TrainingSim.tsx`):**
   - Extract problem display + `THE_BLUR` handling out of `Combat.tsx` (currently 629 lines) into a reusable `ProblemPromptCard` component.
   - Never replace `problem.question` when in Combo Chain mode; render:
     1. **Pinned Original Problem** at the top of the terminal card.
     2. **Solved-Step Breadcrumb** showing intermediate values earned so far (e.g., `LCD: 12 → 1/4 = 3/12 → 5/6 = 10/12`).
     3. **Active Step Prompt** + **Combo Step Pip Bar** (`Step 2/3 · 2× Combo`).
-- [ ] **Direct Strike Toggle & Repurposed `CombatActionBar`:**
+- [x] **Direct Strike Toggle & Repurposed `CombatActionBar`:**
   - Show a crisp `[Direct Strike · 1-Shot · +50% Shards]` toggle on `COMBO` problems **only before Step 1 is submitted**.
   - Update `CombatActionBar.tsx` labels, icons, and disabled states for the repurposed Tactical Hint tool.
-- [ ] **Snappier Patrol Battle Intros (`Combat.tsx`):**
+- [x] **Snappier Patrol Battle Intros (`Combat.tsx`):**
   - Shorten standard patrol `Battle Start` overlay from `1200ms` to `450ms–600ms` (or allow keypress/tap skip), reserving the full dramatic `1200ms` intro for Floor 5 Apex Bosses.
-- [ ] **Align `TrainingSim.tsx` & `ManualStation.tsx`:**
+- [x] **Align `TrainingSim.tsx` & `ManualStation.tsx`:**
   - Give `TrainingSim.tsx` an untimed **Combo Chain vs. Direct Strike** mode toggle (plus visible `step.clue` support) so it stays distinct and useful once Combo Chains are default in combat.
   - Update `ManualStation.tsx` to explain Combo Chains, Direct Strike, and Tactical Hint Packs.
 
 ### Player Input & Ergonomics (`useCombatInput.ts`, `ProblemInputRouter.tsx`, `FractionInput.tsx`)
-- [ ] **Fast-Combo Keyboard Safety (`useCombatInput.ts`):**
+- [x] **Fast-Combo Keyboard Safety (`useCombatInput.ts`):**
   - Add `if (e.repeat) return;` and `if (e.ctrlKey || e.metaKey || e.altKey) return;` to the global keydown handler so held keys or browser shortcuts never double-submit or bleed across `400ms` combo-step transitions.
   - Reset `input`, `fractionInput`, `fractionFocus`, and `selectedOptions` atomically with step advancement.
-- [ ] **`FractionInput` Keyboard Flow (`useCombatInput.ts`):**
+- [x] **`FractionInput` Keyboard Flow (`useCombatInput.ts`):**
   - Pressing `Enter` while `fractionFocus === 'num'` and `den` is empty auto-advances focus from `num → den` (and submits once both fields are populated), matching `Tab` / `/` / `:` ergonomics.
-- [ ] **Stable Touch Layout Across Step Transitions (`ProblemInputRouter.tsx`):**
+- [x] **Stable Touch Layout Across Step Transitions (`ProblemInputRouter.tsx`):**
   - Maintain a consistent input-stage height/alignment when a Combo Chain switches mid-problem from integer `NumberPad` steps to `FractionInput` so the primary Submit button never jumps under the player's thumb on mobile/tablet.
-- [ ] **Chromebook-Safe Tactical Action Hotkeys (`useCombatInput.ts`):**
+- [x] **Chromebook-Safe Tactical Action Hotkeys (`useCombatInput.ts`):**
   - Add optional keyboard shortcuts for Direct Strike (`Shift+D`), Tactical Hint (`Shift+H`), and Focus/Meditation (`Shift+F`) with subtle button hints—avoiding bare `A–D` / `1–9` (answer inputs) and `F1–F3` (Chromebook/browser OS keys).
 
 ### Playtest Gate 2: "The Arcade Rhythm, Ergonomics & Economy Check"

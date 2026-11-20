@@ -1,0 +1,258 @@
+import React, { useState } from 'react';
+import { MathProblem } from '../types';
+import { generateProblem } from '../lib/mathEngine';
+import { ENEMY_TIERS } from '../lib/enemyData';
+import { formatMultiSelectAnswer } from '../lib/combatLogic';
+import {
+  getActiveChoices,
+  getActiveMultiSelectOptions,
+  getCurrentStep,
+  getExpectedAnswer,
+  getRequireSimplified,
+  hasProblemSteps,
+  inferInputType,
+} from '../lib/inputUtils';
+import { validateAnswer } from '../lib/answerValidator';
+import { useCombatInput } from '../hooks/useCombatInput';
+import { useSafeTimeout } from '../hooks/useSafeTimeout';
+import { ProblemInputRouter } from './inputs/ProblemInputRouter';
+import { BrainCircuit, X, ChevronRight } from 'lucide-react';
+import { motion } from 'motion/react';
+
+interface Props {
+  variantId: string;
+  onClose: () => void;
+}
+
+export const TrainingSim: React.FC<Props> = ({ variantId, onClose }) => {
+  const [tierStr, variantStr] = variantId.split('-');
+  const tier = parseInt(tierStr, 10);
+  const variant = parseInt(variantStr, 10) as 1 | 2 | 3 | 4 | 5;
+
+  const [problem, setProblem] = useState<MathProblem>(() => generateProblem(tier, 'ATTACK', variant));
+  const [hintStepIndex, setHintStepIndex] = useState<number>(0);
+  const [input, setInput] = useState('');
+  const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
+  const [fractionInput, setFractionInput] = useState({ num: '', den: '' });
+  const [fractionFocus, setFractionFocus] = useState<'num' | 'den'>('num');
+  const [feedback, setFeedback] = useState<'IDLE' | 'CORRECT' | 'WRONG'>('IDLE');
+  const [stepMissCount, setStepMissCount] = useState(0);
+  const [isComplete, setIsComplete] = useState(false);
+  const { scheduleTimeout, clearAllTimeouts } = useSafeTimeout();
+
+  const resetInputs = () => {
+    setInput('');
+    setSelectedOptions([]);
+    setFractionInput({ num: '', den: '' });
+    setFractionFocus('num');
+  };
+
+  const handleNextProblem = () => {
+    clearAllTimeouts();
+    setProblem(generateProblem(tier, 'ATTACK', variant));
+    setHintStepIndex(0);
+    setStepMissCount(0);
+    resetInputs();
+    setFeedback('IDLE');
+    setIsComplete(false);
+  };
+
+  const problemHasSteps = hasProblemSteps(problem);
+  const activeStepIndex = problemHasSteps ? hintStepIndex : null;
+  const currentStep = getCurrentStep(problem, activeStepIndex);
+  const expectedAnswer = getExpectedAnswer(problem, activeStepIndex);
+  const currentInputType = inferInputType(problem, currentStep);
+  const activeChoices = getActiveChoices(problem, currentStep);
+  const activeMultiSelectOptions = getActiveMultiSelectOptions(problem, currentStep);
+  const requireSimplified = getRequireSimplified(problem, currentStep);
+  const includeInclusiveRelationship =
+    expectedAnswer === '≤' ||
+    expectedAnswer === '≥' ||
+    problem.question.includes('≤') ||
+    problem.question.includes('≥');
+
+  const handleToggleOption = (option: string) => {
+    setSelectedOptions((prev) =>
+      prev.includes(option) ? prev.filter((o) => o !== option) : [...prev, option]
+    );
+  };
+
+  const handleSubmit = (overrideInput?: string) => {
+    if (isComplete || feedback !== 'IDLE') return;
+
+    let valueToSubmit = overrideInput !== undefined ? overrideInput : input;
+    if (activeMultiSelectOptions && overrideInput === undefined) {
+      valueToSubmit = formatMultiSelectAnswer(selectedOptions);
+    } else if (currentInputType === 'FRACTION' && overrideInput === undefined) {
+      valueToSubmit = `${fractionInput.num}/${fractionInput.den}`;
+    } else if (currentInputType === 'RATIO' && overrideInput === undefined) {
+      valueToSubmit = `${fractionInput.num}:${fractionInput.den}`;
+    }
+
+    if (
+      !valueToSubmit ||
+      ((currentInputType === 'FRACTION' || currentInputType === 'RATIO') &&
+        overrideInput === undefined &&
+        (!fractionInput.num || !fractionInput.den))
+    ) {
+      return;
+    }
+
+    const isCorrect = validateAnswer(valueToSubmit, expectedAnswer, {
+      inputType: currentInputType,
+      requireSimplified,
+      isMultiSelect: Boolean(activeMultiSelectOptions),
+    });
+
+    if (isCorrect) {
+      setFeedback('CORRECT');
+      setStepMissCount(0);
+
+      scheduleTimeout(() => {
+        if (problemHasSteps && hintStepIndex < problem.steps.length - 1) {
+          setHintStepIndex(hintStepIndex + 1);
+          resetInputs();
+          setFeedback('IDLE');
+        } else {
+          setIsComplete(true);
+        }
+      }, 800);
+    } else {
+      const nextMissCount = stepMissCount + 1;
+      setStepMissCount(nextMissCount);
+      setFeedback('WRONG');
+      scheduleTimeout(() => {
+        resetInputs();
+        setFeedback('IDLE');
+      }, nextMissCount >= 2 ? 1500 : 900);
+    }
+  };
+
+  useCombatInput({
+    showSystemMenu: false,
+    setShowSystemMenu: (open) => {
+      if (open) {
+        clearAllTimeouts();
+        onClose();
+      }
+    },
+    feedback,
+    isIntro: isComplete,
+    activeChoices,
+    activeMultiSelectOptions,
+    onToggleOption: handleToggleOption,
+    currentInputType,
+    setInput,
+    handleSubmit,
+    fractionInput,
+    setFractionInput,
+    fractionFocus,
+    setFractionFocus,
+  });
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="training-sim-title"
+      className="absolute inset-0 z-50 bg-gb-0/95 backdrop-blur-sm flex flex-col items-center justify-center p-4 font-mono"
+    >
+      <div className="w-full max-w-md max-h-[92vh] overflow-y-auto custom-scrollbar bg-gb-1 border-2 border-purple-400 p-5 shadow-[0_0_30px_rgba(168,85,247,0.3)]">
+        <div className="flex justify-between items-center mb-5 border-b border-purple-400/30 pb-3 gap-2">
+          <div className="flex items-center gap-2 text-purple-300 min-w-0">
+            <BrainCircuit className="w-5 h-5 shrink-0" />
+            <h2 id="training-sim-title" className="text-base font-black italic tracking-tight uppercase truncate">
+              {ENEMY_TIERS[tier]?.variants[variant]?.fullName || `Simulation T${tier} V${variant}`}
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              clearAllTimeouts();
+              onClose();
+            }}
+            aria-label="Close training simulator"
+            className="min-h-10 min-w-10 flex items-center justify-center text-gb-3 hover:text-purple-300 transition-colors shrink-0"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {!isComplete ? (
+          <div className="space-y-4">
+            <div className="text-center space-y-2">
+              <div className="text-xs text-purple-300 uppercase tracking-wider font-bold tabular-nums">
+                Guided Step {hintStepIndex + 1} of {problemHasSteps ? problem.steps.length : 1}
+              </div>
+              <div
+                className={`bg-gb-0 p-4 border text-lg sm:text-xl font-bold tracking-tight transition-colors ${
+                  feedback === 'CORRECT'
+                    ? 'border-neon-green text-neon-green'
+                    : feedback === 'WRONG'
+                      ? 'border-neon-magenta text-neon-magenta'
+                      : 'border-gb-3 text-gb-3'
+                }`}
+              >
+                {currentStep ? currentStep.prompt : problem.question}
+              </div>
+              <div aria-live="polite" className="min-h-[20px] text-xs font-bold uppercase tracking-wider">
+                {feedback === 'CORRECT' && (
+                  <span className="text-neon-green">Step Verified</span>
+                )}
+                {feedback === 'WRONG' && (
+                  <span className="text-neon-magenta">
+                    {stepMissCount >= 2
+                      ? `Incorrect · Expected: ${expectedAnswer}`
+                      : 'Incorrect · Try Again'}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <ProblemInputRouter
+              choices={activeChoices}
+              multiSelectOptions={activeMultiSelectOptions}
+              currentInputType={currentInputType}
+              includeInclusiveRelationship={includeInclusiveRelationship}
+              input={input}
+              setInput={setInput}
+              selectedOptions={selectedOptions}
+              onToggleOption={handleToggleOption}
+              fractionInput={fractionInput}
+              setFractionInput={setFractionInput}
+              fractionFocus={fractionFocus}
+              setFractionFocus={setFractionFocus}
+              onSubmit={handleSubmit}
+              disabled={feedback !== 'IDLE'}
+            />
+          </div>
+        ) : (
+          <motion.div
+            initial={{ scale: 0.94, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="text-center space-y-5 py-6"
+          >
+            <div className="text-neon-green text-2xl font-black italic tracking-tight uppercase">
+              Simulation Complete
+            </div>
+            <p className="text-gb-2 text-sm font-sans">
+              Sentinel logic pattern decoded successfully.
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleNextProblem}
+                className="flex-1 min-h-11 py-3 px-4 bg-purple-500 text-gb-0 font-bold uppercase tracking-wider hover:bg-gb-3 transition-colors flex items-center justify-center gap-2 text-sm"
+              >
+                Practice Again <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </div>
+    </motion.div>
+  );
+};

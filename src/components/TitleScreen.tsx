@@ -1,16 +1,42 @@
 import React, { useEffect, useState } from 'react';
-import { SaveSlot } from '../types';
+import { AnonymizedCacheProfile, SaveSlot } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { Terminal, Database, Cpu, Skull, Trash2, Info, X, AlertTriangle } from 'lucide-react';
+import {
+  Terminal,
+  Database,
+  Cpu,
+  Skull,
+  Trash2,
+  Info,
+  X,
+  AlertTriangle,
+  ShieldCheck,
+  Download,
+  RefreshCw,
+} from 'lucide-react';
 
 interface Props {
   slots: SaveSlot[];
+  cacheProfile: AnonymizedCacheProfile;
   onSelectSlot: (id: number) => void;
   onDeleteSlot: (id: number) => void;
+  onRotateAnonymousId: () => void;
+  onClearAllCache: () => void;
+  onExportCache: () => string;
 }
 
-export const TitleScreen: React.FC<Props> = ({ slots, onSelectSlot, onDeleteSlot }) => {
+export const TitleScreen: React.FC<Props> = ({
+  slots,
+  cacheProfile,
+  onSelectSlot,
+  onDeleteSlot,
+  onRotateAnonymousId,
+  onClearAllCache,
+  onExportCache,
+}) => {
   const [showConcept, setShowConcept] = useState(false);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+  const [confirmClearAll, setConfirmClearAll] = useState(false);
   const [pendingDeleteSlotId, setPendingDeleteSlotId] = useState<number | null>(null);
 
   useEffect(() => {
@@ -18,6 +44,10 @@ export const TitleScreen: React.FC<Props> = ({ slots, onSelectSlot, onDeleteSlot
       if (e.key === 'Escape') {
         if (pendingDeleteSlotId !== null) {
           setPendingDeleteSlotId(null);
+        } else if (confirmClearAll) {
+          setConfirmClearAll(false);
+        } else if (showPrivacyModal) {
+          setShowPrivacyModal(false);
         } else if (showConcept) {
           setShowConcept(false);
         }
@@ -25,7 +55,20 @@ export const TitleScreen: React.FC<Props> = ({ slots, onSelectSlot, onDeleteSlot
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [pendingDeleteSlotId, showConcept]);
+  }, [pendingDeleteSlotId, confirmClearAll, showPrivacyModal, showConcept]);
+
+  const handleDownloadExport = () => {
+    const json = onExportCache();
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `ghost-diver-anonymized-cache.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="h-full w-full bg-gb-0 text-gb-3 p-4 md:p-8 scanlines relative overflow-y-auto custom-scrollbar terminal-text wireframe-bg flex items-center justify-center">
@@ -53,6 +96,17 @@ export const TitleScreen: React.FC<Props> = ({ slots, onSelectSlot, onDeleteSlot
             >
               <Info className="w-4 h-4" />
               Mission Briefing
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setConfirmClearAll(false);
+                setShowPrivacyModal(true);
+              }}
+              className="min-h-11 px-4 py-2 border-2 border-gb-3 bg-gb-0 text-gb-3 hover:border-neon-green hover:text-neon-green transition-colors flex items-center gap-2 text-xs font-bold uppercase tracking-wider gb-border-sm"
+            >
+              <ShieldCheck className="w-4 h-4" />
+              Local Cache &amp; Privacy
             </button>
           </div>
         </motion.div>
@@ -127,8 +181,14 @@ export const TitleScreen: React.FC<Props> = ({ slots, onSelectSlot, onDeleteSlot
               ))}
             </div>
 
-            <div className="mt-5 text-xs text-gb-2 text-center leading-relaxed">
-              Choose a profile slot to enter the Cradle Bunker.
+            <div className="mt-5 text-xs text-gb-2 text-center leading-relaxed space-y-1">
+              <p>Choose a profile slot to enter the Cradle Bunker.</p>
+              <p className="text-[11px] text-gb-2/80 font-mono">
+                {cacheProfile.storageMode === 'localStorage'
+                  ? 'Anonymized Local Browser Cache'
+                  : 'Session Memory Fallback'}{' '}
+                &bull; ID: <span className="text-gb-3">{cacheProfile.anonymousId}</span>
+              </p>
             </div>
           </div>
         </div>
@@ -232,6 +292,135 @@ export const TitleScreen: React.FC<Props> = ({ slots, onSelectSlot, onDeleteSlot
               >
                 Close Briefing
               </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Local Cache & Privacy Modal */}
+      <AnimatePresence>
+        {showPrivacyModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="privacy-cache-title"
+            className="fixed inset-0 z-[100] bg-gb-0/95 backdrop-blur-md flex items-center justify-center p-4"
+          >
+            <div className="max-w-md w-full bg-gb-1 border-2 border-gb-3 p-6 gb-border dither relative max-h-[90vh] overflow-y-auto custom-scrollbar">
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmClearAll(false);
+                  setShowPrivacyModal(false);
+                }}
+                aria-label="Close local cache and privacy modal"
+                className="absolute top-3 right-3 min-h-10 min-w-10 flex items-center justify-center text-gb-3 hover:text-neon-magenta transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <h2
+                id="privacy-cache-title"
+                className="text-xl font-black italic mb-3 text-neon-green tracking-tight uppercase flex items-center gap-2 pr-10"
+              >
+                <ShieldCheck className="w-5 h-5 shrink-0" />
+                Local Cache &amp; Privacy
+              </h2>
+
+              <p className="text-xs text-gb-3 font-sans leading-relaxed mb-4">
+                All progress and aggregate stats are stored <span className="text-neon-green font-bold">strictly in this browser&apos;s local cache</span> under a random pseudonymous ID. No personal data, accounts, cookies, or server uploads are used.
+              </p>
+
+              <div className="bg-gb-0 border border-gb-3 p-3 mb-4 space-y-2 text-xs">
+                <div className="flex justify-between items-center gap-2">
+                  <span className="text-gb-2 uppercase">Anonymous ID</span>
+                  <span className="font-mono font-bold text-neon-cyan">{cacheProfile.anonymousId}</span>
+                </div>
+                <div className="flex justify-between items-center gap-2">
+                  <span className="text-gb-2 uppercase">Storage Engine</span>
+                  <span className="font-mono font-bold text-gb-3">
+                    {cacheProfile.storageMode === 'localStorage' ? 'Browser localStorage' : 'Memory Fallback'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 mb-5 text-xs tabular-nums">
+                <div className="bg-gb-0 border border-gb-2/60 p-2.5">
+                  <div className="text-gb-2 uppercase text-[10px]">Dives Started</div>
+                  <div className="text-base font-black text-gb-3">{cacheProfile.telemetry.totalDives}</div>
+                </div>
+                <div className="bg-gb-0 border border-gb-2/60 p-2.5">
+                  <div className="text-gb-2 uppercase text-[10px]">Extractions</div>
+                  <div className="text-base font-black text-neon-green">{cacheProfile.telemetry.totalExtractions}</div>
+                </div>
+                <div className="bg-gb-0 border border-gb-2/60 p-2.5">
+                  <div className="text-gb-2 uppercase text-[10px]">Sentinels Cleared</div>
+                  <div className="text-base font-black text-neon-cyan">{cacheProfile.telemetry.totalCombatsWon}</div>
+                </div>
+                <div className="bg-gb-0 border border-gb-2/60 p-2.5">
+                  <div className="text-gb-2 uppercase text-[10px]">Shards Extracted</div>
+                  <div className="text-base font-black text-gb-3">{cacheProfile.telemetry.totalKnowledgeExtracted}</div>
+                </div>
+              </div>
+
+              <div className="space-y-2.5">
+                <button
+                  type="button"
+                  onClick={handleDownloadExport}
+                  className="w-full min-h-11 py-2.5 px-4 bg-gb-0 border-2 border-neon-cyan text-neon-cyan hover:bg-neon-cyan hover:text-gb-0 font-bold uppercase tracking-wider text-xs transition-colors flex items-center justify-center gap-2 gb-border-sm"
+                >
+                  <Download className="w-4 h-4" />
+                  Export Anonymized JSON
+                </button>
+
+                <button
+                  type="button"
+                  onClick={onRotateAnonymousId}
+                  className="w-full min-h-11 py-2.5 px-4 bg-gb-0 border-2 border-gb-3 text-gb-3 hover:bg-gb-3 hover:text-gb-0 font-bold uppercase tracking-wider text-xs transition-colors flex items-center justify-center gap-2 gb-border-sm"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Rotate Anonymous ID
+                </button>
+
+                {!confirmClearAll ? (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmClearAll(true)}
+                    className="w-full min-h-11 py-2.5 px-4 bg-gb-0 border-2 border-neon-magenta text-neon-magenta hover:bg-neon-magenta hover:text-gb-0 font-bold uppercase tracking-wider text-xs transition-colors flex items-center justify-center gap-2 gb-border-sm"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Clear All Local Cache
+                  </button>
+                ) : (
+                  <div className="bg-gb-0 border-2 border-neon-magenta p-3 space-y-2.5">
+                    <p className="text-xs text-neon-magenta font-sans font-semibold">
+                      Erase all 3 save slots, reset telemetry, and generate a new anonymous ID?
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setConfirmClearAll(false)}
+                        className="min-h-10 py-2 px-3 bg-gb-1 border border-gb-3 text-gb-3 text-xs font-bold uppercase tracking-wider hover:bg-gb-3 hover:text-gb-0 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClearAllCache();
+                          setConfirmClearAll(false);
+                        }}
+                        className="min-h-10 py-2 px-3 bg-neon-magenta border border-neon-magenta text-gb-0 text-xs font-black uppercase tracking-wider hover:bg-gb-3 hover:border-gb-3 transition-colors"
+                      >
+                        Confirm Wipe
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </motion.div>
         )}

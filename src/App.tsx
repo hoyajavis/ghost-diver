@@ -19,8 +19,12 @@ export default function App() {
     lootMessage,
     currentSlot,
     slots,
+    cacheProfile,
     handleSelectSlot,
     handleDeleteSlot,
+    handleRotateAnonymousId,
+    handleClearAllCache,
+    handleExportCache,
     startDive,
     handleMove,
     handleCombatWin,
@@ -39,8 +43,12 @@ export default function App() {
         {gameState === 'TITLE' && (
           <TitleScreen
             slots={slots}
+            cacheProfile={cacheProfile}
             onSelectSlot={handleSelectSlot}
             onDeleteSlot={handleDeleteSlot}
+            onRotateAnonymousId={handleRotateAnonymousId}
+            onClearAllCache={handleClearAllCache}
+            onExportCache={handleExportCache}
           />
         )}
 

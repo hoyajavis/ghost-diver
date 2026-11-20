@@ -77,6 +77,31 @@ export interface SaveSlot {
   stats: PlayerStats | null;
 }
 
+export interface AnonymizedPlayerTelemetry {
+  totalDives: number;
+  totalExtractions: number;
+  totalDefeats: number;
+  totalCombatsWon: number;
+  totalKnowledgeExtracted: number;
+}
+
+export interface AnonymizedCacheProfile {
+  anonymousId: string;
+  storageMode: 'localStorage' | 'memory';
+  telemetry: AnonymizedPlayerTelemetry;
+}
+
+export interface AnonymizedCacheExport {
+  schemaVersion: number;
+  exportedDay: string;
+  anonymousId: string;
+  telemetry: AnonymizedPlayerTelemetry;
+  slots: Array<{
+    slotId: number;
+    data: Record<string, unknown> | null;
+  }>;
+}
+
 export interface MathStep {
   prompt: string;
   answer: number | string;

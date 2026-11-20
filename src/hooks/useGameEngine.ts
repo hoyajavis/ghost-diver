@@ -1,10 +1,31 @@
 import { useState, useEffect } from 'react';
-import { GameState, PlayerStats, DungeonState, Enemy, Chest, DataLog, SaveSlot } from '../types';
+import {
+  AnonymizedCacheProfile,
+  GameState,
+  PlayerStats,
+  DungeonState,
+  Enemy,
+  Chest,
+  DataLog,
+  SaveSlot,
+} from '../types';
 import { generateFloor } from '../lib/mapGen';
 import { getBankableHintPacks, getDiveCost, stepEnemies } from '../lib/dungeonLogic';
 import { LORE_ENTRIES } from '../lib/lore';
 import { getRandomScar } from '../lib/scarData';
-import { INITIAL_STATS, hydrateSaveData, loadSlots, saveSlot, deleteSlot, toPersistedSaveData } from '../lib/storage';
+import {
+  INITIAL_STATS,
+  hydrateSaveData,
+  loadSlots,
+  saveSlot,
+  deleteSlot,
+  toPersistedSaveData,
+  getAnonymizedCacheProfile,
+  recordTelemetryEvent,
+  rotateAnonymousId,
+  clearAllLocalCache,
+  exportAnonymizedCacheData,
+} from '../lib/storage';
 
 export function useGameEngine() {
   const [gameState, setGameState] = useState<GameState>('TITLE');
@@ -14,10 +35,14 @@ export function useGameEngine() {
   const [lootMessage, setLootMessage] = useState<{ text: string; type: 'CHEST' | 'LOG' } | null>(null);
   const [currentSlot, setCurrentSlot] = useState<number | null>(null);
   const [slots, setSlots] = useState<SaveSlot[]>([]);
+  const [cacheProfile, setCacheProfile] = useState<AnonymizedCacheProfile>(() =>
+    getAnonymizedCacheProfile()
+  );
 
-  // Load all slots on mount
+  // Load all slots and anonymized cache profile on mount
   useEffect(() => {
     setSlots(loadSlots());
+    setCacheProfile(getAnonymizedCacheProfile());
   }, []);
 
   const handleSelectSlot = (id: number) => {
@@ -34,6 +59,23 @@ export function useGameEngine() {
   const handleDeleteSlot = (id: number) => {
     deleteSlot(id);
     setSlots((prev) => prev.map((s) => (s.id === id ? { ...s, stats: null } : s)));
+  };
+
+  const handleRotateAnonymousId = () => {
+    rotateAnonymousId();
+    setCacheProfile(getAnonymizedCacheProfile());
+  };
+
+  const handleClearAllCache = () => {
+    const freshProfile = clearAllLocalCache();
+    setSlots(loadSlots());
+    setCurrentSlot(null);
+    setStats(INITIAL_STATS);
+    setCacheProfile(freshProfile);
+  };
+
+  const handleExportCache = () => {
+    return JSON.stringify(exportAnonymizedCacheData(), null, 2);
   };
 
   // Save stats to current slot
@@ -70,6 +112,9 @@ export function useGameEngine() {
       runHintPacks: prev.upgrades.hints,
       runBuffs: [],
     }));
+
+    recordTelemetryEvent('DIVE_STARTED');
+    setCacheProfile(getAnonymizedCacheProfile());
 
     const startTier = Math.max(1, Math.ceil(startFloor / 5));
     setDungeon(generateFloor(startFloor, startTier));
@@ -205,6 +250,9 @@ export function useGameEngine() {
       };
     });
 
+    recordTelemetryEvent('COMBAT_WON');
+    setCacheProfile(getAnonymizedCacheProfile());
+
     setCurrentEnemy(null);
     setGameState('DUNGEON');
   };
@@ -220,10 +268,13 @@ export function useGameEngine() {
         neuralScars: newScar ? [...prev.neuralScars, newScar] : prev.neuralScars,
       };
     });
+    recordTelemetryEvent('DEFEAT');
+    setCacheProfile(getAnonymizedCacheProfile());
     setGameState('GAMEOVER');
   };
 
   const handleBankAndExit = () => {
+    const extractedKnowledge = stats.runKnowledge;
     setStats((prev) => ({
       ...prev,
       knowledge: prev.knowledge + prev.runKnowledge,
@@ -233,6 +284,8 @@ export function useGameEngine() {
       runBuffs: [],
       maxExtractedFloor: Math.max(prev.maxExtractedFloor, dungeon?.floor || 1),
     }));
+    recordTelemetryEvent('EXTRACTION', extractedKnowledge);
+    setCacheProfile(getAnonymizedCacheProfile());
     setGameState('HOME');
   };
 
@@ -328,8 +381,12 @@ export function useGameEngine() {
     setLootMessage,
     currentSlot,
     slots,
+    cacheProfile,
     handleSelectSlot,
     handleDeleteSlot,
+    handleRotateAnonymousId,
+    handleClearAllCache,
+    handleExportCache,
     startDive,
     handleMove,
     handleCombatWin,

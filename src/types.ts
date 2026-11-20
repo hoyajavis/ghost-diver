@@ -77,12 +77,22 @@ export interface SaveSlot {
   stats: PlayerStats | null;
 }
 
+export interface ProblemMetricSummary {
+  attempts: number;
+  firstTryCorrect: number;
+  firstTryAccuracy: number;
+  medianSolveMs: number;
+  solveMsSamples: number[];
+}
+
 export interface AnonymizedPlayerTelemetry {
   totalDives: number;
   totalExtractions: number;
   totalDefeats: number;
   totalCombatsWon: number;
   totalKnowledgeExtracted: number;
+  byTierVariant: Record<string, ProblemMetricSummary>;
+  byArchetype: Record<string, ProblemMetricSummary>;
 }
 
 export interface AnonymizedCacheProfile {
@@ -110,10 +120,13 @@ export interface MathStep {
   requireSimplified?: boolean;
 }
 
+export type ProblemComplexity = 'QUICK' | 'COMBO';
+
 export interface MathProblem {
   question: string;
   answer: number | string;
   type: 'ATTACK' | 'MEDITATION';
+  complexity: ProblemComplexity;
   inputType?: InputType;
   requireSimplified?: boolean;
   steps?: MathStep[];

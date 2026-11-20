@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { MathProblem } from '../types';
 import { generateProblem } from '../lib/mathEngine';
 import { ENEMY_TIERS } from '../lib/enemyData';
@@ -13,6 +13,7 @@ import {
   inferInputType,
 } from '../lib/inputUtils';
 import { validateAnswer } from '../lib/answerValidator';
+import { recordProblemTelemetry } from '../lib/storage';
 import { useCombatInput } from '../hooks/useCombatInput';
 import { useSafeTimeout } from '../hooks/useSafeTimeout';
 import { ProblemInputRouter } from './inputs/ProblemInputRouter';
@@ -39,6 +40,8 @@ export const TrainingSim: React.FC<Props> = ({ variantId, onClose }) => {
   const [stepMissCount, setStepMissCount] = useState(0);
   const [isComplete, setIsComplete] = useState(false);
   const { scheduleTimeout, clearAllTimeouts } = useSafeTimeout();
+  const problemStartTimeRef = useRef<number>(Date.now());
+  const hadWrongAttemptRef = useRef<boolean>(false);
 
   const resetInputs = () => {
     setInput('');
@@ -50,6 +53,8 @@ export const TrainingSim: React.FC<Props> = ({ variantId, onClose }) => {
   const handleNextProblem = () => {
     clearAllTimeouts();
     setProblem(generateProblem(tier, 'ATTACK', variant));
+    problemStartTimeRef.current = Date.now();
+    hadWrongAttemptRef.current = false;
     setHintStepIndex(0);
     setStepMissCount(0);
     resetInputs();
@@ -108,8 +113,17 @@ export const TrainingSim: React.FC<Props> = ({ variantId, onClose }) => {
       setFeedback('CORRECT');
       setStepMissCount(0);
 
+      const isFinalStep = !(problemHasSteps && hintStepIndex < problem.steps.length - 1);
+      if (isFinalStep) {
+        recordProblemTelemetry({
+          tierVariant: variantId,
+          solveMs: Math.max(0, Date.now() - problemStartTimeRef.current),
+          firstTryCorrect: !hadWrongAttemptRef.current,
+        });
+      }
+
       scheduleTimeout(() => {
-        if (problemHasSteps && hintStepIndex < problem.steps.length - 1) {
+        if (!isFinalStep) {
           setHintStepIndex(hintStepIndex + 1);
           resetInputs();
           setFeedback('IDLE');
@@ -118,6 +132,7 @@ export const TrainingSim: React.FC<Props> = ({ variantId, onClose }) => {
         }
       }, 800);
     } else {
+      hadWrongAttemptRef.current = true;
       const nextMissCount = stepMissCount + 1;
       setStepMissCount(nextMissCount);
       setFeedback('WRONG');

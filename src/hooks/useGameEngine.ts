@@ -10,7 +10,15 @@ import {
   SaveSlot,
 } from '../types';
 import { generateFloor } from '../lib/mapGen';
-import { getBankableHintPacks, getDiveCost, stepEnemies } from '../lib/dungeonLogic';
+import {
+  canDescendFromFloor,
+  clampFloor,
+  getBankableHintPacks,
+  getDiveCost,
+  getNextUnlockedFloor,
+  getTierForFloor,
+  stepEnemies,
+} from '../lib/dungeonLogic';
 import { LORE_ENTRIES } from '../lib/lore';
 import { getRandomScar } from '../lib/scarData';
 import {
@@ -100,7 +108,8 @@ export function useGameEngine() {
   ]);
 
   const startDive = (startFloor: number = 1) => {
-    const cost = getDiveCost(startFloor);
+    const safeFloor = clampFloor(startFloor);
+    const cost = getDiveCost(safeFloor);
     if (stats.knowledge < cost) return;
 
     setStats((prev) => ({
@@ -116,8 +125,8 @@ export function useGameEngine() {
     recordTelemetryEvent('DIVE_STARTED');
     setCacheProfile(getAnonymizedCacheProfile());
 
-    const startTier = Math.max(1, Math.ceil(startFloor / 5));
-    setDungeon(generateFloor(startFloor, startTier));
+    const startTier = getTierForFloor(safeFloor);
+    setDungeon(generateFloor(safeFloor, startTier));
     setGameState('DUNGEON');
   };
 
@@ -282,7 +291,7 @@ export function useGameEngine() {
       runKnowledge: 0,
       runHintPacks: 0,
       runBuffs: [],
-      maxExtractedFloor: Math.max(prev.maxExtractedFloor, dungeon?.floor || 1),
+      maxExtractedFloor: getNextUnlockedFloor(dungeon?.floor ?? 1, prev.maxExtractedFloor),
     }));
     recordTelemetryEvent('EXTRACTION', extractedKnowledge);
     setCacheProfile(getAnonymizedCacheProfile());
@@ -290,10 +299,10 @@ export function useGameEngine() {
   };
 
   const handleDiveDeeper = () => {
-    if (dungeon) {
-      setDungeon(generateFloor(dungeon.floor + 1, dungeon.tier + 1));
-      setGameState('DUNGEON');
-    }
+    if (!dungeon || !canDescendFromFloor(dungeon.floor)) return;
+    const nextFloor = dungeon.floor + 1;
+    setDungeon(generateFloor(nextFloor, getTierForFloor(nextFloor)));
+    setGameState('DUNGEON');
   };
 
   const handleHealScar = (scarToHeal: string) => {

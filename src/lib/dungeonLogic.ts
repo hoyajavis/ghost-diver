@@ -2,6 +2,33 @@ import { Chest, DataLog, Enemy, Position } from '../types';
 
 export const DIVE_COST_PER_FLOOR = 50;
 export const MAX_ENEMIES_PER_FLOOR = 8;
+export const MAX_TIER = 12;
+export const FLOORS_PER_SECTOR = 5;
+export const MAX_FLOOR = MAX_TIER * FLOORS_PER_SECTOR;
+
+export function clampFloor(floor: number): number {
+  if (!Number.isFinite(floor)) return 1;
+  return Math.min(MAX_FLOOR, Math.max(1, Math.floor(floor)));
+}
+
+export function clampTier(tier: number): number {
+  if (!Number.isFinite(tier)) return 1;
+  return Math.min(MAX_TIER, Math.max(1, Math.floor(tier)));
+}
+
+export function getTierForFloor(floor: number): number {
+  return clampTier(Math.ceil(clampFloor(floor) / FLOORS_PER_SECTOR));
+}
+
+export function getNextUnlockedFloor(extractedFloor: number, currentMax: number): number {
+  const safeCurrentMax = clampFloor(currentMax);
+  const safeExtracted = Number.isFinite(extractedFloor) ? Math.floor(extractedFloor) : 1;
+  return clampFloor(Math.max(safeCurrentMax, safeExtracted + 1));
+}
+
+export function canDescendFromFloor(floor: number): boolean {
+  return Number.isFinite(floor) && Math.floor(floor) < MAX_FLOOR;
+}
 
 export function posKey(pos: Position): string {
   return `${pos.x},${pos.y}`;

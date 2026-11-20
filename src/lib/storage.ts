@@ -3,9 +3,11 @@ import {
   AnonymizedCacheProfile,
   AnonymizedPlayerTelemetry,
   PlayerStats,
+  ProblemMetricSummary,
   SaveSlot,
   UpgradeLevels,
 } from '../types';
+import { clampFloor } from './dungeonLogic';
 
 export const SAVE_SCHEMA_VERSION = 3;
 
@@ -14,6 +16,10 @@ const SAVE_KEY_PREFIX = 'ghost_diver_save_';
 const LEGACY_SAVE_KEY_PREFIX = 'extraction_academy_save_';
 const ANON_ID_KEY = 'ghost_diver_anon_id';
 const TELEMETRY_KEY = 'ghost_diver_telemetry_v1';
+const MAX_SOLVE_SAMPLES = 50;
+const MAX_SOLVE_MS = 300_000;
+const TIER_VARIANT_KEY_REGEX = /^\d{1,2}-\d{1,2}$/;
+const ARCHETYPE_KEY_REGEX = /^[A-Z0-9_-]{1,32}$/;
 
 export interface PersistedSaveData {
   schemaVersion: number;
@@ -57,6 +63,8 @@ export const INITIAL_TELEMETRY: AnonymizedPlayerTelemetry = {
   totalDefeats: 0,
   totalCombatsWon: 0,
   totalKnowledgeExtracted: 0,
+  byTierVariant: {},
+  byArchetype: {},
 };
 
 const memoryFallback = new Map<string, string>();
@@ -228,7 +236,7 @@ export function hydrateSaveData(raw: unknown): PlayerStats | null {
     knowledge: toNonNegativeInt(raw.knowledge, 0),
     hintPacks: toNonNegativeInt(raw.hintPacks, 0),
     neuralScars: toStringArray(raw.neuralScars),
-    maxExtractedFloor: Math.max(1, toNonNegativeInt(raw.maxExtractedFloor, 1)),
+    maxExtractedFloor: clampFloor(toNonNegativeInt(raw.maxExtractedFloor, 1)),
     upgrades,
     unlockedLore: Array.from(new Set(toStringArray(raw.unlockedLore))),
     encounteredTiers: migrateVariantList(raw.encounteredTiers),
@@ -255,7 +263,7 @@ export function toPersistedSaveData(
     knowledge: toNonNegativeInt(stats.knowledge, 0),
     hintPacks: toNonNegativeInt(stats.hintPacks, 0),
     neuralScars: Array.from(new Set(toStringArray(stats.neuralScars))),
-    maxExtractedFloor: Math.max(1, toNonNegativeInt(stats.maxExtractedFloor, 1)),
+    maxExtractedFloor: clampFloor(toNonNegativeInt(stats.maxExtractedFloor, 1)),
     upgrades: {
       hp: toNonNegativeInt(stats.upgrades?.hp, 0),
       fp: toNonNegativeInt(stats.upgrades?.fp, 0),
@@ -315,22 +323,86 @@ export function deleteSlot(id: number): void {
   safeRemoveItem(`${LEGACY_SAVE_KEY_PREFIX}${id}`);
 }
 
+export function computeMedian(samples: number[]): number {
+  const valid = samples.filter((n) => typeof n === 'number' && Number.isFinite(n));
+  if (valid.length === 0) return 0;
+  const sorted = [...valid].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 1) {
+    return Math.round(sorted[mid]);
+  }
+  return Math.round((sorted[mid - 1] + sorted[mid]) / 2);
+}
+
+function clampSolveMs(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
+  return Math.min(MAX_SOLVE_MS, Math.max(0, Math.round(value)));
+}
+
+function sanitizeProblemMetricSummary(raw: unknown): ProblemMetricSummary | null {
+  if (!isRecord(raw)) return null;
+  const attempts = toNonNegativeInt(raw.attempts, 0);
+  const firstTryCorrect = Math.min(attempts, toNonNegativeInt(raw.firstTryCorrect, 0));
+  const rawSamples = Array.isArray(raw.solveMsSamples) ? raw.solveMsSamples : [];
+  const solveMsSamples = rawSamples
+    .filter((n): n is number => typeof n === 'number' && Number.isFinite(n))
+    .map((n) => clampSolveMs(n))
+    .slice(-MAX_SOLVE_SAMPLES);
+
+  const firstTryAccuracy = attempts > 0 ? Number((firstTryCorrect / attempts).toFixed(4)) : 0;
+  const medianSolveMs = computeMedian(solveMsSamples);
+
+  return {
+    attempts,
+    firstTryCorrect,
+    firstTryAccuracy,
+    medianSolveMs,
+    solveMsSamples,
+  };
+}
+
+function sanitizeMetricMap(
+  raw: unknown,
+  keyRegex: RegExp
+): Record<string, ProblemMetricSummary> {
+  if (!isRecord(raw)) return {};
+  const result: Record<string, ProblemMetricSummary> = {};
+  for (const [key, val] of Object.entries(raw)) {
+    if (!keyRegex.test(key)) continue;
+    const summary = sanitizeProblemMetricSummary(val);
+    if (summary) {
+      result[key] = summary;
+    }
+  }
+  return result;
+}
+
+function createEmptyTelemetry(): AnonymizedPlayerTelemetry {
+  return {
+    ...INITIAL_TELEMETRY,
+    byTierVariant: {},
+    byArchetype: {},
+  };
+}
+
 export function loadTelemetry(): AnonymizedPlayerTelemetry {
   const saved = safeGetItem(TELEMETRY_KEY);
-  if (!saved) return { ...INITIAL_TELEMETRY };
+  if (!saved) return createEmptyTelemetry();
 
   try {
     const parsed: unknown = JSON.parse(saved);
-    if (!isRecord(parsed)) return { ...INITIAL_TELEMETRY };
+    if (!isRecord(parsed)) return createEmptyTelemetry();
     return {
       totalDives: toNonNegativeInt(parsed.totalDives, 0),
       totalExtractions: toNonNegativeInt(parsed.totalExtractions, 0),
       totalDefeats: toNonNegativeInt(parsed.totalDefeats, 0),
       totalCombatsWon: toNonNegativeInt(parsed.totalCombatsWon, 0),
       totalKnowledgeExtracted: toNonNegativeInt(parsed.totalKnowledgeExtracted, 0),
+      byTierVariant: sanitizeMetricMap(parsed.byTierVariant, TIER_VARIANT_KEY_REGEX),
+      byArchetype: sanitizeMetricMap(parsed.byArchetype, ARCHETYPE_KEY_REGEX),
     };
   } catch {
-    return { ...INITIAL_TELEMETRY };
+    return createEmptyTelemetry();
   }
 }
 
@@ -341,7 +413,11 @@ export function recordTelemetryEvent(
   knowledgeAmount: number = 0
 ): AnonymizedPlayerTelemetry {
   const current = loadTelemetry();
-  const next: AnonymizedPlayerTelemetry = { ...current };
+  const next: AnonymizedPlayerTelemetry = {
+    ...current,
+    byTierVariant: { ...current.byTierVariant },
+    byArchetype: { ...current.byArchetype },
+  };
 
   switch (event) {
     case 'DIVE_STARTED':
@@ -360,6 +436,68 @@ export function recordTelemetryEvent(
   }
 
   safeSetItem(TELEMETRY_KEY, JSON.stringify(next));
+  return next;
+}
+
+function updateMetricBucket(
+  existing: ProblemMetricSummary | undefined,
+  solveMs: number,
+  firstTryCorrect: boolean
+): ProblemMetricSummary {
+  const attempts = (existing?.attempts ?? 0) + 1;
+  const firstTryCount = (existing?.firstTryCorrect ?? 0) + (firstTryCorrect ? 1 : 0);
+  const solveMsSamples = [...(existing?.solveMsSamples ?? []), solveMs].slice(-MAX_SOLVE_SAMPLES);
+  const firstTryAccuracy = Number((firstTryCount / attempts).toFixed(4));
+  const medianSolveMs = computeMedian(solveMsSamples);
+
+  return {
+    attempts,
+    firstTryCorrect: firstTryCount,
+    firstTryAccuracy,
+    medianSolveMs,
+    solveMsSamples,
+  };
+}
+
+export function recordProblemTelemetry(params: {
+  tierVariant?: string;
+  archetype?: string;
+  solveMs: number;
+  firstTryCorrect: boolean;
+}): AnonymizedPlayerTelemetry {
+  const current = loadTelemetry();
+  const next: AnonymizedPlayerTelemetry = {
+    ...current,
+    byTierVariant: { ...current.byTierVariant },
+    byArchetype: { ...current.byArchetype },
+  };
+
+  const safeSolveMs = clampSolveMs(params.solveMs);
+  const firstTry = Boolean(params.firstTryCorrect);
+  let updated = false;
+
+  if (typeof params.tierVariant === 'string' && TIER_VARIANT_KEY_REGEX.test(params.tierVariant)) {
+    next.byTierVariant[params.tierVariant] = updateMetricBucket(
+      next.byTierVariant[params.tierVariant],
+      safeSolveMs,
+      firstTry
+    );
+    updated = true;
+  }
+
+  if (typeof params.archetype === 'string' && ARCHETYPE_KEY_REGEX.test(params.archetype)) {
+    next.byArchetype[params.archetype] = updateMetricBucket(
+      next.byArchetype[params.archetype],
+      safeSolveMs,
+      firstTry
+    );
+    updated = true;
+  }
+
+  if (updated) {
+    safeSetItem(TELEMETRY_KEY, JSON.stringify(next));
+  }
+
   return next;
 }
 

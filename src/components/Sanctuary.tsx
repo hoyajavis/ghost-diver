@@ -1,17 +1,19 @@
 import React from 'react';
 import { PlayerStats } from '../types';
-import { getBankableHintPacks } from '../lib/dungeonLogic';
+import { canDescendFromFloor, getBankableHintPacks, MAX_FLOOR, MAX_TIER } from '../lib/dungeonLogic';
 import { getScarName } from '../lib/scarData';
-import { Home, ArrowDownToLine, Activity, Database, ShieldAlert, Cpu } from 'lucide-react';
+import { Home, ArrowDownToLine, Activity, Database, ShieldAlert, Cpu, Lock } from 'lucide-react';
 
 interface Props {
   stats: PlayerStats;
+  floor: number;
   onBankAndExit: () => void;
   onDiveDeeper: () => void;
 }
 
-export const Sanctuary: React.FC<Props> = ({ stats, onBankAndExit, onDiveDeeper }) => {
+export const Sanctuary: React.FC<Props> = ({ stats, floor, onBankAndExit, onDiveDeeper }) => {
   const bankableHints = getBankableHintPacks(stats.runHintPacks, stats.upgrades.hints);
+  const canDescend = canDescendFromFloor(floor);
 
   return (
     <div className="flex flex-col items-center justify-center h-full bg-gb-0 text-gb-3 p-4 scanlines relative overflow-y-auto custom-scrollbar terminal-text wireframe-bg">
@@ -25,7 +27,9 @@ export const Sanctuary: React.FC<Props> = ({ stats, onBankAndExit, onDiveDeeper 
         </h2>
         <div className="w-full h-[1px] bg-gb-3/60 my-2" />
         <p className="text-gb-2 mb-5 text-center text-xs leading-relaxed font-sans">
-          Neural link stabilized. Extract now to bank your gains, or descend into the next sector.
+          {canDescend
+            ? 'Neural link stabilized. Extract now to bank your gains, or descend into the next sector.'
+            : `Sector ${MAX_TIER} (Floor ${MAX_FLOOR}) cleared. Extract now to bank your gains.`}
         </p>
 
         {/* Current Run Stats */}
@@ -60,6 +64,18 @@ export const Sanctuary: React.FC<Props> = ({ stats, onBankAndExit, onDiveDeeper 
           </div>
         )}
 
+        {!canDescend && (
+          <div className="w-full bg-gb-0 border border-amber-400 p-3 mb-5 gb-border-sm text-center">
+            <div className="text-amber-400 font-bold uppercase tracking-wider text-xs mb-1 flex items-center justify-center gap-1.5">
+              <Lock className="w-4 h-4 shrink-0" />
+              Deep Sub-Strata Locked
+            </div>
+            <p className="text-xs text-gb-2 font-sans">
+              Sector {MAX_TIER} / Floor {MAX_FLOOR} is the current maximum depth. Extract to bank your run.
+            </p>
+          </div>
+        )}
+
         <div className="flex flex-col w-full gap-3">
           <button
             type="button"
@@ -73,15 +89,18 @@ export const Sanctuary: React.FC<Props> = ({ stats, onBankAndExit, onDiveDeeper 
           <button
             type="button"
             onClick={onDiveDeeper}
-            className="w-full min-h-11 py-2.5 px-4 bg-gb-3 text-gb-0 hover:bg-neon-cyan font-black italic transition-all flex items-center justify-center gap-2 uppercase tracking-wider gb-border shadow-[0_0_20px_rgba(0,243,255,0.25)] text-sm"
+            disabled={!canDescend}
+            className="w-full min-h-11 py-2.5 px-4 bg-gb-3 text-gb-0 hover:bg-neon-cyan font-black italic transition-all flex items-center justify-center gap-2 uppercase tracking-wider gb-border shadow-[0_0_20px_rgba(0,243,255,0.25)] text-sm disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-gb-3 disabled:shadow-none"
           >
-            <ArrowDownToLine className="w-4 h-4" />
-            Descend Deeper
+            {canDescend ? <ArrowDownToLine className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+            {canDescend ? 'Descend Deeper' : 'Deep Sub-Strata Locked'}
           </button>
         </div>
 
         <p className="mt-4 text-xs text-gb-2 text-center leading-relaxed font-sans">
-          Descending deeper raises Sentinel difficulty and Neural Scar risk.
+          {canDescend
+            ? 'Descending deeper raises Sentinel difficulty and Neural Scar risk.'
+            : `Maximum archive depth reached (Sector ${MAX_TIER} · F${MAX_FLOOR}).`}
         </p>
       </div>
     </div>

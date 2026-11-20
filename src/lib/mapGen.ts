@@ -1,7 +1,7 @@
 import { DungeonState, Position, Enemy, Chest, DataLog } from '../types';
 import { LORE_ENTRIES } from './lore';
 import { ENEMY_TIERS } from './enemyData';
-import { getEnemyCountForFloor, getReachablePositions, posKey } from './dungeonLogic';
+import { clampTier, getEnemyCountForFloor, getReachablePositions, posKey } from './dungeonLogic';
 
 const GRID_SIZE = 10;
 const WALL_COUNT = 15;
@@ -100,7 +100,8 @@ export function generateFloor(
 
   const takeSpawnPos = (): Position | null => remainingPool.pop() ?? null;
 
-  const tierData = ENEMY_TIERS[tier] ?? ENEMY_TIERS[1];
+  const safeTier = clampTier(tier);
+  const tierData = ENEMY_TIERS[safeTier] ?? ENEMY_TIERS[1];
   const baseHp = tierData.baseHp;
   const variantIds = Object.keys(tierData.variants)
     .map((k) => parseInt(k, 10))
@@ -154,7 +155,7 @@ export function generateFloor(
 
   return {
     floor,
-    tier,
+    tier: safeTier,
     gridSize: GRID_SIZE,
     walls,
     enemies,

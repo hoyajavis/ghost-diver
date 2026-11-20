@@ -98,6 +98,7 @@ export default function App() {
         {gameState === 'SANCTUARY' && (
           <Sanctuary
             stats={stats}
+            floor={dungeon?.floor ?? 1}
             onBankAndExit={handleBankAndExit}
             onDiveDeeper={handleDiveDeeper}
           />

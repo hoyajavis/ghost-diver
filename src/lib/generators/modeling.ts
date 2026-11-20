@@ -1,5 +1,8 @@
 import { ProblemGenerator } from '../mathGenerators';
 
+const pickRandom = <T,>(items: readonly T[]): T =>
+  items[Math.floor(Math.random() * items.length)];
+
 export const modelingGenerators: Record<number, Record<number, ProblemGenerator>> = {
   11: {
     // Floor 51: Identifying the Constant of Proportionality (k) from tables
@@ -13,6 +16,7 @@ export const modelingGenerators: Record<number, Record<number, ProblemGenerator>
       return {
         question: `FIND k: x=[${x1}, ${x2}], y=[${y1}, ${y2}]`,
         answer: k.toString(),
+        complexity: 'COMBO',
         steps: [
           { prompt: `DIVIDE y BY x: ${y1} / ${x1}`, answer: k },
           { prompt: `VERIFY WITH SECOND PAIR: ${y2} / ${x2}`, answer: k }
@@ -24,31 +28,34 @@ export const modelingGenerators: Record<number, Record<number, ProblemGenerator>
       const isTax = Math.random() > 0.5;
       const base = (Math.floor(Math.random() * 10) + 2) * 10; // 20 to 110
       const percent = isTax ? (Math.floor(Math.random() * 3) + 5) : (Math.floor(Math.random() * 3) * 5 + 10); // 5-7% tax or 10-20% tip
-      const amount = (base * percent) / 100;
-      const total = base + amount;
+      const amount = Math.round(base * percent) / 100;
+      const total = Math.round((base + amount) * 100) / 100;
       
       return {
         question: `${isTax ? 'TAX' : 'TIP'}: ${percent}% ON $${base}. TOTAL?`,
         answer: total.toString(),
+        complexity: 'COMBO',
         steps: [
           { prompt: `CALCULATE ${percent}% OF ${base}`, answer: amount },
           { prompt: `ADD TO BASE: ${base} + ${amount}`, answer: total }
         ]
       };
     },
-    // Floor 53: Simple Interest calculations (I = Prt)
+    // Floor 53: Simple Interest calculations (I = Prt, mental-friendly 2-step chain)
     3: () => {
-      const p = (Math.floor(Math.random() * 9) + 1) * 100; // 100 to 900
-      const r = Math.floor(Math.random() * 5) + 2; // 2% to 6%
-      const t = Math.floor(Math.random() * 4) + 2; // 2 to 5 years
-      const i = (p * r * t) / 100;
+      const p = pickRandom([100, 200, 300, 400, 500]);
+      const r = pickRandom([2, 4, 5, 10]);
+      const t = pickRandom([2, 3, 4]);
+      const annual = (p * r) / 100;
+      const i = annual * t;
       
       return {
         question: `INTEREST: P=$${p}, r=${r}%, t=${t}yrs. I=?`,
         answer: i.toString(),
+        complexity: 'COMBO',
         steps: [
-          { prompt: `CONVERT RATE TO DECIMAL: ${r} / 100`, answer: r / 100 },
-          { prompt: `MULTIPLY P * r * t: ${p} * ${r / 100} * ${t}`, answer: i }
+          { prompt: `1-YEAR INTEREST: ${r}% OF $${p}`, answer: annual },
+          { prompt: `MULTIPLY BY ${t} YEARS: ${annual} * ${t}`, answer: i }
         ]
       };
     },
@@ -63,6 +70,7 @@ export const modelingGenerators: Record<number, Record<number, ProblemGenerator>
       return {
         question: `IS PROPORTIONAL? ${eq}`,
         answer: isProportional ? 'YES' : 'NO',
+        complexity: 'QUICK',
         choices: ['YES', 'NO'],
         steps: [
           {
@@ -92,6 +100,7 @@ export const modelingGenerators: Record<number, Record<number, ProblemGenerator>
         return {
           question: `EVALUATE: ${num1}/${d} + (${num2}/${d})`,
           answer: `${sumN}/${d}`,
+          complexity: 'QUICK',
           inputType: 'FRACTION',
           steps: [
             { prompt: `ADD NUMERATORS: ${num1} + (${num2})`, answer: sumN },
@@ -106,6 +115,7 @@ export const modelingGenerators: Record<number, Record<number, ProblemGenerator>
         return {
           question: `EVALUATE: ${num1.toFixed(1)} + (${num2.toFixed(1)})`,
           answer: sum.toString(),
+          complexity: 'QUICK',
           steps: [
             { prompt: `ALIGN DECIMALS AND ADD`, answer: sum.toString() }
           ]
@@ -126,6 +136,7 @@ export const modelingGenerators: Record<number, Record<number, ProblemGenerator>
         return {
           question: `MULTIPLY: (${n1}/${d1}) * (${n2}/${d2})`,
           answer: `${resN}/${resD}`,
+          complexity: 'COMBO',
           inputType: 'FRACTION',
           steps: [
             { prompt: `MULTIPLY NUMERATORS: ${n1} * ${n2}`, answer: resN },
@@ -134,18 +145,20 @@ export const modelingGenerators: Record<number, Record<number, ProblemGenerator>
           ]
         };
       } else {
-        const resN = n1 * d2;
-        const resD = d1 * n2;
-        // Handle negative denominator
-        const finalN = resD < 0 ? -resN : resN;
-        const finalD = Math.abs(resD);
+        const recipN = n2 < 0 ? -d2 : d2;
+        const recipD = Math.abs(n2);
+        const finalN = n1 * recipN;
+        const finalD = d1 * recipD;
         
         return {
           question: `DIVIDE: (${n1}/${d1}) / (${n2}/${d2})`,
           answer: `${finalN}/${finalD}`,
+          complexity: 'COMBO',
           inputType: 'FRACTION',
           steps: [
-            { prompt: `MULTIPLY BY RECIPROCAL: (${n1}/${d1}) * (${d2}/${n2})`, answer: `${finalN}/${finalD}` }
+            { prompt: `FLIP SECOND FRACTION (RECIPROCAL OF ${n2}/${d2})`, answer: `${recipN}/${recipD}`, inputType: 'FRACTION' },
+            { prompt: `MULTIPLY NUMERATORS: ${n1} * ${recipN}`, answer: finalN },
+            { prompt: `MULTIPLY DENOMINATORS (${d1} * ${recipD}) & WRITE FRACTION`, answer: `${finalN}/${finalD}`, inputType: 'FRACTION' }
           ]
         };
       }
@@ -161,6 +174,7 @@ export const modelingGenerators: Record<number, Record<number, ProblemGenerator>
       return {
         question: `EVALUATE: (${a} + ${b < 0 ? `(${b})` : b}) * (${c})`,
         answer: result.toString(),
+        complexity: 'COMBO',
         steps: [
           { prompt: `EVALUATE PARENTHESES: ${a} + ${b < 0 ? `(${b})` : b}`, answer: sum },
           { prompt: `MULTIPLY RESULT BY ${c}`, answer: result }
@@ -176,6 +190,7 @@ export const modelingGenerators: Record<number, Record<number, ProblemGenerator>
         return {
           question: `SIGN OF: ${sameSign ? 'NEG * NEG' : 'POS * NEG'}`,
           answer: sameSign ? 'POS' : 'NEG',
+          complexity: 'QUICK',
           choices: ['POS', 'NEG'],
           steps: [
             { prompt: `DO SIGNS MATCH?`, answer: sameSign ? 'YES' : 'NO', choices: ['YES', 'NO'] },
@@ -186,6 +201,7 @@ export const modelingGenerators: Record<number, Record<number, ProblemGenerator>
         return {
           question: `SIGN OF: ${sameSign ? 'NEG / NEG' : 'NEG / POS'}`,
           answer: sameSign ? 'POS' : 'NEG',
+          complexity: 'QUICK',
           choices: ['POS', 'NEG'],
           steps: [
             { prompt: `DO SIGNS MATCH?`, answer: sameSign ? 'YES' : 'NO', choices: ['YES', 'NO'] },

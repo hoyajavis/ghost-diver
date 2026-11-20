@@ -59,4 +59,14 @@ describe('mapGen floor generation', () => {
     const variantsSpawned = new Set(dungeon.enemies.map((e) => e.variant));
     expect(variantsSpawned.size).toBeGreaterThan(1);
   });
+
+  it('clamps tier > 12 to Tier 12 instead of wrapping back to Tier 1', () => {
+    const dungeon = generateFloor(61, 13);
+    const tier12Data = ENEMY_TIERS[12];
+
+    expect(dungeon.tier).toBe(12);
+    expect(dungeon.enemies.length).toBeGreaterThan(0);
+    expect(dungeon.enemies[0].type).toBe(tier12Data.name);
+    expect(dungeon.enemies[0].maxHp).toBe(tier12Data.baseHp);
+  });
 });

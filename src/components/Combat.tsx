@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { PlayerStats, Enemy, MathProblem } from '../types';
 import { generateProblem } from '../lib/mathEngine';
 import { ENEMY_TIERS } from '../lib/enemyData';
@@ -24,6 +24,7 @@ import {
 } from '../lib/inputUtils';
 import { validateAnswer } from '../lib/answerValidator';
 import { getScarName } from '../lib/scarData';
+import { recordProblemTelemetry } from '../lib/storage';
 import { ShieldAlert, Skull, Terminal, Zap, User, Settings, X, LogOut } from 'lucide-react';
 import { ProblemInputRouter } from './inputs/ProblemInputRouter';
 import { motion, AnimatePresence } from 'motion/react';
@@ -66,14 +67,30 @@ export const Combat: React.FC<Props> = ({
 
   const { scheduleTimeout, clearAllTimeouts } = useSafeTimeout();
   const totalHints = getTotalHints(stats);
+  const problemStartTimeRef = useRef<number>(Date.now());
+  const hadWrongAttemptRef = useRef<boolean>(false);
 
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   const [fractionInput, setFractionInput] = useState({ num: '', den: '' });
   const [fractionFocus, setFractionFocus] = useState<'num' | 'den'>('num');
 
   useEffect(() => {
-    scheduleTimeout(() => setIsIntro(false), 1200);
+    scheduleTimeout(() => {
+      setIsIntro(false);
+      problemStartTimeRef.current = Date.now();
+      hadWrongAttemptRef.current = false;
+    }, 1200);
   }, [scheduleTimeout]);
+
+  const emitProblemTelemetry = (firstTryCorrect: boolean, activeMode: 'ATTACK' | 'MEDITATION') => {
+    const solveMs = Math.max(0, Date.now() - problemStartTimeRef.current);
+    recordProblemTelemetry({
+      tierVariant: activeMode === 'ATTACK' ? `${tier}-${enemy.variant}` : undefined,
+      archetype: activeMode === 'MEDITATION' ? 'MEDITATION' : undefined,
+      solveMs,
+      firstTryCorrect,
+    });
+  };
 
   const isHintMode = hintStepIndex !== null;
   const currentStep = getCurrentStep(problem, hintStepIndex);
@@ -155,6 +172,7 @@ export const Combat: React.FC<Props> = ({
         });
 
         if (newEnemyHp <= 0) {
+          emitProblemTelemetry(!hadWrongAttemptRef.current, 'ATTACK');
           scheduleTimeout(() => {
             setHintStepIndex(null);
             onWin(calculateCombatReward(tier));
@@ -176,12 +194,16 @@ export const Combat: React.FC<Props> = ({
           }, 800);
           return;
         }
+
+        emitProblemTelemetry(!hadWrongAttemptRef.current, 'ATTACK');
       } else {
+        emitProblemTelemetry(!hadWrongAttemptRef.current, 'MEDITATION');
         onUpdateStats(applyMeditationRecovery(stats));
         nextMode = 'ATTACK';
         setMode('ATTACK');
       }
     } else {
+      hadWrongAttemptRef.current = true;
       setFeedback('WRONG');
       setIsAttacking('ENEMY');
       const damage = calculateEnemyCounterDamage(tier);
@@ -194,6 +216,7 @@ export const Combat: React.FC<Props> = ({
       });
 
       if (newHp <= 0) {
+        emitProblemTelemetry(false, mode);
         scheduleTimeout(onLose, 1200);
         return;
       }
@@ -213,6 +236,8 @@ export const Combat: React.FC<Props> = ({
         }, nextMissCount >= 2 ? 1600 : 1000);
         return;
       }
+
+      emitProblemTelemetry(false, mode);
     }
 
     scheduleTimeout(() => {
@@ -227,6 +252,8 @@ export const Combat: React.FC<Props> = ({
       setIsAttacking(null);
       setHintStepIndex(null);
       setProblem(generateProblem(tier, nextMode, enemy.variant));
+      problemStartTimeRef.current = Date.now();
+      hadWrongAttemptRef.current = false;
     }, isCorrect ? 800 : 1800);
   };
 
@@ -239,6 +266,8 @@ export const Combat: React.FC<Props> = ({
       setLastExpectedAnswer(null);
       setFeedback('IDLE');
       setProblem(generateProblem(tier, 'MEDITATION', enemy.variant));
+      problemStartTimeRef.current = Date.now();
+      hadWrongAttemptRef.current = false;
       setInput('');
       setFractionInput({ num: '', den: '' });
       setFractionFocus('num');

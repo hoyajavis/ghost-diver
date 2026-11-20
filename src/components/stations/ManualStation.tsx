@@ -1,5 +1,6 @@
 import React from 'react';
 import { Info } from 'lucide-react';
+import { MEDITATION_FP_COST } from '../../lib/combatLogic';
 
 export const ManualStation: React.FC = () => {
   return (
@@ -33,7 +34,7 @@ export const ManualStation: React.FC = () => {
         <section>
           <h4 className="text-xs font-mono text-neon-cyan font-bold uppercase mb-1">4. Focus (FP)</h4>
           <p className="text-gb-2">
-            Every correct attack builds Focus Points. Spend 25 FP on Meditation Recovery (HEAL) in combat to answer a conceptual check and restore HP.
+            Every correct attack builds Focus Points. Spend {MEDITATION_FP_COST} FP on Meditation Recovery (HEAL) in combat to answer a conceptual check and restore HP.
           </p>
         </section>
 

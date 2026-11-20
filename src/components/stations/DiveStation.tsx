@@ -1,6 +1,6 @@
 import React from 'react';
 import { PlayerStats } from '../../types';
-import { getDiveCost } from '../../lib/dungeonLogic';
+import { clampFloor, getDiveCost, MAX_FLOOR, MAX_TIER } from '../../lib/dungeonLogic';
 import { getScarName } from '../../lib/scarData';
 import { Activity, ChevronLeft, ChevronRight, Database } from 'lucide-react';
 
@@ -19,7 +19,8 @@ export const DiveStation: React.FC<Props> = ({
   onStartDive,
   onHealScar,
 }) => {
-  const clampedFloor = Math.max(1, Math.min(stats.maxExtractedFloor, selectedFloor));
+  const maxUnlocked = clampFloor(stats.maxExtractedFloor);
+  const clampedFloor = Math.max(1, Math.min(maxUnlocked, selectedFloor));
   const diveCost = getDiveCost(clampedFloor);
   const canAffordDive = stats.knowledge >= diveCost;
 
@@ -44,19 +45,25 @@ export const DiveStation: React.FC<Props> = ({
           <div className="text-center min-w-[110px]">
             <div className="text-3xl font-black italic">Floor {clampedFloor}</div>
             <div className="text-xs text-gb-2">
-              Max unlocked: F{stats.maxExtractedFloor}
+              Max unlocked: F{maxUnlocked}
             </div>
           </div>
           <button
             type="button"
-            onClick={() => setSelectedFloor(Math.min(stats.maxExtractedFloor, clampedFloor + 1))}
-            disabled={clampedFloor >= stats.maxExtractedFloor}
+            onClick={() => setSelectedFloor(Math.min(maxUnlocked, clampedFloor + 1))}
+            disabled={clampedFloor >= maxUnlocked}
             aria-label="Increase starting floor"
             className="min-w-11 min-h-11 border border-gb-3 flex items-center justify-center hover:bg-gb-3 hover:text-gb-0 disabled:opacity-30 transition-colors"
           >
             <ChevronRight className="w-5 h-5" />
           </button>
         </div>
+
+        {clampedFloor >= MAX_FLOOR && (
+          <div className="text-xs text-amber-400 font-bold uppercase tracking-wider text-center">
+            Deep Sub-Strata Locked (Max Sector {MAX_TIER} · F{MAX_FLOOR})
+          </div>
+        )}
 
         <div className="flex items-center gap-2 text-xs font-bold">
           <Database className={`w-4 h-4 ${canAffordDive ? 'text-neon-green' : 'text-neon-magenta'}`} />

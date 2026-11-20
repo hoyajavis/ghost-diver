@@ -1,64 +1,77 @@
 import { ProblemGenerator } from '../mathGenerators';
 
+const pickRandom = <T,>(items: readonly T[]): T =>
+  items[Math.floor(Math.random() * items.length)];
+
 export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerator>> = {
   6: {
-    // Floor 26: Multi-digit Decimal Addition and Subtraction
+    // Floor 26: Multi-digit Decimal Addition and Subtraction (clean halves, quarters, fifths, tenths)
     1: () => {
       const isAdd = Math.random() > 0.5;
-      const aInt = Math.floor(Math.random() * 90) + 10; // 10-99
-      const aDec = Math.floor(Math.random() * 99) + 1; // 1-99
-      const a = aInt + aDec / 100;
-      
-      const bInt = Math.floor(Math.random() * 9) + 1; // 1-9
-      const bDec = Math.floor(Math.random() * 9) + 1; // 1-9
-      const b = bInt + bDec / 10;
+      const isQuarters = Math.random() > 0.5;
+      const fracPool = isQuarters ? [0.25, 0.5, 0.75] : [0.2, 0.4, 0.5, 0.6, 0.8];
+      const a = Math.round(((Math.floor(Math.random() * 12) + 2) + pickRandom(fracPool)) * 100) / 100;
+      const b = Math.round(((Math.floor(Math.random() * 8) + 1) + pickRandom(fracPool)) * 100) / 100;
       
       if (isAdd) {
         const sum = Math.round((a + b) * 100) / 100;
         return {
-          question: `ADD: ${a.toFixed(2)} + ${b.toFixed(1)}`,
+          question: `ADD: ${a} + ${b}`,
           answer: sum.toString(),
+          complexity: 'QUICK',
           steps: [
-            { prompt: `ALIGN DECIMALS: ${a.toFixed(2)} + ${b.toFixed(2)}`, answer: sum.toString() }
+            { prompt: `ALIGN DECIMALS: ${a} + ${b}`, answer: sum.toString() }
           ]
         };
       } else {
-        const big = Math.max(a, b);
+        let big = Math.max(a, b);
         const small = Math.min(a, b);
+        if (big === small) big = Math.round((big + 1) * 100) / 100;
         const diff = Math.round((big - small) * 100) / 100;
         return {
-          question: `SUBTRACT: ${big.toFixed(2)} - ${small.toFixed(1)}`,
+          question: `SUBTRACT: ${big} - ${small}`,
           answer: diff.toString(),
+          complexity: 'QUICK',
           steps: [
-            { prompt: `ALIGN DECIMALS: ${big.toFixed(2)} - ${small.toFixed(2)}`, answer: diff.toString() }
+            { prompt: `ALIGN DECIMALS: ${big} - ${small}`, answer: diff.toString() }
           ]
         };
       }
     },
-    // Floor 27: Decimal Multiplication and Division
+    // Floor 27: Decimal Multiplication and Division (mental-friendly decimals)
     2: () => {
       const isMult = Math.random() > 0.5;
       if (isMult) {
-        const a = (Math.floor(Math.random() * 90) + 10) / 10; // 1.0 - 9.9
-        const b = (Math.floor(Math.random() * 90) + 10) / 10; // 1.0 - 9.9
-        const prod = Math.round((a * b) * 100) / 100;
+        const multPairs = [
+          { dec: 0.25, wholes: [4, 8, 12, 16, 20] },
+          { dec: 0.5, wholes: [2, 4, 6, 8, 10, 12, 14, 16] },
+          { dec: 0.75, wholes: [4, 8, 12, 16] },
+          { dec: 0.2, wholes: [5, 10, 15, 20, 25] },
+          { dec: 1.2, wholes: [2, 3, 4, 5, 10] },
+          { dec: 1.5, wholes: [2, 4, 6, 8, 10] }
+        ];
+        const pair = pickRandom(multPairs);
+        const whole = pickRandom(pair.wholes);
+        const prod = Math.round(pair.dec * whole * 100) / 100;
         return {
-          question: `MULTIPLY: ${a.toFixed(1)} * ${b.toFixed(1)}`,
+          question: `MULTIPLY: ${pair.dec} * ${whole}`,
           answer: prod.toString(),
+          complexity: 'QUICK',
           steps: [
-            { prompt: `MULTIPLY AS WHOLE NUMBERS: ${Math.round(a * 10)} * ${Math.round(b * 10)}`, answer: Math.round(a * 10) * Math.round(b * 10) },
-            { prompt: `PLACE DECIMAL POINT (2 PLACES LEFT)`, answer: prod.toString() }
+            { prompt: `MULTIPLY: ${pair.dec} * ${whole}`, answer: prod.toString() }
           ]
         };
       } else {
-        const divisor = (Math.floor(Math.random() * 9) + 1) / 10; // 0.1 - 0.9
-        const quotient = Math.floor(Math.random() * 12) + 2; // 2 - 13
-        const dividend = Math.round((divisor * quotient) * 100) / 100;
+        const divisor = pickRandom([0.2, 0.25, 0.5]);
+        const quotient = Math.floor(Math.random() * 8) + 2; // 2 to 9
+        const dividend = Math.round(divisor * quotient * 100) / 100;
+        const shift = divisor === 0.25 ? 100 : 10;
         return {
-          question: `DIVIDE: ${dividend.toFixed(2)} / ${divisor.toFixed(1)}`,
+          question: `DIVIDE: ${dividend} / ${divisor}`,
           answer: quotient.toString(),
+          complexity: 'QUICK',
           steps: [
-            { prompt: `SHIFT DECIMALS RIGHT: ${Math.round(dividend * 10)} / ${Math.round(divisor * 10)}`, answer: quotient.toString() }
+            { prompt: `SHIFT DECIMALS RIGHT: ${Math.round(dividend * shift)} / ${Math.round(divisor * shift)}`, answer: quotient.toString() }
           ]
         };
       }
@@ -82,6 +95,7 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
       return {
         question: `CONVERT TO DECIMAL: ${f.n}/${f.d}`,
         answer: f.dec.toString(),
+        complexity: 'QUICK',
         steps: [
           { prompt: `DIVIDE NUMERATOR BY DENOMINATOR: ${f.n} / ${f.d}`, answer: f.dec.toString() }
         ]
@@ -105,12 +119,13 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
       const f = fractions[Math.floor(Math.random() * fractions.length)];
       const decStr = f.dec.toString();
       const isTenths = decStr.length === 3; // e.g., "0.5"
-      const unsimplifiedN = isTenths ? f.dec * 10 : f.dec * 100;
+      const unsimplifiedN = isTenths ? Math.round(f.dec * 10) : Math.round(f.dec * 100);
       const unsimplifiedD = isTenths ? 10 : 100;
       
       return {
         question: `CONVERT TO FRACTION: ${f.dec}`,
         answer: `${f.n}/${f.d}`,
+        complexity: 'COMBO',
         inputType: 'FRACTION',
         requireSimplified: true,
         steps: [
@@ -136,6 +151,7 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
       return {
         question: `RATIO: ${count1} ${item.name1} TO ${count2} ${item.name2}`,
         answer: `${count1}:${count2}`,
+        complexity: 'COMBO',
         inputType: 'RATIO',
         steps: [
           { prompt: `IDENTIFY FIRST QUANTITY`, answer: count1 },
@@ -160,6 +176,7 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
       return {
         question: `UNIT RATE: ${total} ${item.unit} IN ${units} ${item.per}S`,
         answer: rate.toString(),
+        complexity: 'QUICK',
         steps: [
           { prompt: `DIVIDE TOTAL BY UNITS: ${total} / ${units}`, answer: rate }
         ]
@@ -171,11 +188,12 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
       const p = percents[Math.floor(Math.random() * percents.length)];
       const multiplier = (p === 25 || p === 75) ? 4 : 10;
       const whole = (Math.floor(Math.random() * 10) + 1) * multiplier * 10;
-      const ans = (p / 100) * whole;
+      const ans = Math.round((p * whole) / 100);
       
       return {
         question: `PERCENTAGE: ${p}% OF ${whole}`,
         answer: ans.toString(),
+        complexity: 'COMBO',
         steps: [
           { prompt: `CONVERT ${p}% TO DECIMAL`, answer: (p / 100).toString() },
           { prompt: `MULTIPLY: ${(p / 100)} * ${whole}`, answer: ans }
@@ -194,6 +212,7 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
       return {
         question: `ADD: ${a} + (${b})`,
         answer: ans.toString(),
+        complexity: 'COMBO',
         steps: [
           { prompt: `SIGN OF RESULT?`, answer: signChoice, choices: ['POSITIVE', 'NEGATIVE', 'ZERO'] },
           { prompt: `CALCULATE SUM`, answer: ans }
@@ -204,14 +223,16 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
     2: () => {
       const a = Math.floor(Math.random() * 40) - 20;
       const b = Math.floor(Math.random() * 40) - 20;
+      const oppB = -b || 0;
       const ans = a - b;
       
       return {
         question: `SUBTRACT: ${a} - (${b})`,
         answer: ans.toString(),
+        complexity: 'COMBO',
         steps: [
-          { prompt: `FIND THE OPPOSITE OF ${b}`, answer: -b },
-          { prompt: `ADD ${a} + (${-b})`, answer: ans }
+          { prompt: `FIND THE OPPOSITE OF ${b}`, answer: oppB },
+          { prompt: `ADD ${a} + (${oppB})`, answer: ans }
         ]
       };
     },
@@ -223,6 +244,7 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
       return {
         question: `ABSOLUTE VALUE: |${a}|`,
         answer: ans.toString(),
+        complexity: 'QUICK',
         steps: [
           { prompt: `DISTANCE FROM ZERO`, answer: ans }
         ]
@@ -236,6 +258,7 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
       return {
         question: `PLOT POINT: (${x}, ${y})`,
         answer: `${x},${y}`,
+        complexity: 'COMBO',
         inputType: 'COORDINATE',
         steps: [
           { prompt: `IDENTIFY X-COORDINATE`, answer: x },
@@ -256,6 +279,7 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
       return {
         question: `EVALUATE: ${base}^${exp}`,
         answer: ans.toString(),
+        complexity: isCube ? 'COMBO' : 'QUICK',
         steps: isCube
           ? [
               { prompt: `SQUARE FIRST: ${base} * ${base}`, answer: base * base },
@@ -277,6 +301,7 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
       return {
         question: `EVALUATE: ${a} + ${b} * ${c}`,
         answer: ans.toString(),
+        complexity: 'COMBO',
         steps: [
           { prompt: `MULTIPLY FIRST: ${b} * ${c}`, answer: b * c },
           { prompt: `ADD: ${a} + ${b * c}`, answer: ans }
@@ -295,6 +320,7 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
       return {
         question: `EVALUATE ${a}x ${isAdd ? '+' : '-'} ${b} FOR x = ${x}`,
         answer: ans.toString(),
+        complexity: 'COMBO',
         steps: [
           { prompt: `SUBSTITUTE & MULTIPLY: ${a} * ${x}`, answer: prod },
           { prompt: `${isAdd ? 'ADD' : 'SUBTRACT'} ${b}`, answer: ans }
@@ -311,6 +337,7 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
         return {
           question: `SOLVE FOR x: x + ${a} = ${c}`,
           answer: x.toString(),
+          complexity: 'QUICK',
           steps: [
             { prompt: `SUBTRACT ${a} FROM ${c}`, answer: x }
           ]
@@ -322,32 +349,33 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
         return {
           question: `SOLVE FOR x: x - ${a} = ${c}`,
           answer: x.toString(),
+          complexity: 'QUICK',
           steps: [
             { prompt: `ADD ${a} TO ${c}`, answer: x }
           ]
         };
       } else if (opIndex === 2) {
-        const x = Math.floor(Math.random() * 12) + 2;
-        const a = Math.floor(Math.random() * 9) + 2;
+        const x = Math.floor(Math.random() * 9) + 2; // 2 to 10
+        const a = Math.floor(Math.random() * 8) + 2; // 2 to 9
         const c = x * a;
         return {
           question: `SOLVE FOR x: ${a}x = ${c}`,
           answer: x.toString(),
+          complexity: 'QUICK',
           steps: [
-            { prompt: `WHICH NUMBER DIVIDES BOTH SIDES?`, answer: a },
-            { prompt: `CALCULATE ${c} / ${a}`, answer: x }
+            { prompt: `DIVIDE BOTH SIDES BY ${a}: ${c} / ${a}`, answer: x }
           ]
         };
       } else {
-        const c = Math.floor(Math.random() * 12) + 2;
-        const a = Math.floor(Math.random() * 9) + 2;
+        const c = Math.floor(Math.random() * 9) + 2; // 2 to 10
+        const a = Math.floor(Math.random() * 8) + 2; // 2 to 9
         const dividend = c * a;
         return {
           question: `SOLVE FOR x: x / ${a} = ${c}`,
           answer: dividend.toString(),
+          complexity: 'QUICK',
           steps: [
-            { prompt: `WHICH NUMBER MULTIPLIES BOTH SIDES?`, answer: a },
-            { prompt: `CALCULATE ${c} * ${a}`, answer: dividend }
+            { prompt: `MULTIPLY BOTH SIDES BY ${a}: ${c} * ${a}`, answer: dividend }
           ]
         };
       }
@@ -364,6 +392,7 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
       return {
         question: `SOLVE FOR x: ${a}x + ${b} = ${c}`,
         answer: x.toString(),
+        complexity: 'COMBO',
         steps: [
           { prompt: `SUBTRACT ${b} FROM BOTH SIDES`, answer: c - b },
           { prompt: `DIVIDE BY ${a}`, answer: x }
@@ -381,6 +410,7 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
       return {
         question: `SOLVE FOR x: x + ${a} ${symbol} ${c}`,
         answer: isGreater ? `>${c - a}` : `<${c - a}`,
+        complexity: 'COMBO',
         inputType: 'INEQUALITY',
         steps: [
           { prompt: `SUBTRACT ${a} FROM BOTH SIDES`, answer: c - a },
@@ -392,12 +422,16 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
     3: () => {
       const isTriangle = Math.random() > 0.5;
       const b = Math.floor(Math.random() * 10) + 2;
-      const h = Math.floor(Math.random() * 10) + 2;
+      let h = Math.floor(Math.random() * 10) + 2;
+      if (isTriangle && b % 2 !== 0 && h % 2 !== 0) {
+        h += 1;
+      }
       const ans = isTriangle ? (b * h) / 2 : b * h;
       
       return {
         question: `AREA OF ${isTriangle ? 'TRIANGLE' : 'PARALLELOGRAM'}: b=${b}, h=${h}`,
         answer: ans.toString(),
+        complexity: isTriangle ? 'COMBO' : 'QUICK',
         steps: [
           { prompt: `MULTIPLY BASE AND HEIGHT`, answer: b * h },
           ...(isTriangle ? [{ prompt: `DIVIDE BY 2`, answer: ans }] : [])
@@ -408,8 +442,8 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
     4: () => {
       const measure = Math.floor(Math.random() * 3); // 0=Mean, 1=Median, 2=Range
       if (measure === 0) {
-        // Generate 5 numbers with exact integer mean
-        const mean = Math.floor(Math.random() * 15) + 6;
+        // Generate 5 small integers with exact integer mean
+        const mean = Math.floor(Math.random() * 8) + 5; // 5 to 12
         const d1 = Math.floor(Math.random() * 4) + 1;
         const d2 = Math.floor(Math.random() * 4) + 1;
         const nums = [mean - d1, mean + d1, mean - d2, mean + d2, mean];
@@ -417,6 +451,7 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
         return {
           question: `FIND MEAN: [${nums.join(', ')}]`,
           answer: mean.toString(),
+          complexity: 'COMBO',
           steps: [
             { prompt: `SUM ALL 5 VALUES`, answer: sum },
             { prompt: `DIVIDE SUM BY 5`, answer: mean }
@@ -435,6 +470,7 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
         return {
           question: `FIND MEDIAN: [${shuffled.join(', ')}]`,
           answer: sorted[2].toString(),
+          complexity: 'COMBO',
           steps: [
             { prompt: `FIND SMALLEST VALUE`, answer: sorted[0] },
             { prompt: `FIND MIDDLE VALUE AFTER SORTING`, answer: sorted[2] }
@@ -449,6 +485,7 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
         return {
           question: `FIND RANGE: [${nums.join(', ')}]`,
           answer: (max - min).toString(),
+          complexity: 'COMBO',
           steps: [
             { prompt: `FIND MAXIMUM VALUE`, answer: max },
             { prompt: `FIND MINIMUM VALUE`, answer: min },

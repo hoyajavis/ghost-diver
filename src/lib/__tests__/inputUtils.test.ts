@@ -16,6 +16,7 @@ describe('inputUtils', () => {
       question: 'CONCEPT: Test?',
       answer: 'A',
       type: 'MEDITATION',
+      complexity: 'QUICK',
       choices: ['A', 'B'],
       steps: [],
     };
@@ -30,6 +31,7 @@ describe('inputUtils', () => {
       question: 'Test',
       answer: '1',
       type: 'ATTACK',
+      complexity: 'QUICK',
     };
 
     expect(inferInputType(baseProblem, { prompt: 'p', answer: '3/4' })).toBe('FRACTION');
@@ -46,6 +48,7 @@ describe('inputUtils', () => {
       question: 'CLASSIFY 15',
       answer: 'COMPOSITE',
       type: 'ATTACK',
+      complexity: 'QUICK',
       choices: ['PRIME', 'COMPOSITE'],
       steps: [
         { prompt: 'HOW MANY FACTORS?', answer: 4 },
@@ -63,6 +66,7 @@ describe('inputUtils', () => {
       question: 'FIND FACTORS OF 6',
       answer: '1,2,3,6',
       type: 'ATTACK',
+      complexity: 'QUICK',
       multiSelectOptions: ['1', '2', '3', '4', '6'],
       steps: [
         { prompt: 'SMALLEST FACTOR?', answer: 1 },
@@ -80,6 +84,7 @@ describe('inputUtils', () => {
       question: 'SIMPLIFY: 4/8',
       answer: '1/2',
       type: 'ATTACK',
+      complexity: 'COMBO',
       inputType: 'FRACTION',
       requireSimplified: true,
       steps: [
@@ -94,7 +99,7 @@ describe('inputUtils', () => {
   });
 
   it('falls back to problem.inputType or NUMPAD when not in hint mode', () => {
-    expect(inferInputType({ question: 'q', answer: '1/2', type: 'ATTACK', inputType: 'FRACTION' }, null)).toBe('FRACTION');
-    expect(inferInputType({ question: 'q', answer: 5, type: 'ATTACK' }, null)).toBe('NUMPAD');
+    expect(inferInputType({ question: 'q', answer: '1/2', type: 'ATTACK', complexity: 'QUICK', inputType: 'FRACTION' }, null)).toBe('FRACTION');
+    expect(inferInputType({ question: 'q', answer: 5, type: 'ATTACK', complexity: 'QUICK' }, null)).toBe('NUMPAD');
   });
 });

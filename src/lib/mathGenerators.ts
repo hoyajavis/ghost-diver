@@ -84,6 +84,7 @@ export const MEDITATION_GENERATOR: ProblemGenerator = () => {
   return {
     question: `CONCEPT: ${q.question}`,
     answer: q.answer,
+    complexity: 'QUICK',
     choices: q.choices,
     steps: []
   };

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Cpu, BrainCircuit } from 'lucide-react';
+import { MEDITATION_FP_COST } from '../../lib/combatLogic';
 
 export interface CombatActionBarProps {
   onHintClick: () => void;
@@ -35,8 +36,8 @@ export const CombatActionBar: React.FC<CombatActionBarProps> = ({
         type="button"
         onClick={onMeditationClick}
         disabled={meditationDisabled}
-        aria-label="Meditate to recover HP (costs 25 FP)"
-        title="Meditate (25 FP)"
+        aria-label={`Meditate to recover HP (costs ${MEDITATION_FP_COST} FP)`}
+        title={`Meditate (${MEDITATION_FP_COST} FP)`}
         className="min-w-11 min-h-11 px-2 bg-gb-0 border border-gb-3 flex flex-col items-center justify-center disabled:opacity-30 hover:bg-gb-2 hover:text-gb-0 transition-colors"
       >
         <BrainCircuit className="w-4 h-4" />

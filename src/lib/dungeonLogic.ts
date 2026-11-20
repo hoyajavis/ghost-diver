@@ -1,7 +1,9 @@
 import { Chest, DataLog, Enemy, Position } from '../types';
+import { ENEMY_TIERS } from './enemyData';
 
 export const DIVE_COST_PER_FLOOR = 50;
-export const MAX_ENEMIES_PER_FLOOR = 8;
+export const MAX_ENEMIES_PER_FLOOR = 5;
+export const APEX_HP_MULTIPLIER = 1.5;
 export const MAX_TIER = 12;
 export const FLOORS_PER_SECTOR = 5;
 export const MAX_FLOOR = MAX_TIER * FLOORS_PER_SECTOR;
@@ -43,8 +45,24 @@ export function getBankableHintPacks(runHintPacks: number, preloadedHints: numbe
 }
 
 export function getEnemyCountForFloor(floor: number): number {
-  const safeFloor = Math.max(1, Math.floor(floor));
-  return Math.min(MAX_ENEMIES_PER_FLOOR, 2 + Math.floor(safeFloor / 5));
+  const safeFloor = clampFloor(floor);
+  const tier = getTierForFloor(safeFloor);
+  const floorInTier = ((safeFloor - 1) % FLOORS_PER_SECTOR) + 1;
+
+  if (tier === 1) return floorInTier <= 2 ? 2 : 3;
+  if (tier === 2) return 3;
+  if (tier === 3) return floorInTier <= 2 ? 3 : 4;
+  if (tier === 4) return 4;
+  return MAX_ENEMIES_PER_FLOOR;
+}
+
+export function getPatrolBaseHpForTier(tier: number): number {
+  const safeTier = clampTier(tier);
+  return (ENEMY_TIERS[safeTier] ?? ENEMY_TIERS[1]).baseHp;
+}
+
+export function getApexHpForTier(tier: number): number {
+  return Math.round(getPatrolBaseHpForTier(tier) * APEX_HP_MULTIPLIER);
 }
 
 export function getReachablePositions(

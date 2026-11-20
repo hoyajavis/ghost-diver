@@ -1,7 +1,14 @@
 import { DungeonState, Position, Enemy, Chest, DataLog } from '../types';
 import { LORE_ENTRIES } from './lore';
 import { ENEMY_TIERS } from './enemyData';
-import { clampTier, getEnemyCountForFloor, getReachablePositions, posKey } from './dungeonLogic';
+import {
+  clampTier,
+  getApexHpForTier,
+  getEnemyCountForFloor,
+  getPatrolBaseHpForTier,
+  getReachablePositions,
+  posKey,
+} from './dungeonLogic';
 
 const GRID_SIZE = 10;
 const WALL_COUNT = 15;
@@ -74,8 +81,9 @@ export function generateFloor(
   tier: number,
   rng: () => number = Math.random
 ): DungeonState {
-  const numEnemies = getEnemyCountForFloor(floor);
-  const floorInTier = ((Math.max(1, floor) - 1) % 5) + 1;
+  const safeFloor = Number.isFinite(floor) ? Math.max(1, Math.floor(floor)) : 1;
+  const numEnemies = getEnemyCountForFloor(safeFloor);
+  const floorInTier = ((safeFloor - 1) % 5) + 1;
   const isTierCulmination = floorInTier === 5;
 
   // Guarantee enough reachable tiles for player + stairs + enemies + chest + log + maneuvering room
@@ -102,7 +110,7 @@ export function generateFloor(
 
   const safeTier = clampTier(tier);
   const tierData = ENEMY_TIERS[safeTier] ?? ENEMY_TIERS[1];
-  const baseHp = tierData.baseHp;
+  const baseHp = getPatrolBaseHpForTier(safeTier);
   const variantIds = Object.keys(tierData.variants)
     .map((k) => parseInt(k, 10))
     .sort((a, b) => a - b);
@@ -114,10 +122,10 @@ export function generateFloor(
 
     const variant = selectEnemyVariant(floorInTier, i, variantIds);
     const isApex = isTierCulmination && i === 0;
-    const hp = isApex ? Math.round(baseHp * 1.25) : baseHp;
+    const hp = isApex ? getApexHpForTier(safeTier) : baseHp;
 
     enemies.push({
-      id: `e_${floor}_${i}`,
+      id: `e_${safeFloor}_${i}`,
       pos,
       hp,
       maxHp: hp,
@@ -131,7 +139,7 @@ export function generateFloor(
     const pos = takeSpawnPos();
     if (pos) {
       chests.push({
-        id: `c_${floor}_1`,
+        id: `c_${safeFloor}_1`,
         pos,
         type: 'RED',
         opened: false,
@@ -145,7 +153,7 @@ export function generateFloor(
     if (pos) {
       const randomLore = LORE_ENTRIES[Math.floor(rng() * LORE_ENTRIES.length)];
       logs.push({
-        id: `l_${floor}_1`,
+        id: `l_${safeFloor}_1`,
         pos,
         loreId: randomLore.id,
         collected: false,
@@ -154,7 +162,7 @@ export function generateFloor(
   }
 
   return {
-    floor,
+    floor: safeFloor,
     tier: safeTier,
     gridSize: GRID_SIZE,
     walls,

@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
+  APEX_HP_MULTIPLIER,
   canDescendFromFloor,
   clampFloor,
   clampTier,
   FLOORS_PER_SECTOR,
+  getApexHpForTier,
   getBankableHintPacks,
   getDiveCost,
   getEnemyCountForFloor,
   getNextUnlockedFloor,
+  getPatrolBaseHpForTier,
   getReachablePositions,
   getTierForFloor,
   MAX_ENEMIES_PER_FLOOR,
@@ -85,11 +88,43 @@ describe('dungeonLogic', () => {
     expect(getBankableHintPacks(1, 0)).toBe(1);
   });
 
-  it('caps enemy counts safely even at extreme depths', () => {
+  it('scales enemy counts progressively by sector and caps at 5 in Sector 5+', () => {
+    expect(MAX_ENEMIES_PER_FLOOR).toBe(5);
+    // Sector 1 (F1-2 -> 2, F3-5 -> 3)
+    expect(getEnemyCountForFloor(0)).toBe(2);
     expect(getEnemyCountForFloor(1)).toBe(2);
-    expect(getEnemyCountForFloor(10)).toBe(4);
+    expect(getEnemyCountForFloor(2)).toBe(2);
+    expect(getEnemyCountForFloor(3)).toBe(3);
+    expect(getEnemyCountForFloor(5)).toBe(3);
+    // Sector 2 (F6-10 -> 3)
+    expect(getEnemyCountForFloor(6)).toBe(3);
+    expect(getEnemyCountForFloor(10)).toBe(3);
+    // Sector 3 (F11-12 -> 3, F13-15 -> 4)
+    expect(getEnemyCountForFloor(11)).toBe(3);
+    expect(getEnemyCountForFloor(12)).toBe(3);
+    expect(getEnemyCountForFloor(13)).toBe(4);
+    expect(getEnemyCountForFloor(15)).toBe(4);
+    // Sector 4 (F16-20 -> 4)
+    expect(getEnemyCountForFloor(16)).toBe(4);
+    expect(getEnemyCountForFloor(20)).toBe(4);
+    // Sector 5+ (F21-60+ -> 5)
+    expect(getEnemyCountForFloor(21)).toBe(MAX_ENEMIES_PER_FLOOR);
+    expect(getEnemyCountForFloor(60)).toBe(MAX_ENEMIES_PER_FLOOR);
     expect(getEnemyCountForFloor(100)).toBe(MAX_ENEMIES_PER_FLOOR);
     expect(getEnemyCountForFloor(500)).toBe(MAX_ENEMIES_PER_FLOOR);
+  });
+
+  it('computes patrol base HP and 1.5x Apex HP cleanly across all tiers', () => {
+    expect(APEX_HP_MULTIPLIER).toBe(1.5);
+    expect(getPatrolBaseHpForTier(0)).toBe(30);
+    expect(getPatrolBaseHpForTier(1)).toBe(30);
+    expect(getPatrolBaseHpForTier(3)).toBe(50);
+    expect(getPatrolBaseHpForTier(12)).toBe(140);
+    expect(getPatrolBaseHpForTier(99)).toBe(140);
+
+    expect(getApexHpForTier(1)).toBe(45);
+    expect(getApexHpForTier(3)).toBe(75);
+    expect(getApexHpForTier(12)).toBe(210);
   });
 
   it('finds only tiles reachable via BFS around walls', () => {

@@ -34,7 +34,7 @@ export const WorkbenchStation: React.FC<Props> = ({ stats, onUpgrade }) => {
       />
       <UpgradeItem
         title="AI Preload"
-        desc="Free Hint Packs each dive"
+        desc="Free Tactical Hint Packs each dive"
         level={stats.upgrades.hints}
         cost={(stats.upgrades.hints + 1) * 100}
         icon={<Cpu className="w-4 h-4 text-neon-magenta" />}
@@ -53,7 +53,7 @@ export const WorkbenchStation: React.FC<Props> = ({ stats, onUpgrade }) => {
               <div className="text-xs font-bold text-gb-3">
                 Hint Pack <span className="text-gb-2 font-normal">· Owned: {stats.hintPacks}</span>
               </div>
-              <div className="text-xs text-gb-2 font-sans">Breaks problems into guided steps</div>
+              <div className="text-xs text-gb-2 font-sans">Reveals step clue &amp; shields next hit</div>
             </div>
           </div>
           <button

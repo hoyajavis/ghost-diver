@@ -1,6 +1,7 @@
 import React, { useEffect, useCallback } from 'react';
 import { DungeonState, PlayerStats } from '../types';
 import { getScarName } from '../lib/scarData';
+import { getAtkUpStacks } from '../lib/combatLogic';
 import {
   Cpu,
   ArrowUp,
@@ -54,7 +55,7 @@ const LEGEND_ITEMS = [
     ),
   },
   {
-    label: 'Cache (+ATK)',
+    label: 'Cache (+Shards)',
     icon: (
       <div className="w-6 h-6 bg-gb-0 border-2 border-amber-500 flex items-center justify-center rounded-sm shrink-0">
         <Box className="w-3.5 h-3.5 text-amber-500" />
@@ -77,6 +78,7 @@ const LEGEND_ITEMS = [
 
 export const Dungeon: React.FC<Props> = ({ dungeon, stats, onMove, onEject, isActive = true }) => {
   const [showSystemMenu, setShowSystemMenu] = React.useState(false);
+  const atkUpStacks = getAtkUpStacks(stats.runBuffs);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -374,7 +376,7 @@ export const Dungeon: React.FC<Props> = ({ dungeon, stats, onMove, onEject, isAc
               <div className="flex justify-between">
                 <span className="text-gb-2">Active Buffs</span>
                 <span className="font-bold text-neon-cyan">
-                  {stats.runBuffs.length > 0 ? `+${stats.runBuffs.length * 10}% ATK` : 'None'}
+                  {atkUpStacks > 0 ? `+${atkUpStacks * 15}% Shards` : 'None'}
                 </span>
               </div>
               <div className="flex justify-between">
@@ -454,9 +456,9 @@ export const Dungeon: React.FC<Props> = ({ dungeon, stats, onMove, onEject, isAc
                     <Zap className="w-4 h-4" />
                     Active Buffs
                   </div>
-                  {stats.runBuffs.length > 0 ? (
+                  {atkUpStacks > 0 ? (
                     <div className="text-xs font-bold text-neon-cyan">
-                      Neural Overclock (+{stats.runBuffs.length * 10}% Attack)
+                      Neural Overclock (+{atkUpStacks * 15}% Shards · Apex Step-Skip)
                     </div>
                   ) : (
                     <div className="text-xs text-gb-2">No active buffs</div>

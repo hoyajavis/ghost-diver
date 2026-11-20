@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { ENEMY_TIERS } from '../enemyData';
-import { getReachablePositions, MAX_ENEMIES_PER_FLOOR, posKey } from '../dungeonLogic';
+import {
+  getApexHpForTier,
+  getPatrolBaseHpForTier,
+  getReachablePositions,
+  MAX_ENEMIES_PER_FLOOR,
+  posKey,
+} from '../dungeonLogic';
 import { generateFloor } from '../mapGen';
 
 describe('mapGen floor generation', () => {
@@ -48,13 +54,14 @@ describe('mapGen floor generation', () => {
     }
   });
 
-  it('spawns mixed variants and an Apex Sentinel with boosted HP on Floor 5 of each tier', () => {
+  it('spawns mixed variants and an Apex Sentinel with 1.5x boosted HP on Floor 5 of each tier', () => {
     const dungeon = generateFloor(15, 3); // Tier 3 has 3 variants, Floor 15 has floorInTier === 5
     const tierData = ENEMY_TIERS[3];
 
-    expect(dungeon.enemies.length).toBeGreaterThanOrEqual(3);
+    expect(dungeon.enemies.length).toBe(4);
     expect(dungeon.enemies[0].type).toBe(`${tierData.name}_APEX`);
-    expect(dungeon.enemies[0].maxHp).toBe(Math.round(tierData.baseHp * 1.25));
+    expect(dungeon.enemies[0].maxHp).toBe(getApexHpForTier(3));
+    expect(dungeon.enemies[1].maxHp).toBe(getPatrolBaseHpForTier(3));
 
     const variantsSpawned = new Set(dungeon.enemies.map((e) => e.variant));
     expect(variantsSpawned.size).toBeGreaterThan(1);
@@ -67,6 +74,33 @@ describe('mapGen floor generation', () => {
     expect(dungeon.tier).toBe(12);
     expect(dungeon.enemies.length).toBeGreaterThan(0);
     expect(dungeon.enemies[0].type).toBe(tier12Data.name);
-    expect(dungeon.enemies[0].maxHp).toBe(tier12Data.baseHp);
+    expect(dungeon.enemies[0].maxHp).toBe(getPatrolBaseHpForTier(12));
+  });
+
+  it('sanitizes invalid and non-integer floors to finite integers >= 1 with defined enemy variants and positive HP', () => {
+    const invalidFloors = [0, -5, Number.NaN, Number.POSITIVE_INFINITY, 2.5];
+
+    for (const rawFloor of invalidFloors) {
+      const dungeon = generateFloor(rawFloor, 1);
+
+      expect(Number.isFinite(dungeon.floor)).toBe(true);
+      expect(Number.isInteger(dungeon.floor)).toBe(true);
+      expect(dungeon.floor).toBeGreaterThanOrEqual(1);
+      expect(dungeon.enemies.length).toBeGreaterThan(0);
+
+      for (const enemy of dungeon.enemies) {
+        expect(enemy.variant).toBeDefined();
+        expect(Number.isInteger(enemy.variant)).toBe(true);
+        expect(Number.isFinite(enemy.hp)).toBe(true);
+        expect(enemy.hp).toBeGreaterThan(0);
+        expect(Number.isFinite(enemy.maxHp)).toBe(true);
+        expect(enemy.maxHp).toBeGreaterThan(0);
+      }
+    }
+
+    // Fractional floor 2.5 floors to 2 (floorInTier === 2)
+    const fractional = generateFloor(2.5, 1);
+    expect(fractional.floor).toBe(2);
+    expect(fractional.enemies[0].id).toBe('e_2_0');
   });
 });

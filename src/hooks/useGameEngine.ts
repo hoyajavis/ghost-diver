@@ -135,7 +135,7 @@ export function useGameEngine() {
       ...prev,
       runBuffs: [...prev.runBuffs, 'ATK_UP'],
     }));
-    return 'Neural Overclock Active: +10% Attack Power';
+    return 'Neural Overclock Active: +15% Shards & Apex Step-Skip';
   };
 
   const handleMove = (dx: number, dy: number) => {

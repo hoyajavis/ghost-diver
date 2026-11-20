@@ -38,7 +38,11 @@ describe('inputUtils', () => {
     expect(inferInputType(baseProblem, { prompt: 'p', answer: '2:5' })).toBe('RATIO');
     expect(inferInputType(baseProblem, { prompt: 'p', answer: '-2,4' })).toBe('COORDINATE');
     expect(inferInputType(baseProblem, { prompt: 'p', answer: '<' })).toBe('RELATIONSHIP');
+    expect(inferInputType(baseProblem, { prompt: 'p', answer: '≤' })).toBe('RELATIONSHIP');
+    expect(inferInputType(baseProblem, { prompt: 'p', answer: '≥' })).toBe('RELATIONSHIP');
     expect(inferInputType(baseProblem, { prompt: 'p', answer: '>5' })).toBe('INEQUALITY');
+    expect(inferInputType(baseProblem, { prompt: 'p', answer: '≤5' })).toBe('INEQUALITY');
+    expect(inferInputType(baseProblem, { prompt: 'p', answer: '≥-3' })).toBe('INEQUALITY');
     expect(inferInputType(baseProblem, { prompt: 'p', answer: 42 })).toBe('NUMPAD');
     expect(inferInputType(baseProblem, { prompt: 'p', answer: 42, inputType: 'FRACTION' })).toBe('FRACTION');
   });

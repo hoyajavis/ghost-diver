@@ -20,7 +20,12 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
           answer: sum.toString(),
           complexity: 'QUICK',
           steps: [
-            { prompt: `ALIGN DECIMALS: ${a} + ${b}`, answer: sum.toString() }
+            {
+              prompt: `ALIGN DECIMALS: ${a} + ${b}`,
+              answer: sum.toString(),
+              clue: 'Add the whole parts and decimal parts separately, then combine.',
+              resultLabel: `Sum = ${sum}`
+            }
           ]
         };
       } else {
@@ -33,7 +38,12 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
           answer: diff.toString(),
           complexity: 'QUICK',
           steps: [
-            { prompt: `ALIGN DECIMALS: ${big} - ${small}`, answer: diff.toString() }
+            {
+              prompt: `ALIGN DECIMALS: ${big} - ${small}`,
+              answer: diff.toString(),
+              clue: 'Line up the decimal points and subtract place by place.',
+              resultLabel: `Diff = ${diff}`
+            }
           ]
         };
       }
@@ -58,7 +68,12 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
           answer: prod.toString(),
           complexity: 'QUICK',
           steps: [
-            { prompt: `MULTIPLY: ${pair.dec} * ${whole}`, answer: prod.toString() }
+            {
+              prompt: `MULTIPLY: ${pair.dec} * ${whole}`,
+              answer: prod.toString(),
+              clue: 'Think of the decimal as a clean fraction (1/2, 1/4, 3/4, 1/5) or scale by 10.',
+              resultLabel: `Prod = ${prod}`
+            }
           ]
         };
       } else {
@@ -71,7 +86,12 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
           answer: quotient.toString(),
           complexity: 'QUICK',
           steps: [
-            { prompt: `SHIFT DECIMALS RIGHT: ${Math.round(dividend * shift)} / ${Math.round(divisor * shift)}`, answer: quotient.toString() }
+            {
+              prompt: `SHIFT DECIMALS RIGHT: ${Math.round(dividend * shift)} / ${Math.round(divisor * shift)}`,
+              answer: quotient.toString(),
+              clue: 'Shift both decimal points right by the same places to divide whole numbers.',
+              resultLabel: `Quot = ${quotient}`
+            }
           ]
         };
       }
@@ -97,7 +117,12 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
         answer: f.dec.toString(),
         complexity: 'QUICK',
         steps: [
-          { prompt: `DIVIDE NUMERATOR BY DENOMINATOR: ${f.n} / ${f.d}`, answer: f.dec.toString() }
+          {
+            prompt: `DIVIDE NUMERATOR BY DENOMINATOR: ${f.n} / ${f.d}`,
+            answer: f.dec.toString(),
+            clue: 'Scale the fraction to tenths (/10) or hundredths (/100) to read the decimal.',
+            resultLabel: `${f.n}/${f.d} = ${f.dec}`
+          }
         ]
       };
     },
@@ -129,8 +154,19 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
         inputType: 'FRACTION',
         requireSimplified: true,
         steps: [
-          { prompt: `WRITE AS FRACTION OVER ${unsimplifiedD}`, answer: `${unsimplifiedN}/${unsimplifiedD}` },
-          { prompt: `SIMPLIFY TO LOWEST TERMS`, answer: `${f.n}/${f.d}`, requireSimplified: true }
+          {
+            prompt: `WRITE ${f.dec} AS A FRACTION OVER ${unsimplifiedD}`,
+            answer: `${unsimplifiedN}/${unsimplifiedD}`,
+            clue: '1 decimal place = tenths (/10); 2 decimal places = hundredths (/100).',
+            resultLabel: `${f.dec} = ${unsimplifiedN}/${unsimplifiedD}`
+          },
+          {
+            prompt: `SIMPLIFY ${unsimplifiedN}/${unsimplifiedD} TO LOWEST TERMS`,
+            answer: `${f.n}/${f.d}`,
+            requireSimplified: true,
+            clue: 'Divide numerator and denominator by their greatest common divisor.',
+            resultLabel: `${f.n}/${f.d}`
+          }
         ]
       };
     }
@@ -154,9 +190,24 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
         complexity: 'COMBO',
         inputType: 'RATIO',
         steps: [
-          { prompt: `IDENTIFY FIRST QUANTITY`, answer: count1 },
-          { prompt: `IDENTIFY SECOND QUANTITY`, answer: count2 },
-          { prompt: `FORMAT AS RATIO (A:B)`, answer: `${count1}:${count2}` }
+          {
+            prompt: `COUNT OF ${item.name1} (${count1} ${item.name1} TO ${count2} ${item.name2})`,
+            answer: count1,
+            clue: 'Read the first quantity mentioned in the ratio statement.',
+            resultLabel: `${item.name1} = ${count1}`
+          },
+          {
+            prompt: `COUNT OF ${item.name2} (${count1} ${item.name1} TO ${count2} ${item.name2})`,
+            answer: count2,
+            clue: 'Read the second quantity mentioned in the ratio statement.',
+            resultLabel: `${item.name2} = ${count2}`
+          },
+          {
+            prompt: `WRITE RATIO (${count1} ${item.name1} TO ${count2} ${item.name2}) AS A:B`,
+            answer: `${count1}:${count2}`,
+            clue: 'Ratio order matches the wording: first quantity : second quantity.',
+            resultLabel: `${count1}:${count2}`
+          }
         ]
       };
     },
@@ -178,7 +229,12 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
         answer: rate.toString(),
         complexity: 'QUICK',
         steps: [
-          { prompt: `DIVIDE TOTAL BY UNITS: ${total} / ${units}`, answer: rate }
+          {
+            prompt: `DIVIDE TOTAL BY UNITS: ${total} / ${units}`,
+            answer: rate,
+            clue: 'Unit rate = total quantity ÷ number of units (amount per 1 unit).',
+            resultLabel: `Rate = ${rate}`
+          }
         ]
       };
     },
@@ -195,8 +251,18 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
         answer: ans.toString(),
         complexity: 'COMBO',
         steps: [
-          { prompt: `CONVERT ${p}% TO DECIMAL`, answer: (p / 100).toString() },
-          { prompt: `MULTIPLY: ${(p / 100)} * ${whole}`, answer: ans }
+          {
+            prompt: `CONVERT ${p}% TO DECIMAL`,
+            answer: (p / 100).toString(),
+            clue: 'Divide a percent by 100 (shift the decimal 2 places left).',
+            resultLabel: `${p}% = ${p / 100}`
+          },
+          {
+            prompt: `MULTIPLY: ${(p / 100)} * ${whole}`,
+            answer: ans,
+            clue: 'Multiply the decimal rate by the whole amount.',
+            resultLabel: `Ans = ${ans}`
+          }
         ]
       };
     }
@@ -214,8 +280,19 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
         answer: ans.toString(),
         complexity: 'COMBO',
         steps: [
-          { prompt: `SIGN OF RESULT?`, answer: signChoice, choices: ['POSITIVE', 'NEGATIVE', 'ZERO'] },
-          { prompt: `CALCULATE SUM`, answer: ans }
+          {
+            prompt: `SIGN OF ${a} + (${b})?`,
+            answer: signChoice,
+            choices: ['POSITIVE', 'NEGATIVE', 'ZERO'],
+            clue: 'Compare distances from 0: the number farther from 0 sets the sign.',
+            resultLabel: `Sign = ${signChoice}`
+          },
+          {
+            prompt: `CALCULATE SUM: ${a} + (${b})`,
+            answer: ans,
+            clue: 'Same signs: add magnitudes. Different signs: subtract magnitudes.',
+            resultLabel: `Sum = ${ans}`
+          }
         ]
       };
     },
@@ -231,8 +308,18 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
         answer: ans.toString(),
         complexity: 'COMBO',
         steps: [
-          { prompt: `FIND THE OPPOSITE OF ${b}`, answer: oppB },
-          { prompt: `ADD ${a} + (${oppB})`, answer: ans }
+          {
+            prompt: `FIND THE OPPOSITE OF ${b}`,
+            answer: oppB,
+            clue: 'Subtracting a number is the same as adding its opposite (flip the sign).',
+            resultLabel: `Opp = ${oppB}`
+          },
+          {
+            prompt: `ADD ${a} + (${oppB})`,
+            answer: ans,
+            clue: 'Now add the two integers using the integer addition sign rule.',
+            resultLabel: `Ans = ${ans}`
+          }
         ]
       };
     },
@@ -246,7 +333,12 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
         answer: ans.toString(),
         complexity: 'QUICK',
         steps: [
-          { prompt: `DISTANCE FROM ZERO`, answer: ans }
+          {
+            prompt: `DISTANCE OF ${a} FROM ZERO: |${a}|`,
+            answer: ans,
+            clue: 'Absolute value is always non-negative (drop any minus sign).',
+            resultLabel: `|${a}| = ${ans}`
+          }
         ]
       };
     },
@@ -261,9 +353,24 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
         complexity: 'COMBO',
         inputType: 'COORDINATE',
         steps: [
-          { prompt: `IDENTIFY X-COORDINATE`, answer: x },
-          { prompt: `IDENTIFY Y-COORDINATE`, answer: y },
-          { prompt: `PLOT POINT ON GRID`, answer: `${x},${y}` }
+          {
+            prompt: `IDENTIFY X-COORDINATE OF (${x}, ${y})`,
+            answer: x,
+            clue: 'In an ordered pair (x, y), x is the first number (horizontal).',
+            resultLabel: `x = ${x}`
+          },
+          {
+            prompt: `IDENTIFY Y-COORDINATE OF (${x}, ${y})`,
+            answer: y,
+            clue: 'In an ordered pair (x, y), y is the second number (vertical).',
+            resultLabel: `y = ${y}`
+          },
+          {
+            prompt: `PLOT (${x}, ${y}) ON GRID`,
+            answer: `${x},${y}`,
+            clue: 'Move horizontally to x, then vertically to y.',
+            resultLabel: `(${x}, ${y})`
+          }
         ]
       };
     }
@@ -282,11 +389,26 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
         complexity: isCube ? 'COMBO' : 'QUICK',
         steps: isCube
           ? [
-              { prompt: `SQUARE FIRST: ${base} * ${base}`, answer: base * base },
-              { prompt: `MULTIPLY BY ${base} AGAIN`, answer: ans }
+              {
+                prompt: `SQUARE FIRST: ${base} * ${base}`,
+                answer: base * base,
+                clue: 'Start a cube by multiplying the base by itself once.',
+                resultLabel: `${base}² = ${base * base}`
+              },
+              {
+                prompt: `MULTIPLY BY ${base} AGAIN: ${base * base} * ${base}`,
+                answer: ans,
+                clue: 'n³ = (n × n) × n: multiply the square by the base once more.',
+                resultLabel: `${base}³ = ${ans}`
+              }
             ]
           : [
-              { prompt: `MULTIPLY ${base} BY ITSELF`, answer: ans }
+              {
+                prompt: `MULTIPLY ${base} BY ITSELF`,
+                answer: ans,
+                clue: 'Squaring a number means multiplying it by itself (n × n).',
+                resultLabel: `${base}² = ${ans}`
+              }
             ]
       };
     },
@@ -303,8 +425,18 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
         answer: ans.toString(),
         complexity: 'COMBO',
         steps: [
-          { prompt: `MULTIPLY FIRST: ${b} * ${c}`, answer: b * c },
-          { prompt: `ADD: ${a} + ${b * c}`, answer: ans }
+          {
+            prompt: `MULTIPLY FIRST: ${b} * ${c}`,
+            answer: b * c,
+            clue: 'PEMDAS: always multiply before adding.',
+            resultLabel: `${b}×${c} = ${b * c}`
+          },
+          {
+            prompt: `ADD: ${a} + ${b * c}`,
+            answer: ans,
+            clue: 'Add the remaining term to the product.',
+            resultLabel: `Val = ${ans}`
+          }
         ]
       };
     },
@@ -322,8 +454,18 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
         answer: ans.toString(),
         complexity: 'COMBO',
         steps: [
-          { prompt: `SUBSTITUTE & MULTIPLY: ${a} * ${x}`, answer: prod },
-          { prompt: `${isAdd ? 'ADD' : 'SUBTRACT'} ${b}`, answer: ans }
+          {
+            prompt: `SUBSTITUTE & MULTIPLY: ${a} * ${x}`,
+            answer: prod,
+            clue: `Replace x with ${x} and multiply by the coefficient first.`,
+            resultLabel: `${a}x = ${prod}`
+          },
+          {
+            prompt: `${isAdd ? 'ADD' : 'SUBTRACT'}: ${prod} ${isAdd ? '+' : '-'} ${b}`,
+            answer: ans,
+            clue: `Finish by ${isAdd ? 'adding' : 'subtracting'} the constant term.`,
+            resultLabel: `Val = ${ans}`
+          }
         ]
       };
     },
@@ -339,7 +481,12 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
           answer: x.toString(),
           complexity: 'QUICK',
           steps: [
-            { prompt: `SUBTRACT ${a} FROM ${c}`, answer: x }
+            {
+              prompt: `SUBTRACT ${a} FROM ${c}`,
+              answer: x,
+              clue: `Undo +${a} by subtracting ${a} from both sides.`,
+              resultLabel: `x = ${x}`
+            }
           ]
         };
       } else if (opIndex === 1) {
@@ -351,7 +498,12 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
           answer: x.toString(),
           complexity: 'QUICK',
           steps: [
-            { prompt: `ADD ${a} TO ${c}`, answer: x }
+            {
+              prompt: `ADD ${a} TO ${c}`,
+              answer: x,
+              clue: `Undo -${a} by adding ${a} to both sides.`,
+              resultLabel: `x = ${x}`
+            }
           ]
         };
       } else if (opIndex === 2) {
@@ -363,7 +515,12 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
           answer: x.toString(),
           complexity: 'QUICK',
           steps: [
-            { prompt: `DIVIDE BOTH SIDES BY ${a}: ${c} / ${a}`, answer: x }
+            {
+              prompt: `DIVIDE BOTH SIDES BY ${a}: ${c} / ${a}`,
+              answer: x,
+              clue: `Undo multiplication by dividing both sides by ${a}.`,
+              resultLabel: `x = ${x}`
+            }
           ]
         };
       } else {
@@ -375,7 +532,12 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
           answer: dividend.toString(),
           complexity: 'QUICK',
           steps: [
-            { prompt: `MULTIPLY BOTH SIDES BY ${a}: ${c} * ${a}`, answer: dividend }
+            {
+              prompt: `MULTIPLY BOTH SIDES BY ${a}: ${c} * ${a}`,
+              answer: dividend,
+              clue: `Undo division by multiplying both sides by ${a}.`,
+              resultLabel: `x = ${dividend}`
+            }
           ]
         };
       }
@@ -394,8 +556,18 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
         answer: x.toString(),
         complexity: 'COMBO',
         steps: [
-          { prompt: `SUBTRACT ${b} FROM BOTH SIDES`, answer: c - b },
-          { prompt: `DIVIDE BY ${a}`, answer: x }
+          {
+            prompt: `SUBTRACT ${b} FROM BOTH SIDES (${c} - ${b}) TO FIND ${a}x`,
+            answer: c - b,
+            clue: `Undo +${b} first by subtracting ${b} from both sides.`,
+            resultLabel: `${a}x = ${c - b}`
+          },
+          {
+            prompt: `DIVIDE BY ${a}: ${c - b} / ${a}`,
+            answer: x,
+            clue: `Undo multiplication by dividing both sides by ${a}.`,
+            resultLabel: `x = ${x}`
+          }
         ]
       };
     },
@@ -413,8 +585,18 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
         complexity: 'COMBO',
         inputType: 'INEQUALITY',
         steps: [
-          { prompt: `SUBTRACT ${a} FROM BOTH SIDES`, answer: c - a },
-          { prompt: `WRITE INEQUALITY`, answer: isGreater ? `>${c - a}` : `<${c - a}` }
+          {
+            prompt: `SUBTRACT ${a} FROM BOTH SIDES: ${c} - ${a}`,
+            answer: c - a,
+            clue: `Subtracting ${a} from both sides keeps the ${symbol} sign unchanged.`,
+            resultLabel: `Bound = ${c - a}`
+          },
+          {
+            prompt: `WRITE INEQUALITY FOR x + ${a} ${symbol} ${c}`,
+            answer: isGreater ? `>${c - a}` : `<${c - a}`,
+            clue: `Combine the ${symbol} symbol with the boundary value.`,
+            resultLabel: `x ${symbol} ${c - a}`
+          }
         ]
       };
     },
@@ -433,8 +615,24 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
         answer: ans.toString(),
         complexity: isTriangle ? 'COMBO' : 'QUICK',
         steps: [
-          { prompt: `MULTIPLY BASE AND HEIGHT`, answer: b * h },
-          ...(isTriangle ? [{ prompt: `DIVIDE BY 2`, answer: ans }] : [])
+          {
+            prompt: `MULTIPLY BASE * HEIGHT: ${b} * ${h}`,
+            answer: b * h,
+            clue: isTriangle
+              ? 'Triangle Area = (base × height) ÷ 2; multiply base × height first.'
+              : 'Parallelogram Area = base × height.',
+            resultLabel: `b×h = ${b * h}`
+          },
+          ...(isTriangle
+            ? [
+                {
+                  prompt: `DIVIDE BY 2: ${b * h} / 2`,
+                  answer: ans,
+                  clue: 'A triangle is half of a parallelogram—divide by 2.',
+                  resultLabel: `Area = ${ans}`
+                }
+              ]
+            : [])
         ]
       };
     },
@@ -453,8 +651,18 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
           answer: mean.toString(),
           complexity: 'COMBO',
           steps: [
-            { prompt: `SUM ALL 5 VALUES`, answer: sum },
-            { prompt: `DIVIDE SUM BY 5`, answer: mean }
+            {
+              prompt: `SUM ALL 5 VALUES: ${nums.join(' + ')}`,
+              answer: sum,
+              clue: 'Add all 5 numbers together first (pair opposites around the middle).',
+              resultLabel: `Sum = ${sum}`
+            },
+            {
+              prompt: `DIVIDE SUM BY 5: ${sum} / 5`,
+              answer: mean,
+              clue: 'Mean = (sum of all values) ÷ (number of values).',
+              resultLabel: `Mean = ${mean}`
+            }
           ]
         };
       } else if (measure === 1) {
@@ -472,8 +680,18 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
           answer: sorted[2].toString(),
           complexity: 'COMBO',
           steps: [
-            { prompt: `FIND SMALLEST VALUE`, answer: sorted[0] },
-            { prompt: `FIND MIDDLE VALUE AFTER SORTING`, answer: sorted[2] }
+            {
+              prompt: `FIND SMALLEST VALUE IN [${shuffled.join(', ')}]`,
+              answer: sorted[0],
+              clue: 'Start sorting from least to greatest by locating the minimum value.',
+              resultLabel: `Min = ${sorted[0]}`
+            },
+            {
+              prompt: `FIND MIDDLE (3RD) VALUE IN [${shuffled.join(', ')}] AFTER SORTING`,
+              answer: sorted[2],
+              clue: 'Order all 5 values least to greatest; the 3rd value is the median.',
+              resultLabel: `Med = ${sorted[2]}`
+            }
           ]
         };
       } else {
@@ -487,9 +705,24 @@ export const preAlgebraGenerators: Record<number, Record<number, ProblemGenerato
           answer: (max - min).toString(),
           complexity: 'COMBO',
           steps: [
-            { prompt: `FIND MAXIMUM VALUE`, answer: max },
-            { prompt: `FIND MINIMUM VALUE`, answer: min },
-            { prompt: `SUBTRACT: MAX - MIN`, answer: max - min }
+            {
+              prompt: `FIND MAXIMUM VALUE IN [${nums.join(', ')}]`,
+              answer: max,
+              clue: 'Scan the list for the largest number.',
+              resultLabel: `Max = ${max}`
+            },
+            {
+              prompt: `FIND MINIMUM VALUE IN [${nums.join(', ')}]`,
+              answer: min,
+              clue: 'Scan the list for the smallest number.',
+              resultLabel: `Min = ${min}`
+            },
+            {
+              prompt: `SUBTRACT MAX - MIN: ${max} - ${min}`,
+              answer: max - min,
+              clue: 'Range = Maximum − Minimum.',
+              resultLabel: `Range = ${max - min}`
+            }
           ]
         };
       }

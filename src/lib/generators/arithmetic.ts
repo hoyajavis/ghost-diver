@@ -46,9 +46,24 @@ export const arithmeticGenerators: Record<number, Record<number, ProblemGenerato
           answer: base * power,
           complexity: 'QUICK',
           steps: [
-            { prompt: `IDENTIFY BASE IN ${base} * ${power}`, answer: base },
-            { prompt: `COUNT ZEROS IN ${power}`, answer: numZeros },
-            { prompt: `SHIFT DIGITS LEFT ${numZeros} PLACES`, answer: base * power }
+            {
+              prompt: `IDENTIFY BASE IN ${base} * ${power}`,
+              answer: base,
+              clue: 'The base is the number being multiplied by the power of 10.',
+              resultLabel: `Base = ${base}`
+            },
+            {
+              prompt: `COUNT ZEROS IN ${power}`,
+              answer: numZeros,
+              clue: 'Count each 0 digit in the power of 10.',
+              resultLabel: `Zeros = ${numZeros}`
+            },
+            {
+              prompt: `SHIFT ${base} LEFT ${numZeros} PLACES (${base} * ${power})`,
+              answer: base * power,
+              clue: 'Multiplying by 10, 100, or 1000 appends that many zeros.',
+              resultLabel: `Ans = ${base * power}`
+            }
           ]
         };
       } else {
@@ -58,9 +73,24 @@ export const arithmeticGenerators: Record<number, Record<number, ProblemGenerato
           answer: base,
           complexity: 'QUICK',
           steps: [
-            { prompt: `IDENTIFY DIVIDEND IN ${dividend} / ${power}`, answer: dividend },
-            { prompt: `COUNT ZEROS IN ${power}`, answer: numZeros },
-            { prompt: `SHIFT DIGITS RIGHT ${numZeros} PLACES`, answer: base }
+            {
+              prompt: `IDENTIFY DIVIDEND IN ${dividend} / ${power}`,
+              answer: dividend,
+              clue: 'The dividend is the starting number being divided.',
+              resultLabel: `Start = ${dividend}`
+            },
+            {
+              prompt: `COUNT ZEROS IN ${power}`,
+              answer: numZeros,
+              clue: 'Count each 0 digit in the divisor.',
+              resultLabel: `Zeros = ${numZeros}`
+            },
+            {
+              prompt: `SHIFT ${dividend} RIGHT ${numZeros} PLACES (${dividend} / ${power})`,
+              answer: base,
+              clue: 'Dividing by 10, 100, or 1000 removes that many trailing zeros.',
+              resultLabel: `Ans = ${base}`
+            }
           ]
         };
       }
@@ -75,15 +105,32 @@ export const arithmeticGenerators: Record<number, Record<number, ProblemGenerato
       const num = (base * place) + offset;
       
       const answer = Math.round(num / place) * place;
+      const targetDigit = Math.floor((num % (place * 10)) / place);
+      const nextDigit = Math.floor((num % place) / (place / 10));
       
       return {
         question: `APPROXIMATE: Round ${num} to nearest ${place}`,
         answer: answer,
         complexity: 'QUICK',
         steps: [
-          { prompt: `IDENTIFY TARGET DIGIT (${place}s) IN ${num}`, answer: Math.floor((num % (place * 10)) / place) },
-          { prompt: `CHECK NEXT DIGIT IN ${num}`, answer: Math.floor((num % place) / (place / 10)) },
-          { prompt: `EXECUTE ROUNDING ON ${num}`, answer: answer }
+          {
+            prompt: `IDENTIFY TARGET DIGIT (${place}s) IN ${num}`,
+            answer: targetDigit,
+            clue: `Find the digit sitting in the ${place}s place.`,
+            resultLabel: `Digit = ${targetDigit}`
+          },
+          {
+            prompt: `CHECK ${place / 10}s DIGIT IN ${num}`,
+            answer: nextDigit,
+            clue: `Look one place to the right of the ${place}s digit.`,
+            resultLabel: `Next = ${nextDigit}`
+          },
+          {
+            prompt: `ROUND ${num} TO NEAREST ${place}`,
+            answer: answer,
+            clue: '5 or more rounds up; 4 or less keeps the target digit.',
+            resultLabel: `≈ ${answer}`
+          }
         ]
       };
     },
@@ -102,9 +149,24 @@ export const arithmeticGenerators: Record<number, Record<number, ProblemGenerato
           answer: sum,
           complexity: 'COMBO',
           steps: [
-            { prompt: `ROUND ADDEND: ${b1} -> ?`, answer: roundedB },
-            { prompt: `ADD ROUNDED: ${a1} + ${roundedB}`, answer: a1 + roundedB },
-            { prompt: `SUBTRACT OVERSHOOT: ${a1 + roundedB} - ${offset}`, answer: sum }
+            {
+              prompt: `ROUND ${b1} UP TO NEAREST 100`,
+              answer: roundedB,
+              clue: 'Round up to a clean hundred to make mental addition faster.',
+              resultLabel: `${b1} ≈ ${roundedB}`
+            },
+            {
+              prompt: `ADD ROUNDED: ${a1} + ${roundedB}`,
+              answer: a1 + roundedB,
+              clue: 'Add the clean hundred while keeping the tens and ones intact.',
+              resultLabel: `${a1}+${roundedB}=${a1 + roundedB}`
+            },
+            {
+              prompt: `SUBTRACT OVERSHOOT: ${a1 + roundedB} - ${offset}`,
+              answer: sum,
+              clue: 'Subtract the extra amount you added when rounding up.',
+              resultLabel: `Sum = ${sum}`
+            }
           ]
         };
       } else {
@@ -122,9 +184,24 @@ export const arithmeticGenerators: Record<number, Record<number, ProblemGenerato
           answer: sum,
           complexity: 'COMBO',
           steps: [
-            { prompt: `ADD HUNDREDS: ${hundredsA} + ${hundredsB}`, answer: hundredsA + hundredsB },
-            { prompt: `ADD REMAINING: ${remA} + ${remB}`, answer: remA + remB },
-            { prompt: `SUM COMPONENTS: (${hundredsA + hundredsB} + ${remA + remB})`, answer: sum }
+            {
+              prompt: `ADD HUNDREDS: ${hundredsA} + ${hundredsB}`,
+              answer: hundredsA + hundredsB,
+              clue: 'Split into hundreds and remaining parts; add hundreds first.',
+              resultLabel: `${hundredsA}+${hundredsB}=${hundredsA + hundredsB}`
+            },
+            {
+              prompt: `ADD REMAINING: ${remA} + ${remB}`,
+              answer: remA + remB,
+              clue: 'Add the remaining tens and ones together.',
+              resultLabel: `${remA}+${remB}=${remA + remB}`
+            },
+            {
+              prompt: `SUM COMPONENTS: (${hundredsA + hundredsB} + ${remA + remB})`,
+              answer: sum,
+              clue: 'Combine the hundreds sum and the remaining sum.',
+              resultLabel: `Sum = ${sum}`
+            }
           ]
         };
       }
@@ -146,9 +223,24 @@ export const arithmeticGenerators: Record<number, Record<number, ProblemGenerato
         answer: diff,
         complexity: 'COMBO',
         steps: [
-          { prompt: `ROUND SUBTRAHEND: ${b1} -> ?`, answer: roundedB },
-          { prompt: `SUBTRACT ROUNDED: ${a1} - ${roundedB}`, answer: partialDiff },
-          { prompt: `ADD OVERSHOOT: ${partialDiff} + ${overshot}`, answer: diff }
+          {
+            prompt: `ROUND ${b1} UP TO NEAREST 100`,
+            answer: roundedB,
+            clue: 'Round the subtrahend up to a clean hundred first.',
+            resultLabel: `${b1} ≈ ${roundedB}`
+          },
+          {
+            prompt: `SUBTRACT ROUNDED: ${a1} - ${roundedB}`,
+            answer: partialDiff,
+            clue: 'Subtract the clean hundred from the starting number.',
+            resultLabel: `${a1}-${roundedB}=${partialDiff}`
+          },
+          {
+            prompt: `ADD OVERSHOOT: ${partialDiff} + ${overshot}`,
+            answer: diff,
+            clue: 'You subtracted extra when rounding up—add back the overshoot.',
+            resultLabel: `Diff = ${diff}`
+          }
         ]
       };
     }
@@ -166,9 +258,24 @@ export const arithmeticGenerators: Record<number, Record<number, ProblemGenerato
         answer: a2 * b2,
         complexity: 'COMBO',
         steps: [
-          { prompt: `MULTIPLY TENS: ${tensA} * ${b2}`, answer: tensA * b2 },
-          { prompt: `MULTIPLY ONES: ${onesA} * ${b2}`, answer: onesA * b2 },
-          { prompt: `SUM COMPONENTS: (${tensA * b2} + ${onesA * b2})`, answer: a2 * b2 }
+          {
+            prompt: `MULTIPLY TENS: ${tensA} * ${b2}`,
+            answer: tensA * b2,
+            clue: 'Split the 2-digit number into tens + ones; multiply tens first.',
+            resultLabel: `${tensA}×${b2}=${tensA * b2}`
+          },
+          {
+            prompt: `MULTIPLY ONES: ${onesA} * ${b2}`,
+            answer: onesA * b2,
+            clue: 'Multiply the ones digit by the single-digit factor.',
+            resultLabel: `${onesA}×${b2}=${onesA * b2}`
+          },
+          {
+            prompt: `SUM COMPONENTS: (${tensA * b2} + ${onesA * b2})`,
+            answer: a2 * b2,
+            clue: 'Add the two partial products to get the final answer.',
+            resultLabel: `Prod = ${a2 * b2}`
+          }
         ]
       };
     },
@@ -199,7 +306,12 @@ export const arithmeticGenerators: Record<number, Record<number, ProblemGenerato
         complexity: 'QUICK',
         multiSelectOptions: options,
         steps: [
-          { prompt: `FIND FACTOR PAIRS FOR ${target}`, answer: answerStr }
+          {
+            prompt: `FIND FACTOR PAIRS FOR ${target}`,
+            answer: answerStr,
+            clue: 'Factors divide the target evenly with zero remainder—check pairs from 1 up.',
+            resultLabel: `${factors.length} factors`
+          }
         ]
       };
     },
@@ -226,7 +338,12 @@ export const arithmeticGenerators: Record<number, Record<number, ProblemGenerato
         complexity: 'QUICK',
         multiSelectOptions: options,
         steps: [
-          { prompt: `FIND NUMBERS DIVISIBLE BY ${base}`, answer: answerStr }
+          {
+            prompt: `FIND NUMBERS DIVISIBLE BY ${base}`,
+            answer: answerStr,
+            clue: `Skip-count by ${base} to spot every matching multiple.`,
+            resultLabel: `Mult: ${answerStr}`
+          }
         ]
       };
     },
@@ -249,12 +366,16 @@ export const arithmeticGenerators: Record<number, Record<number, ProblemGenerato
           {
             prompt: `DOES ${target} HAVE FACTORS OTHER THAN 1 AND ITSELF?`,
             answer: isPrimeTarget ? 'NO' : 'YES',
-            choices: ['YES', 'NO']
+            choices: ['YES', 'NO'],
+            clue: 'Test divisibility by small primes: 2, 3, 5, and 7.',
+            resultLabel: `Extra = ${isPrimeTarget ? 'NO' : 'YES'}`
           },
           {
             prompt: `CLASSIFY ${target}`,
             answer: isPrimeTarget ? 'PRIME' : 'COMPOSITE',
-            choices: ['PRIME', 'COMPOSITE']
+            choices: ['PRIME', 'COMPOSITE'],
+            clue: 'Exactly 2 factors = PRIME; more than 2 factors = COMPOSITE.',
+            resultLabel: isPrimeTarget ? 'PRIME' : 'COMPOSITE'
           }
         ]
       };
@@ -275,8 +396,18 @@ export const arithmeticGenerators: Record<number, Record<number, ProblemGenerato
           answer: a3 * b3,
           complexity: 'COMBO',
           steps: [
-            { prompt: `MULTIPLY BY TENS DIGIT: ${a3} * ${tensDigit}`, answer: partial },
-            { prompt: `SHIFT PLACE VALUE (* 10): ${partial} * 10`, answer: a3 * b3 }
+            {
+              prompt: `MULTIPLY BY TENS DIGIT: ${a3} * ${tensDigit}`,
+              answer: partial,
+              clue: 'Ignore the trailing zero first and multiply by the tens digit.',
+              resultLabel: `${a3}×${tensDigit}=${partial}`
+            },
+            {
+              prompt: `SHIFT PLACE VALUE (* 10): ${partial} * 10`,
+              answer: a3 * b3,
+              clue: 'Multiply by 10 by appending one trailing zero.',
+              resultLabel: `Prod = ${a3 * b3}`
+            }
           ]
         };
       } else {
@@ -290,9 +421,24 @@ export const arithmeticGenerators: Record<number, Record<number, ProblemGenerato
           answer: a3 * b3,
           complexity: 'COMBO',
           steps: [
-            { prompt: `MULTIPLY BY ONES: ${a3} * ${onesB}`, answer: a3 * onesB },
-            { prompt: `MULTIPLY BY TENS: ${a3} * ${tensB}`, answer: a3 * tensB },
-            { prompt: `SUM COMPONENTS: (${a3 * onesB} + ${a3 * tensB})`, answer: a3 * b3 }
+            {
+              prompt: `MULTIPLY BY ONES: ${a3} * ${onesB}`,
+              answer: a3 * onesB,
+              clue: 'Split the second factor into 10 + ones; multiply by ones first.',
+              resultLabel: `${a3}×${onesB}=${a3 * onesB}`
+            },
+            {
+              prompt: `MULTIPLY BY TENS: ${a3} * ${tensB}`,
+              answer: a3 * tensB,
+              clue: 'Multiplying by 10 appends a single zero.',
+              resultLabel: `${a3}×${tensB}=${a3 * tensB}`
+            },
+            {
+              prompt: `SUM COMPONENTS: (${a3 * onesB} + ${a3 * tensB})`,
+              answer: a3 * b3,
+              clue: 'Add the two partial products together.',
+              resultLabel: `Prod = ${a3 * b3}`
+            }
           ]
         };
       }
@@ -311,9 +457,24 @@ export const arithmeticGenerators: Record<number, Record<number, ProblemGenerato
         answer: quotient,
         complexity: 'COMBO',
         steps: [
-          { prompt: `FIND TENS DIGIT: ? * ${divisor * 10} <= ${dividend}`, answer: tensQ },
-          { prompt: `FIND ONES DIGIT: (${dividend} - ${tensChunk}) / ${divisor}`, answer: onesQ },
-          { prompt: `COMPILE QUOTIENT: ${tensQ * 10} + ${onesQ}`, answer: quotient }
+          {
+            prompt: `FIND TENS DIGIT: ? * ${divisor * 10} <= ${dividend}`,
+            answer: tensQ,
+            clue: `Find the largest multiple of ${divisor * 10} that fits inside ${dividend}.`,
+            resultLabel: `Tens = ${tensQ}`
+          },
+          {
+            prompt: `FIND ONES DIGIT: (${dividend} - ${tensChunk}) / ${divisor}`,
+            answer: onesQ,
+            clue: `Subtract the tens chunk, then divide the remainder by ${divisor}.`,
+            resultLabel: `Ones = ${onesQ}`
+          },
+          {
+            prompt: `COMPILE QUOTIENT: ${tensQ * 10} + ${onesQ}`,
+            answer: quotient,
+            clue: 'Combine the tens value and ones digit into the 2-digit quotient.',
+            resultLabel: `Quot = ${quotient}`
+          }
         ]
       };
     },
@@ -331,9 +492,24 @@ export const arithmeticGenerators: Record<number, Record<number, ProblemGenerato
           answer: fullGroups + 1,
           complexity: 'COMBO',
           steps: [
-            { prompt: `FIND FULL BLOCKS: ${total} / ${perGroup}`, answer: fullGroups },
-            { prompt: `FIND REMAINDER: ${total} % ${perGroup}`, answer: remainder },
-            { prompt: `ADD EXTRA BLOCK FOR REMAINDER: ${fullGroups} + 1`, answer: fullGroups + 1 }
+            {
+              prompt: `FIND FULL BLOCKS: ${total} / ${perGroup}`,
+              answer: fullGroups,
+              clue: 'Divide to find how many full blocks fit without going over.',
+              resultLabel: `Full = ${fullGroups}`
+            },
+            {
+              prompt: `FIND REMAINDER OF ${total} / ${perGroup}`,
+              answer: remainder,
+              clue: 'Remainder = total − (full blocks × bytes per block).',
+              resultLabel: `Rem = ${remainder}`
+            },
+            {
+              prompt: `ADD EXTRA BLOCK FOR REMAINDER: ${fullGroups} + 1`,
+              answer: fullGroups + 1,
+              clue: 'Any leftover bytes require 1 extra block so nothing is lost.',
+              resultLabel: `Blocks = ${fullGroups + 1}`
+            }
           ]
         };
       } else {
@@ -342,8 +518,18 @@ export const arithmeticGenerators: Record<number, Record<number, ProblemGenerato
           answer: fullGroups,
           complexity: 'COMBO',
           steps: [
-            { prompt: `FIND FULL BLOCKS: ${total} / ${perGroup}`, answer: fullGroups },
-            { prompt: `DROP REMAINDER (${remainder})`, answer: fullGroups }
+            {
+              prompt: `FIND FULL BLOCKS: ${total} / ${perGroup}`,
+              answer: fullGroups,
+              clue: 'Divide to find how many complete blocks can be filled.',
+              resultLabel: `Full = ${fullGroups}`
+            },
+            {
+              prompt: `FULL BLOCKS AFTER DROPPING REMAINDER (${remainder}) FROM ${total} / ${perGroup}`,
+              answer: fullGroups,
+              clue: 'An incomplete block does not count—keep only the whole quotient.',
+              resultLabel: `Blocks = ${fullGroups}`
+            }
           ]
         };
       }
@@ -377,10 +563,31 @@ export const arithmeticGenerators: Record<number, Record<number, ProblemGenerato
         inputType: 'FRACTION',
         requireSimplified: true,
         steps: [
-          { prompt: `FIND GREATEST COMMON DIVISOR OF ${bigN} AND ${bigD}`, answer: m },
-          { prompt: `DIVIDE NUMERATOR: ${bigN} / ${m}`, answer: n },
-          { prompt: `DIVIDE DENOMINATOR: ${bigD} / ${m}`, answer: d },
-          { prompt: `WRITE SIMPLIFIED FRACTION`, answer: `${n}/${d}`, requireSimplified: true }
+          {
+            prompt: `FIND GREATEST COMMON DIVISOR OF ${bigN} AND ${bigD}`,
+            answer: m,
+            clue: 'Find the largest whole number that divides both top and bottom.',
+            resultLabel: `GCD = ${m}`
+          },
+          {
+            prompt: `DIVIDE NUMERATOR: ${bigN} / ${m}`,
+            answer: n,
+            clue: 'Divide the numerator by the GCD.',
+            resultLabel: `Num = ${n}`
+          },
+          {
+            prompt: `DIVIDE DENOMINATOR: ${bigD} / ${m}`,
+            answer: d,
+            clue: 'Divide the denominator by the same GCD.',
+            resultLabel: `Den = ${d}`
+          },
+          {
+            prompt: `WRITE SIMPLIFIED FRACTION FOR ${bigN}/${bigD}`,
+            answer: `${n}/${d}`,
+            requireSimplified: true,
+            clue: 'Put the new numerator over the new denominator.',
+            resultLabel: `${n}/${d}`
+          }
         ]
       };
     },
@@ -406,10 +613,30 @@ export const arithmeticGenerators: Record<number, Record<number, ProblemGenerato
         complexity: 'COMBO',
         inputType: 'RELATIONSHIP',
         steps: [
-          { prompt: `FIND COMMON DENOMINATOR (LCM OF ${d1} AND ${d2})`, answer: commonD },
-          { prompt: `CONVERT LEFT NUMERATOR: ${n1} * ${scale1}`, answer: newN1 },
-          { prompt: `CONVERT RIGHT NUMERATOR: ${n2} * ${scale2}`, answer: newN2 },
-          { prompt: `COMPARE: ${newN1} _ ${newN2} (<, >, =)`, answer: ans }
+          {
+            prompt: `FIND COMMON DENOMINATOR (LCM OF ${d1} AND ${d2})`,
+            answer: commonD,
+            clue: 'LCM is the smallest number both denominators divide into evenly.',
+            resultLabel: `LCD = ${commonD}`
+          },
+          {
+            prompt: `CONVERT ${n1}/${d1} TO /${commonD}: ${n1} * ${scale1}`,
+            answer: newN1,
+            clue: 'Scale the left numerator by (LCD ÷ left denominator).',
+            resultLabel: `${n1}/${d1}=${newN1}/${commonD}`
+          },
+          {
+            prompt: `CONVERT ${n2}/${d2} TO /${commonD}: ${n2} * ${scale2}`,
+            answer: newN2,
+            clue: 'Scale the right numerator by (LCD ÷ right denominator).',
+            resultLabel: `${n2}/${d2}=${newN2}/${commonD}`
+          },
+          {
+            prompt: `COMPARE: ${newN1} _ ${newN2} (<, >, =)`,
+            answer: ans,
+            clue: 'With matching denominators, compare the scaled numerators directly.',
+            resultLabel: `${newN1} ${ans} ${newN2}`
+          }
         ]
       };
     },
@@ -425,9 +652,24 @@ export const arithmeticGenerators: Record<number, Record<number, ProblemGenerato
         complexity: 'QUICK',
         inputType: 'FRACTION',
         steps: [
-          { prompt: `IDENTIFY SHARED DENOMINATOR`, answer: d },
-          { prompt: `ADD NUMERATORS: ${n1} + ${n2}`, answer: n1 + n2 },
-          { prompt: `WRITE SUM AS A FRACTION`, answer: `${n1 + n2}/${d}` }
+          {
+            prompt: `SHARED DENOMINATOR OF ${n1}/${d} AND ${n2}/${d}`,
+            answer: d,
+            clue: 'Like fractions already share the same bottom number.',
+            resultLabel: `Den = ${d}`
+          },
+          {
+            prompt: `ADD NUMERATORS: ${n1} + ${n2}`,
+            answer: n1 + n2,
+            clue: 'Add the top numbers while keeping the denominator unchanged.',
+            resultLabel: `Num = ${n1 + n2}`
+          },
+          {
+            prompt: `WRITE ${n1}/${d} + ${n2}/${d} AS A FRACTION`,
+            answer: `${n1 + n2}/${d}`,
+            clue: 'Place the combined numerator over the shared denominator.',
+            resultLabel: `${n1 + n2}/${d}`
+          }
         ]
       };
     },
@@ -443,9 +685,24 @@ export const arithmeticGenerators: Record<number, Record<number, ProblemGenerato
         complexity: 'QUICK',
         inputType: 'FRACTION',
         steps: [
-          { prompt: `IDENTIFY SHARED DENOMINATOR`, answer: d },
-          { prompt: `SUBTRACT NUMERATORS: ${n1} - ${n2}`, answer: n1 - n2 },
-          { prompt: `WRITE DIFFERENCE AS A FRACTION`, answer: `${n1 - n2}/${d}` }
+          {
+            prompt: `SHARED DENOMINATOR OF ${n1}/${d} AND ${n2}/${d}`,
+            answer: d,
+            clue: 'Like fractions already share the same bottom number.',
+            resultLabel: `Den = ${d}`
+          },
+          {
+            prompt: `SUBTRACT NUMERATORS: ${n1} - ${n2}`,
+            answer: n1 - n2,
+            clue: 'Subtract the top numbers while keeping the denominator unchanged.',
+            resultLabel: `Num = ${n1 - n2}`
+          },
+          {
+            prompt: `WRITE ${n1}/${d} - ${n2}/${d} AS A FRACTION`,
+            answer: `${n1 - n2}/${d}`,
+            clue: 'Place the difference of numerators over the shared denominator.',
+            resultLabel: `${n1 - n2}/${d}`
+          }
         ]
       };
     }
@@ -470,11 +727,36 @@ export const arithmeticGenerators: Record<number, Record<number, ProblemGenerato
         complexity: 'COMBO',
         inputType: 'FRACTION',
         steps: [
-          { prompt: `FIND COMMON DENOMINATOR (LCM OF ${d1} AND ${d2})`, answer: commonD },
-          { prompt: `CONVERT LEFT NUMERATOR: ${n1} * ${scale1}`, answer: newN1 },
-          { prompt: `CONVERT RIGHT NUMERATOR: ${n2} * ${scale2}`, answer: newN2 },
-          { prompt: `SUM NUMERATORS: ${newN1} + ${newN2}`, answer: sumN },
-          { prompt: `WRITE SUM AS A FRACTION`, answer: `${sumN}/${commonD}` }
+          {
+            prompt: `FIND COMMON DENOMINATOR (LCM OF ${d1} AND ${d2})`,
+            answer: commonD,
+            clue: 'LCM is the smallest number both denominators divide into evenly.',
+            resultLabel: `LCD = ${commonD}`
+          },
+          {
+            prompt: `CONVERT ${n1}/${d1} TO /${commonD}: ${n1} * ${scale1}`,
+            answer: newN1,
+            clue: 'Scale the left numerator by (LCD ÷ left denominator).',
+            resultLabel: `${n1}/${d1}=${newN1}/${commonD}`
+          },
+          {
+            prompt: `CONVERT ${n2}/${d2} TO /${commonD}: ${n2} * ${scale2}`,
+            answer: newN2,
+            clue: 'Scale the right numerator by (LCD ÷ right denominator).',
+            resultLabel: `${n2}/${d2}=${newN2}/${commonD}`
+          },
+          {
+            prompt: `SUM NUMERATORS: ${newN1} + ${newN2}`,
+            answer: sumN,
+            clue: 'With matching denominators, add the converted numerators.',
+            resultLabel: `Num = ${sumN}`
+          },
+          {
+            prompt: `WRITE ${n1}/${d1} + ${n2}/${d2} AS A FRACTION (OVER ${commonD})`,
+            answer: `${sumN}/${commonD}`,
+            clue: 'Place the combined numerator over the common denominator.',
+            resultLabel: `${sumN}/${commonD}`
+          }
         ]
       };
     },
@@ -510,11 +792,36 @@ export const arithmeticGenerators: Record<number, Record<number, ProblemGenerato
         complexity: 'COMBO',
         inputType: 'FRACTION',
         steps: [
-          { prompt: `FIND COMMON DENOMINATOR (LCM OF ${d1} AND ${d2})`, answer: commonD },
-          { prompt: `CONVERT LEFT NUMERATOR: ${n1} * ${scale1}`, answer: newN1 },
-          { prompt: `CONVERT RIGHT NUMERATOR: ${n2} * ${scale2}`, answer: newN2 },
-          { prompt: `SUBTRACT NUMERATORS: ${newN1} - ${newN2}`, answer: diffN },
-          { prompt: `WRITE DIFFERENCE AS A FRACTION`, answer: `${diffN}/${commonD}` }
+          {
+            prompt: `FIND COMMON DENOMINATOR (LCM OF ${d1} AND ${d2})`,
+            answer: commonD,
+            clue: 'LCM is the smallest number both denominators divide into evenly.',
+            resultLabel: `LCD = ${commonD}`
+          },
+          {
+            prompt: `CONVERT ${n1}/${d1} TO /${commonD}: ${n1} * ${scale1}`,
+            answer: newN1,
+            clue: 'Scale the left numerator by (LCD ÷ left denominator).',
+            resultLabel: `${n1}/${d1}=${newN1}/${commonD}`
+          },
+          {
+            prompt: `CONVERT ${n2}/${d2} TO /${commonD}: ${n2} * ${scale2}`,
+            answer: newN2,
+            clue: 'Scale the right numerator by (LCD ÷ right denominator).',
+            resultLabel: `${n2}/${d2}=${newN2}/${commonD}`
+          },
+          {
+            prompt: `SUBTRACT NUMERATORS: ${newN1} - ${newN2}`,
+            answer: diffN,
+            clue: 'With matching denominators, subtract the converted numerators.',
+            resultLabel: `Num = ${diffN}`
+          },
+          {
+            prompt: `WRITE ${n1}/${d1} - ${n2}/${d2} AS A FRACTION (OVER ${commonD})`,
+            answer: `${diffN}/${commonD}`,
+            clue: 'Place the subtracted numerator over the common denominator.',
+            resultLabel: `${diffN}/${commonD}`
+          }
         ]
       };
     },
@@ -532,9 +839,24 @@ export const arithmeticGenerators: Record<number, Record<number, ProblemGenerato
         complexity: 'QUICK',
         inputType: 'FRACTION',
         steps: [
-          { prompt: `MULTIPLY WHOLE BY NUMERATOR: ${whole} * ${n}`, answer: resultN },
-          { prompt: `KEEP DENOMINATOR`, answer: d },
-          { prompt: `WRITE PRODUCT AS A FRACTION`, answer: `${resultN}/${d}` }
+          {
+            prompt: `MULTIPLY WHOLE BY NUMERATOR: ${whole} * ${n}`,
+            answer: resultN,
+            clue: 'Multiply the whole number by the numerator only.',
+            resultLabel: `Num = ${resultN}`
+          },
+          {
+            prompt: `KEEP DENOMINATOR OF ${n}/${d}`,
+            answer: d,
+            clue: 'The denominator stays unchanged when multiplying by a whole number.',
+            resultLabel: `Den = ${d}`
+          },
+          {
+            prompt: `WRITE ${whole} * (${n}/${d}) AS A FRACTION`,
+            answer: `${resultN}/${d}`,
+            clue: 'Place the new numerator over the original denominator.',
+            resultLabel: `${resultN}/${d}`
+          }
         ]
       };
     },
@@ -550,8 +872,18 @@ export const arithmeticGenerators: Record<number, Record<number, ProblemGenerato
         answer: volume,
         complexity: 'COMBO',
         steps: [
-          { prompt: `CALCULATE BASE AREA: ${l} * ${w}`, answer: l * w },
-          { prompt: `MULTIPLY BY HEIGHT: ${l * w} * ${h}`, answer: volume }
+          {
+            prompt: `CALCULATE BASE AREA: ${l} * ${w}`,
+            answer: l * w,
+            clue: 'Base Area = Length × Width.',
+            resultLabel: `Base = ${l * w}`
+          },
+          {
+            prompt: `MULTIPLY BY HEIGHT: ${l * w} * ${h}`,
+            answer: volume,
+            clue: 'Volume = Base Area × Height.',
+            resultLabel: `Vol = ${volume}`
+          }
         ]
       };
     },
@@ -572,8 +904,18 @@ export const arithmeticGenerators: Record<number, Record<number, ProblemGenerato
         answer: answer,
         complexity: 'COMBO',
         steps: [
-          { prompt: `IDENTIFY CONVERSION FACTOR`, answer: type.factor },
-          { prompt: `MULTIPLY: ${val} * ${type.factor}`, answer: answer }
+          {
+            prompt: `HOW MANY ${type.unit2} IN 1 ${type.unit1}?`,
+            answer: type.factor,
+            clue: 'Recall how many smaller units equal 1 larger unit (ft/in, yd/ft, lb/oz, kg/g).',
+            resultLabel: `1 ${type.unit1} = ${type.factor} ${type.unit2}`
+          },
+          {
+            prompt: `MULTIPLY: ${val} * ${type.factor}`,
+            answer: answer,
+            clue: 'Multiply the starting quantity by the unit conversion factor.',
+            resultLabel: `${answer} ${type.unit2}`
+          }
         ]
       };
     }

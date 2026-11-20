@@ -366,3 +366,95 @@ describe('Phase 1 mental-math bounds & complexity contracts', () => {
     }
   });
 });
+
+describe('Phase 2 self-contained prompts, clues, and breadcrumbs', () => {
+  const CONTEXT_FREE_PROMPT_DENYLIST =
+    /^(IDENTIFY SHARED DENOMINATOR|IDENTIFY CONVERSION FACTOR|IDENTIFY FIRST QUANTITY|IDENTIFY SECOND QUANTITY|FORMAT AS RATIO \(A:B\)|SIGN OF RESULT\?|CALCULATE SUM|DISTANCE FROM ZERO|IDENTIFY X-COORDINATE|IDENTIFY Y-COORDINATE|PLOT POINT ON GRID|MULTIPLY BASE AND HEIGHT|DIVIDE BY 2|SUM ALL 5 VALUES|DIVIDE SUM BY 5|FIND SMALLEST VALUE|FIND MIDDLE VALUE AFTER SORTING|FIND MAXIMUM VALUE|FIND MINIMUM VALUE|SUBTRACT: MAX - MIN|ALIGN DECIMALS AND ADD|WRITE (SUM|DIFFERENCE|PRODUCT|RESULT|SIMPLIFIED FRACTION|INEQUALITY)|KEEP DENOMINATOR|DO SIGNS MATCH\?|RESULTING SIGN\?|DOES IT PASS THROUGH \(0,0\)\?)$/i;
+
+  const CONTEXT_TOKEN_REGEX = /\d|\b(NEG|POS|x|ft|in|yd|lb|oz|kg|g)\b/;
+
+  it('enforces self-contained step prompts, clues, and resultLabels across all 47 attack variants', () => {
+    let variantCount = 0;
+
+    for (const [tierKey, tierData] of Object.entries(ENEMY_TIERS)) {
+      const tier = Number(tierKey);
+
+      for (const variantKey of Object.keys(tierData.variants)) {
+        const variant = Number(variantKey);
+        const generator = ATTACK_GENERATORS[tier][variant];
+        variantCount += 1;
+
+        for (let sample = 0; sample < FUZZ_SAMPLES; sample++) {
+          const problem: MathProblem = { ...generator(), type: 'ATTACK' };
+          const label = `T${tier}V${variant} (${problem.question})`;
+
+          if (!problem.steps) continue;
+
+          for (let idx = 0; idx < problem.steps.length; idx++) {
+            const step = problem.steps[idx];
+            const stepLabel = `${label} step[${idx}] ("${step.prompt}")`;
+
+            // Anti-regression denylist against context-free boilerplate prompts
+            expect(
+              step.prompt.trim(),
+              `Context-free boilerplate prompt in ${stepLabel}`
+            ).not.toMatch(CONTEXT_FREE_PROMPT_DENYLIST);
+
+            // No programmer modulo jargon in Tier 3
+            if (tier === 3) {
+              expect(step.prompt, `Programmer modulo '%' in ${stepLabel}`).not.toMatch(/\s%\s/);
+            }
+
+            // Every step prompt carries concrete numeric or math context
+            expect(
+              step.prompt,
+              `Missing numeric/math context token in ${stepLabel}`
+            ).toMatch(CONTEXT_TOKEN_REGEX);
+
+            // Clue and resultLabel contracts
+            if (problem.complexity === 'COMBO') {
+              expect(
+                step.clue?.trim().length ?? 0,
+                `Missing clue on COMBO step in ${stepLabel}`
+              ).toBeGreaterThan(0);
+              expect(
+                step.clue!.trim().length,
+                `Clue exceeds 120 chars in ${stepLabel}`
+              ).toBeLessThanOrEqual(120);
+
+              expect(
+                step.resultLabel?.trim().length ?? 0,
+                `Missing resultLabel on COMBO step in ${stepLabel}`
+              ).toBeGreaterThan(0);
+              expect(
+                step.resultLabel!.trim().length,
+                `resultLabel exceeds 28 chars ("${step.resultLabel}") in ${stepLabel}`
+              ).toBeLessThanOrEqual(28);
+            } else {
+              if (step.clue !== undefined) {
+                expect(step.clue.trim().length, `Empty clue in ${stepLabel}`).toBeGreaterThan(0);
+                expect(
+                  step.clue.trim().length,
+                  `Clue exceeds 120 chars in ${stepLabel}`
+                ).toBeLessThanOrEqual(120);
+              }
+              if (step.resultLabel !== undefined) {
+                expect(
+                  step.resultLabel.trim().length,
+                  `Empty resultLabel in ${stepLabel}`
+                ).toBeGreaterThan(0);
+                expect(
+                  step.resultLabel.trim().length,
+                  `resultLabel exceeds 28 chars ("${step.resultLabel}") in ${stepLabel}`
+                ).toBeLessThanOrEqual(28);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    expect(variantCount).toBe(47);
+  });
+});
+

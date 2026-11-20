@@ -112,12 +112,22 @@ export interface AnonymizedCacheExport {
   }>;
 }
 
+export type StrikeMode = 'COMBO' | 'DIRECT';
+
+export interface SolvedBreadcrumb {
+  stepIndex: number;
+  label: string;
+  answer: string;
+}
+
 export interface MathStep {
   prompt: string;
   answer: number | string;
   choices?: string[];
   inputType?: InputType;
   requireSimplified?: boolean;
+  clue?: string;
+  resultLabel?: string;
 }
 
 export type ProblemComplexity = 'QUICK' | 'COMBO';

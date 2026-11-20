@@ -52,7 +52,14 @@ export function inferInputType(problem: MathProblem, currentStep: MathStep | nul
     if (expected.includes(':')) return 'RATIO';
     if (expected.includes(',')) return 'COORDINATE';
     if (['<', '>', '=', '≤', '≥'].includes(expected)) return 'RELATIONSHIP';
-    if (expected.includes('<') || expected.includes('>')) return 'INEQUALITY';
+    if (
+      expected.includes('<') ||
+      expected.includes('>') ||
+      expected.includes('≤') ||
+      expected.includes('≥')
+    ) {
+      return 'INEQUALITY';
+    }
     return 'NUMPAD';
   }
   return problem.inputType ?? 'NUMPAD';

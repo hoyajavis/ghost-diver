@@ -20,15 +20,15 @@ Each phase below ends with a **mandatory Playtest Gate**. Do not start the next 
 **Goal:** Eliminate sudden pencil-and-paper frustration spikes, baseline math/progression bugs, and missing playtest metrics in Tiers 1–12 *before* changing core combat rules, so we have a fair baseline to measure against.
 
 ### Phase 1A: Immediate Baseline Bug & Progression Fixes
-- [ ] **Sync Meditation FP Cost Copy (`CombatActionBar.tsx` vs `combatLogic.ts`):** Align `CombatActionBar.tsx` tooltip/ARIA copy (`25 FP`) with `MEDITATION_FP_COST` (`50`)—or adjust `MEDITATION_FP_COST` intentionally—so UI copy never misleads players.
-- [ ] **Fix Tier 1 V4 Negative Intermediate Bug (`src/lib/generators/arithmetic.ts`):** When `a1 = 299` and `b1 = 248`, rounding `b1` up to `300` currently produces a negative intermediate step (`299 - 300 = -1`) in Grade 4 subtraction. Clamp/select compatible numbers so `a1 >= roundedB`.
-- [ ] **Fix Sector Drop-In & Floor 60 Cap (`useGameEngine.ts`, `DiveStation.tsx`, `mapGen.ts`):**
+- [x] **Sync Meditation FP Cost Copy (`CombatActionBar.tsx` vs `combatLogic.ts`):** Align `CombatActionBar.tsx` tooltip/ARIA copy (`25 FP`) with `MEDITATION_FP_COST` (`50`)—or adjust `MEDITATION_FP_COST` intentionally—so UI copy never misleads players.
+- [x] **Fix Tier 1 V4 Negative Intermediate Bug (`src/lib/generators/arithmetic.ts`):** When `a1 = 299` and `b1 = 248`, rounding `b1` up to `300` currently produces a negative intermediate step (`299 - 300 = -1`) in Grade 4 subtraction. Clamp/select compatible numbers so `a1 >= roundedB`.
+- [x] **Fix Sector Drop-In & Floor 60 Cap (`useGameEngine.ts`, `DiveStation.tsx`, `mapGen.ts`):**
   - Extracting from a Floor 5 Secure Node (`handleBankAndExit`) should unlock `dungeon.floor + 1` (Floor 6 / Sector 2) instead of forcing players to replay Floor 5 to advance.
   - Cap `maxExtractedFloor` / "Descend Deeper" at Floor 60 (Sector 12) with a clear "Deep Sub-Strata Locked" message until Phase 6 ships Tiers 13–20, rather than silently wrapping back to Tier 1.
-- [ ] **Add Lightweight Anonymized Playtest Telemetry (`src/lib/storage.ts`):** Track per-`tier-variant` and per-archetype median solve time and first-try accuracy inside the existing anonymized local cache and **Export Anonymized JSON** payload so every Playtest Gate can be verified quantitatively.
+- [x] **Add Lightweight Anonymized Playtest Telemetry (`src/lib/storage.ts`):** Track per-`tier-variant` and per-archetype median solve time and first-try accuracy inside the existing anonymized local cache and **Export Anonymized JSON** payload so every Playtest Gate can be verified quantitatively.
 
 ### Generators & Data Contracts
-- [ ] **Rewrite specific scratch-paper offenders** across `src/lib/generators/arithmetic.ts`, `preAlgebra.ts`, and `modeling.ts`:
+- [x] **Rewrite specific scratch-paper offenders** across `src/lib/generators/arithmetic.ts`, `preAlgebra.ts`, and `modeling.ts`:
   - **`arithmetic.ts` Tier 1 V3 & V4:** Replace arbitrary 3-digit ± 3-digit (`100..999 ± 100..999`, 4 rounding steps) with compatible/mental-friendly numbers (e.g., multiples of 10/25/50 or clean compensation pairs, guaranteeing non-negative intermediates).
   - **`arithmetic.ts` Tier 3 V1:** Replace arbitrary 2-digit × 2-digit (`10..99 × 10..99`, e.g., `87 × 69`) with mental-friendly products (2-digit × 1-digit, clean multiples of 10/5, or small distributive pairs like `14 × 12`).
   - **`arithmetic.ts` Tier 3 V2:** Replace 3-digit quotient long division (`quotient 100..999`, 6 hint steps) with crisp 2-digit mental-quotient division (2–3 steps max).
@@ -38,10 +38,10 @@ Each phase below ends with a **mandatory Playtest Gate**. Do not start the next 
   - **`preAlgebra.ts` Tier 10 V3 (Area of Triangle):** Ensure at least one of `base` or `height` is even so `(b × h) / 2` resolves cleanly to an integer without unexpected `.5` friction.
   - **Equations & Statistics (Tiers 9–10):** Keep datasets to 3–5 small integers with integer means; keep variable coefficients small (`2`–`9`) with clean integer solutions.
   - **`modeling.ts` Tier 11 V3 (Simple Interest):** Keep `P * r * t` rolls mental-friendly (e.g., `$200 * 5% * 3 yrs`) rather than single-step `900 * 0.06 * 5`.
-- [ ] **Classify `complexity: 'QUICK' | 'COMBO'` on `MathProblem` (`src/types.ts`):**
+- [x] **Classify `complexity: 'QUICK' | 'COMBO'` on `MathProblem` (`src/types.ts`):**
   - Tag true 1-step variants (including existing single-step generators such as `arithmetic.ts` Tier 2 V2/V3 multi-select, `preAlgebra.ts` Tier 6 V1–V3, Tier 7 V2, Tier 8 V3, Tier 9 V4, and `modeling.ts` Tier 11 V4, Tier 12 V1, Tier 12 V4) as `'QUICK'` so they never get wrapped in a redundant 1-step Combo Chain.
   - Give genuine multi-step problems that currently only have 1 step (such as `modeling.ts` Tier 12 V2 division) a clean 2–3 step chain and tag them `'COMBO'`.
-- [ ] **Update generator fuzz tests** (`src/lib/__tests__/generators.test.ts`) to assert denominator/LCM/magnitude bounds, non-negative Grade 4 intermediates, and valid `complexity` tagging across all Tiers 1–12.
+- [x] **Update generator fuzz tests** (`src/lib/__tests__/generators.test.ts`) to assert denominator/LCM/magnitude bounds, non-negative Grade 4 intermediates, and valid `complexity` tagging across all Tiers 1–12.
 
 ### Playtest Gate 1: "The No-Paper Stress Test"
 - **Format:** 10–15 minute solo or 2–3 student playtest across Tiers 1, 4, 6, 9, and 12 (using both Dungeon dives and Training Sim), exporting the anonymized JSON telemetry afterward.

@@ -18,8 +18,18 @@ export const modelingGenerators: Record<number, Record<number, ProblemGenerator>
         answer: k.toString(),
         complexity: 'COMBO',
         steps: [
-          { prompt: `DIVIDE y BY x: ${y1} / ${x1}`, answer: k },
-          { prompt: `VERIFY WITH SECOND PAIR: ${y2} / ${x2}`, answer: k }
+          {
+            prompt: `DIVIDE y BY x: ${y1} / ${x1}`,
+            answer: k,
+            clue: 'Constant of proportionality k = y ÷ x for any pair.',
+            resultLabel: `k = ${k}`
+          },
+          {
+            prompt: `VERIFY WITH SECOND PAIR: ${y2} / ${x2}`,
+            answer: k,
+            clue: 'Check that the second y ÷ x ratio gives the same k.',
+            resultLabel: `Verified: k=${k}`
+          }
         ]
       };
     },
@@ -36,8 +46,18 @@ export const modelingGenerators: Record<number, Record<number, ProblemGenerator>
         answer: total.toString(),
         complexity: 'COMBO',
         steps: [
-          { prompt: `CALCULATE ${percent}% OF ${base}`, answer: amount },
-          { prompt: `ADD TO BASE: ${base} + ${amount}`, answer: total }
+          {
+            prompt: `CALCULATE ${percent}% OF ${base}`,
+            answer: amount,
+            clue: 'Find 1% (divide by 100) or 10% (divide by 10), then scale to the percent.',
+            resultLabel: `${isTax ? 'Tax' : 'Tip'} = $${amount}`
+          },
+          {
+            prompt: `ADD TO BASE: ${base} + ${amount}`,
+            answer: total,
+            clue: `Total = original base amount + ${isTax ? 'tax' : 'tip'}.`,
+            resultLabel: `Total = $${total}`
+          }
         ]
       };
     },
@@ -54,8 +74,18 @@ export const modelingGenerators: Record<number, Record<number, ProblemGenerator>
         answer: i.toString(),
         complexity: 'COMBO',
         steps: [
-          { prompt: `1-YEAR INTEREST: ${r}% OF $${p}`, answer: annual },
-          { prompt: `MULTIPLY BY ${t} YEARS: ${annual} * ${t}`, answer: i }
+          {
+            prompt: `1-YEAR INTEREST: ${r}% OF $${p}`,
+            answer: annual,
+            clue: 'Find 1 year of interest first: (Principal × rate) ÷ 100.',
+            resultLabel: `1yr = $${annual}`
+          },
+          {
+            prompt: `MULTIPLY BY ${t} YEARS: ${annual} * ${t}`,
+            answer: i,
+            clue: 'Simple interest I = P × r × t: multiply 1-year interest by years.',
+            resultLabel: `I = $${i}`
+          }
         ]
       };
     },
@@ -74,9 +104,11 @@ export const modelingGenerators: Record<number, Record<number, ProblemGenerator>
         choices: ['YES', 'NO'],
         steps: [
           {
-            prompt: `DOES IT PASS THROUGH (0,0)?`,
+            prompt: `DOES ${eq} PASS THROUGH (0,0)?`,
             answer: isProportional ? 'YES' : 'NO',
-            choices: ['YES', 'NO']
+            choices: ['YES', 'NO'],
+            clue: 'Plug in x = 0: proportional equations give y = 0 (no "+ b" offset).',
+            resultLabel: isProportional ? 'Proportional' : 'Not Prop.'
           }
         ]
       };
@@ -103,8 +135,18 @@ export const modelingGenerators: Record<number, Record<number, ProblemGenerator>
           complexity: 'QUICK',
           inputType: 'FRACTION',
           steps: [
-            { prompt: `ADD NUMERATORS: ${num1} + (${num2})`, answer: sumN },
-            { prompt: `WRITE RESULT AS A FRACTION`, answer: `${sumN}/${d}` }
+            {
+              prompt: `ADD NUMERATORS: ${num1} + (${num2})`,
+              answer: sumN,
+              clue: 'Combine the signed numerators using integer addition rules.',
+              resultLabel: `Num = ${sumN}`
+            },
+            {
+              prompt: `WRITE ${num1}/${d} + (${num2}/${d}) AS A FRACTION (OVER ${d})`,
+              answer: `${sumN}/${d}`,
+              clue: `Keep the shared denominator ${d}.`,
+              resultLabel: `${sumN}/${d}`
+            }
           ]
         };
       } else {
@@ -117,7 +159,12 @@ export const modelingGenerators: Record<number, Record<number, ProblemGenerator>
           answer: sum.toString(),
           complexity: 'QUICK',
           steps: [
-            { prompt: `ALIGN DECIMALS AND ADD`, answer: sum.toString() }
+            {
+              prompt: `ALIGN DECIMALS AND ADD: ${num1.toFixed(1)} + (${num2.toFixed(1)})`,
+              answer: sum.toString(),
+              clue: 'Line up decimal points and watch the signs (same add, opposite subtract).',
+              resultLabel: `Sum = ${sum}`
+            }
           ]
         };
       }
@@ -139,9 +186,24 @@ export const modelingGenerators: Record<number, Record<number, ProblemGenerator>
           complexity: 'COMBO',
           inputType: 'FRACTION',
           steps: [
-            { prompt: `MULTIPLY NUMERATORS: ${n1} * ${n2}`, answer: resN },
-            { prompt: `MULTIPLY DENOMINATORS: ${d1} * ${d2}`, answer: resD },
-            { prompt: `WRITE PRODUCT AS A FRACTION`, answer: `${resN}/${resD}` }
+            {
+              prompt: `MULTIPLY NUMERATORS: ${n1} * ${n2}`,
+              answer: resN,
+              clue: 'Multiply straight across the top; same signs → positive, different → negative.',
+              resultLabel: `Num = ${resN}`
+            },
+            {
+              prompt: `MULTIPLY DENOMINATORS: ${d1} * ${d2}`,
+              answer: resD,
+              clue: 'Multiply straight across the bottom.',
+              resultLabel: `Den = ${resD}`
+            },
+            {
+              prompt: `WRITE (${n1}/${d1}) * (${n2}/${d2}) AS A FRACTION`,
+              answer: `${resN}/${resD}`,
+              clue: 'Place (num × num) over (den × den).',
+              resultLabel: `${resN}/${resD}`
+            }
           ]
         };
       } else {
@@ -156,9 +218,26 @@ export const modelingGenerators: Record<number, Record<number, ProblemGenerator>
           complexity: 'COMBO',
           inputType: 'FRACTION',
           steps: [
-            { prompt: `FLIP SECOND FRACTION (RECIPROCAL OF ${n2}/${d2})`, answer: `${recipN}/${recipD}`, inputType: 'FRACTION' },
-            { prompt: `MULTIPLY NUMERATORS: ${n1} * ${recipN}`, answer: finalN },
-            { prompt: `MULTIPLY DENOMINATORS (${d1} * ${recipD}) & WRITE FRACTION`, answer: `${finalN}/${finalD}`, inputType: 'FRACTION' }
+            {
+              prompt: `FLIP SECOND FRACTION (RECIPROCAL OF ${n2}/${d2})`,
+              answer: `${recipN}/${recipD}`,
+              inputType: 'FRACTION',
+              clue: 'Keep–Change–Flip: swap the second fraction’s top and bottom, keeping its sign.',
+              resultLabel: `Flip = ${recipN}/${recipD}`
+            },
+            {
+              prompt: `MULTIPLY NUMERATORS: ${n1} * ${recipN}`,
+              answer: finalN,
+              clue: 'Multiply the first numerator by the reciprocal’s numerator.',
+              resultLabel: `Num = ${finalN}`
+            },
+            {
+              prompt: `MULTIPLY DENOMINATORS (${d1} * ${recipD}) & WRITE FRACTION`,
+              answer: `${finalN}/${finalD}`,
+              inputType: 'FRACTION',
+              clue: 'Multiply the denominators and place the new numerator on top.',
+              resultLabel: `${finalN}/${finalD}`
+            }
           ]
         };
       }
@@ -176,8 +255,18 @@ export const modelingGenerators: Record<number, Record<number, ProblemGenerator>
         answer: result.toString(),
         complexity: 'COMBO',
         steps: [
-          { prompt: `EVALUATE PARENTHESES: ${a} + ${b < 0 ? `(${b})` : b}`, answer: sum },
-          { prompt: `MULTIPLY RESULT BY ${c}`, answer: result }
+          {
+            prompt: `EVALUATE PARENTHESES: ${a} + ${b < 0 ? `(${b})` : b}`,
+            answer: sum,
+            clue: 'PEMDAS: combine the numbers inside the parentheses first.',
+            resultLabel: `Paren = ${sum}`
+          },
+          {
+            prompt: `MULTIPLY BY ${c}: ${sum} * (${c})`,
+            answer: result,
+            clue: `Multiply the parentheses result by ${c} and watch the sign.`,
+            resultLabel: `Ans = ${result}`
+          }
         ]
       };
     },
@@ -185,30 +274,32 @@ export const modelingGenerators: Record<number, Record<number, ProblemGenerator>
     4: () => {
       const isMult = Math.random() > 0.5;
       const sameSign = Math.random() > 0.5;
+      const expr = isMult
+        ? (sameSign ? 'NEG * NEG' : 'POS * NEG')
+        : (sameSign ? 'NEG / NEG' : 'NEG / POS');
       
-      if (isMult) {
-        return {
-          question: `SIGN OF: ${sameSign ? 'NEG * NEG' : 'POS * NEG'}`,
-          answer: sameSign ? 'POS' : 'NEG',
-          complexity: 'QUICK',
-          choices: ['POS', 'NEG'],
-          steps: [
-            { prompt: `DO SIGNS MATCH?`, answer: sameSign ? 'YES' : 'NO', choices: ['YES', 'NO'] },
-            { prompt: `RESULTING SIGN?`, answer: sameSign ? 'POS' : 'NEG', choices: ['POS', 'NEG'] }
-          ]
-        };
-      } else {
-        return {
-          question: `SIGN OF: ${sameSign ? 'NEG / NEG' : 'NEG / POS'}`,
-          answer: sameSign ? 'POS' : 'NEG',
-          complexity: 'QUICK',
-          choices: ['POS', 'NEG'],
-          steps: [
-            { prompt: `DO SIGNS MATCH?`, answer: sameSign ? 'YES' : 'NO', choices: ['YES', 'NO'] },
-            { prompt: `RESULTING SIGN?`, answer: sameSign ? 'POS' : 'NEG', choices: ['POS', 'NEG'] }
-          ]
-        };
-      }
+      return {
+        question: `SIGN OF: ${expr}`,
+        answer: sameSign ? 'POS' : 'NEG',
+        complexity: 'QUICK',
+        choices: ['POS', 'NEG'],
+        steps: [
+          {
+            prompt: `DO SIGNS MATCH IN ${expr}?`,
+            answer: sameSign ? 'YES' : 'NO',
+            choices: ['YES', 'NO'],
+            clue: 'Check if both terms share the same sign (+/+ or -/-).',
+            resultLabel: `Match = ${sameSign ? 'YES' : 'NO'}`
+          },
+          {
+            prompt: `RESULTING SIGN OF ${expr}?`,
+            answer: sameSign ? 'POS' : 'NEG',
+            choices: ['POS', 'NEG'],
+            clue: 'Same signs → POS; different signs → NEG.',
+            resultLabel: `Sign = ${sameSign ? 'POS' : 'NEG'}`
+          }
+        ]
+      };
     }
   }
 };

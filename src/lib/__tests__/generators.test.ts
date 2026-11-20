@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { InputType, MathProblem } from '../../types';
+import { ConceptualArchetype, InputType, MathProblem } from '../../types';
 import { gcd, validateAnswer } from '../answerValidator';
 import { ENEMY_TIERS } from '../enemyData';
+import { CONCEPTUAL_GENERATORS, generateConceptualProblem } from '../generators/conceptual';
 import {
   getActiveChoices,
   getActiveMultiSelectOptions,
   getRequireSimplified,
   inferInputType,
 } from '../inputUtils';
+import { generateProblem } from '../mathEngine';
 import { ATTACK_GENERATORS, MEDITATION_GENERATOR } from '../mathGenerators';
 
 const FUZZ_SAMPLES = 100;
@@ -123,14 +125,19 @@ describe('mathGenerators structural integrity and hint solvability', () => {
     }
   });
 
-  it('generates valid conceptual meditation problems', () => {
+  it('generates valid conceptual meditation problems via MEDITATION_GENERATOR', () => {
     for (let i = 0; i < 30; i++) {
       const problem = MEDITATION_GENERATOR();
-      expect(problem.question).toContain('CONCEPT:');
+      expect(problem.question.trim().length).toBeGreaterThan(0);
       expect(problem.complexity).toBe('QUICK');
-      expect(problem.choices).toBeDefined();
-      expect(problem.choices).toContain(problem.answer.toString());
-      expect(validateAnswer(problem.answer.toString(), problem.answer)).toBe(true);
+      expect(problem.category).toBe('CONCEPTUAL');
+      expect(problem.archetype).toBeDefined();
+      expect(
+        validateAnswer(problem.answer.toString(), problem.answer, {
+          inputType: problem.inputType,
+          isChoice: Boolean(problem.choices),
+        })
+      ).toBe(true);
     }
   });
 });
@@ -457,4 +464,183 @@ describe('Phase 2 self-contained prompts, clues, and breadcrumbs', () => {
     expect(variantCount).toBe(47);
   });
 });
+
+describe('Phase 3 conceptual generators (Tiers 1-12, 36 generators across 7 archetypes)', () => {
+  const ARCHETYPE_KEY_REGEX = /^[A-Z0-9_-]{1,32}$/;
+  const ALL_ARCHETYPES: ReadonlySet<ConceptualArchetype> = new Set([
+    'MAGNITUDE_ESTIMATION',
+    'BENCHMARK_COMPARE',
+    'SPOT_THE_GLITCH',
+    'FIRST_STEP_STRATEGY',
+    'SIGN_PREDICTION',
+    'EQUIVALENCE_STRUCTURE',
+    'VISUAL_QUADRANT',
+  ]);
+
+  it('fuzz-tests all 36 conceptual generators across Tiers 1-12 for invariants, unique choices, promptLines, and validator accuracy', () => {
+    const seenArchetypes = new Set<ConceptualArchetype>();
+    let totalGenerators = 0;
+
+    for (let tier = 1; tier <= 12; tier++) {
+      const tierGens = CONCEPTUAL_GENERATORS[tier];
+      expect(tierGens, `Missing CONCEPTUAL_GENERATORS for tier ${tier}`).toBeDefined();
+      expect(tierGens.length, `Tier ${tier} must have exactly 3 conceptual generators`).toBe(3);
+
+      for (let genIdx = 0; genIdx < tierGens.length; genIdx++) {
+        totalGenerators += 1;
+        const generator = tierGens[genIdx];
+
+        for (let sample = 0; sample < FUZZ_SAMPLES; sample++) {
+          const problem = generator();
+          const answerStr = problem.answer.toString().trim();
+          const label = `Conceptual T${tier}#${genIdx + 1} (${problem.question})`;
+
+          expect(problem.question.trim().length, label).toBeGreaterThan(0);
+          expect(answerStr.length, label).toBeGreaterThan(0);
+          expect(problem.complexity, label).toBe('QUICK');
+          expect(problem.category, label).toBe('CONCEPTUAL');
+          expect(problem.steps, label).toEqual([]);
+          expect(problem.archetype, label).toBeDefined();
+          expect(ALL_ARCHETYPES.has(problem.archetype!), `Unknown archetype ${problem.archetype} in ${label}`).toBe(true);
+          expect(problem.archetype!, `Archetype fails storage regex in ${label}`).toMatch(ARCHETYPE_KEY_REGEX);
+          seenArchetypes.add(problem.archetype!);
+
+          if (problem.archetype === 'SPOT_THE_GLITCH') {
+            expect(problem.promptLines, `SPOT_THE_GLITCH missing promptLines in ${label}`).toBeDefined();
+            expect(problem.promptLines!.length, `SPOT_THE_GLITCH needs >= 2 promptLines in ${label}`).toBeGreaterThanOrEqual(2);
+            for (const line of problem.promptLines!) {
+              expect(line.trim().length, `Empty promptLine in ${label}`).toBeGreaterThan(0);
+            }
+          }
+
+          const isChoice = Boolean(problem.choices);
+          if (problem.archetype === 'BENCHMARK_COMPARE') {
+            expect(problem.inputType, label).toBe('RELATIONSHIP');
+            expect(problem.choices, label).toBeUndefined();
+            expect(['<', '=', '>'], label).toContain(answerStr);
+
+            expect(
+              validateAnswer(answerStr, problem.answer, {
+                inputType: problem.inputType,
+                isChoice: false,
+              }),
+              `Benchmark answer failed validateAnswer in ${label}`
+            ).toBe(true);
+
+            for (const wrongOp of ['<', '=', '>'].filter((op) => op !== answerStr)) {
+              expect(
+                validateAnswer(wrongOp, problem.answer, {
+                  inputType: problem.inputType,
+                  isChoice: false,
+                }),
+                `Benchmark distractor "${wrongOp}" unexpectedly accepted in ${label}`
+              ).toBe(false);
+            }
+          } else {
+            expect(problem.choices, `Missing choices in ${label}`).toBeDefined();
+            expect(problem.choices!.length, `Need 3-4 choices in ${label}`).toBeGreaterThanOrEqual(3);
+            expect(problem.choices!.length, `Need 3-4 choices in ${label}`).toBeLessThanOrEqual(4);
+            expect(new Set(problem.choices!).size, `Duplicate choices in ${label}`).toBe(problem.choices!.length);
+            expect(problem.choices, `Answer "${answerStr}" missing from choices in ${label}`).toContain(answerStr);
+
+            expect(
+              validateAnswer(answerStr, problem.answer, {
+                inputType: problem.inputType,
+                isChoice,
+              }),
+              `Answer "${answerStr}" failed validateAnswer in ${label}`
+            ).toBe(true);
+
+            for (const distractor of problem.choices!.filter((c) => c !== answerStr)) {
+              expect(
+                validateAnswer(distractor, problem.answer, {
+                  inputType: problem.inputType,
+                  isChoice,
+                }),
+                `Distractor "${distractor}" unexpectedly accepted for answer "${answerStr}" in ${label}`
+              ).toBe(false);
+            }
+          }
+        }
+      }
+    }
+
+    expect(totalGenerators).toBe(36);
+    expect(seenArchetypes.size).toBe(7);
+  });
+
+  it('routes generateProblem across ATTACK, MEDITATION, LOCK, and SHIELD_BREAK and honors archetype/rng options', () => {
+    for (let tier = 1; tier <= 12; tier++) {
+      const attack = generateProblem(tier, 'ATTACK', 1);
+      expect(attack.type).toBe('ATTACK');
+      expect(attack.category).toBe('PROCEDURAL');
+
+      for (const conceptualType of ['MEDITATION', 'LOCK', 'SHIELD_BREAK'] as const) {
+        const problem = generateProblem(tier, conceptualType);
+        expect(problem.type).toBe(conceptualType);
+        expect(problem.category).toBe('CONCEPTUAL');
+        expect(problem.complexity).toBe('QUICK');
+        expect(problem.archetype).toMatch(ARCHETYPE_KEY_REGEX);
+        expect(
+          validateAnswer(problem.answer.toString(), problem.answer, {
+            inputType: problem.inputType,
+            isChoice: Boolean(problem.choices),
+          })
+        ).toBe(true);
+      }
+    }
+
+    // Deterministic rng & archetype filtering
+    const makeDetRng = () => {
+      let state = 42;
+      return () => {
+        state = (state * 1664525 + 1013904223) % 4294967296;
+        return state / 4294967296;
+      };
+    };
+
+    const glitchA = generateConceptualProblem(1, 'LOCK', {
+      archetype: 'SPOT_THE_GLITCH',
+      rng: makeDetRng(),
+    });
+    const glitchB = generateConceptualProblem(1, 'LOCK', {
+      archetype: 'SPOT_THE_GLITCH',
+      rng: makeDetRng(),
+    });
+    expect(glitchA).toEqual(glitchB);
+    expect(glitchA.archetype).toBe('SPOT_THE_GLITCH');
+    expect(glitchA.promptLines?.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('guarantees Tier 6 SPOT_THE_GLITCH decimal parts never carry into the ones digit across 250 samples', () => {
+    const t6GlitchGen = CONCEPTUAL_GENERATORS[6][2];
+    let state = 1337;
+    const rng = () => {
+      state = (state * 1664525 + 1013904223) % 4294967296;
+      return state / 4294967296;
+    };
+
+    const seenAnswers = new Set<string>();
+    for (let i = 0; i < 250; i++) {
+      const problem = t6GlitchGen(rng);
+      expect(problem.archetype).toBe('SPOT_THE_GLITCH');
+
+      const match = problem.question.match(/^SPOT THE GLITCH IN (\d+)\.(\d) \+ 0\.(\d{2}):$/);
+      expect(match, `Unexpected T6 SPOT_THE_GLITCH question format: ${problem.question}`).not.toBeNull();
+
+      const tenths = Number(match![2]);
+      const hundredths = Number(match![3]);
+      expect(
+        tenths * 10 + hundredths,
+        `Decimal carry into ones digit in "${problem.question}" (${tenths * 10} + ${hundredths} >= 100)`
+      ).toBeLessThan(100);
+
+      seenAnswers.add(problem.answer.toString());
+    }
+
+    expect(seenAnswers.has('Step 1')).toBe(true);
+    expect(seenAnswers.has('Step 2')).toBe(true);
+  });
+});
+
 

@@ -1,4 +1,12 @@
-export type GameState = 'TITLE' | 'HOME' | 'DUNGEON' | 'COMBAT' | 'GAMEOVER' | 'SANCTUARY' | 'CHEST_LOOT';
+export type GameState =
+  | 'TITLE'
+  | 'HOME'
+  | 'DUNGEON'
+  | 'COMBAT'
+  | 'GAMEOVER'
+  | 'SANCTUARY'
+  | 'CHEST_LOOT'
+  | 'LOCK_MODAL';
 
 export interface UpgradeLevels {
   hp: number;
@@ -36,13 +44,17 @@ export interface Enemy {
   maxHp: number;
   type: string;
   variant: 1 | 2 | 3 | 4 | 5;
+  isApex?: boolean;
+  shieldLayers?: number;
+  maxShieldLayers?: number;
 }
 
 export interface Chest {
   id: string;
   pos: Position;
-  type: 'RED';
+  type: 'RED' | 'BLUE';
   opened: boolean;
+  locked?: boolean;
 }
 
 export interface DataLog {
@@ -132,11 +144,29 @@ export interface MathStep {
 
 export type ProblemComplexity = 'QUICK' | 'COMBO';
 
+export type ConceptualArchetype =
+  | 'MAGNITUDE_ESTIMATION'
+  | 'BENCHMARK_COMPARE'
+  | 'SPOT_THE_GLITCH'
+  | 'FIRST_STEP_STRATEGY'
+  | 'SIGN_PREDICTION'
+  | 'EQUIVALENCE_STRUCTURE'
+  | 'VISUAL_QUADRANT';
+
+export type ProblemCategory = 'PROCEDURAL' | 'CONCEPTUAL';
+
+export type ProblemType = 'ATTACK' | 'MEDITATION' | 'LOCK' | 'SHIELD_BREAK';
+
+export type CombatMode = 'ATTACK' | 'MEDITATION' | 'FOCUS_SCAN' | 'SHIELD_BREAK';
+
 export interface MathProblem {
   question: string;
   answer: number | string;
-  type: 'ATTACK' | 'MEDITATION';
+  type: ProblemType;
   complexity: ProblemComplexity;
+  category?: ProblemCategory;
+  archetype?: ConceptualArchetype;
+  promptLines?: string[];
   inputType?: InputType;
   requireSimplified?: boolean;
   steps?: MathStep[];

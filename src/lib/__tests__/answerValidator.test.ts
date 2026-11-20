@@ -93,5 +93,44 @@ describe('answerValidator', () => {
       expect(validateAnswer('positive', 'POSITIVE')).toBe(true);
       expect(validateAnswer('   ', '5')).toBe(false);
     });
+
+    it('performs exact normalized string match when isChoice is true without triggering RATIO or FRACTION parsing', () => {
+      expect(
+        validateAnswer('Step 1: subtracted instead of added', 'Step 1: subtracted instead of added', {
+          isChoice: true,
+        })
+      ).toBe(true);
+      expect(
+        validateAnswer('  step 1:   subtracted   instead of added ', 'Step 1: subtracted instead of added', {
+          isChoice: true,
+        })
+      ).toBe(true);
+      expect(
+        validateAnswer('Divide by 3/4', 'Divide by 3/4', {
+          isChoice: true,
+        })
+      ).toBe(true);
+      expect(
+        validateAnswer('4:6', '4:6', {
+          isChoice: true,
+        })
+      ).toBe(true);
+      // Equivalent ratio/fraction distractors must NOT match an exact choice string
+      expect(
+        validateAnswer('2:3', '4:6', {
+          isChoice: true,
+        })
+      ).toBe(false);
+      expect(
+        validateAnswer('2/4', '1/2', {
+          isChoice: true,
+        })
+      ).toBe(false);
+      expect(
+        validateAnswer('Step 2: wrong move', 'Step 1: wrong move', {
+          isChoice: true,
+        })
+      ).toBe(false);
+    });
   });
 });

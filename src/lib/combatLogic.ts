@@ -1,4 +1,5 @@
 import {
+  CombatMode,
   Enemy,
   MathProblem,
   PlayerStats,
@@ -17,6 +18,15 @@ export const LAG_SCAR_FP_GAIN = 5;
 export const BASE_ATTACK_DAMAGE = 10;
 export const ATTACK_DAMAGE_VARIANCE = 5;
 export const ATK_UP_BONUS = 5;
+
+// Phase 3 Conceptual Focus Scan, Apex Shield & Blue Cache Constants
+export const FOCUS_SCAN_FP_GAIN = 15;
+export const LAG_SCAR_FOCUS_SCAN_FP_GAIN = 8;
+export const SHIELD_BREAK_FP_GAIN = 10;
+export const LAG_SCAR_SHIELD_BREAK_FP_GAIN = 5;
+export const APEX_SHIELD_LAYERS_DEFAULT = 2;
+export const APEX_VULNERABLE_MULTIPLIER = 2;
+export const BLUE_CACHE_FAIL_DAMAGE = 5;
 
 // Combat Timing Constants
 export const PATROL_INTRO_MS = 500;
@@ -92,8 +102,81 @@ export interface TacticalHintResolution {
   attackResolution: CorrectResolution | null;
 }
 
-export function isApexEnemy(enemy: Pick<Enemy, 'type'>): boolean {
-  return enemy.type.endsWith('_APEX');
+export interface FocusScanResolution {
+  nextStats: PlayerStats;
+  fpGain: number;
+  newShieldLayers: number;
+  shieldBroken: boolean;
+}
+
+export interface ShieldBreakResolution {
+  newShieldLayers: number;
+  shieldBroken: boolean;
+  isVulnerable: boolean;
+  fpGain: number;
+}
+
+export function isApexEnemy(enemy: Pick<Enemy, 'type' | 'isApex'>): boolean {
+  return Boolean(enemy.isApex) || enemy.type.endsWith('_APEX');
+}
+
+export function getInitialEnemyShieldLayers(
+  enemy: Pick<Enemy, 'type' | 'isApex' | 'shieldLayers'>
+): number {
+  if (typeof enemy.shieldLayers === 'number' && Number.isFinite(enemy.shieldLayers)) {
+    return Math.max(0, Math.floor(enemy.shieldLayers));
+  }
+  return isApexEnemy(enemy) ? APEX_SHIELD_LAYERS_DEFAULT : 0;
+}
+
+export function canUseFocusScan(params: {
+  focusScanUsed: boolean;
+  mode: CombatMode;
+  shieldLayers: number;
+}): boolean {
+  return !params.focusScanUsed && params.mode === 'ATTACK';
+}
+
+export function applyFocusScanSuccess(
+  stats: PlayerStats,
+  shieldLayers: number
+): FocusScanResolution {
+  const safeLayers = Number.isFinite(shieldLayers) ? Math.max(0, Math.floor(shieldLayers)) : 0;
+  const fpGain = stats.neuralScars.includes('CALCULATION_LAG')
+    ? LAG_SCAR_FOCUS_SCAN_FP_GAIN
+    : FOCUS_SCAN_FP_GAIN;
+  const newShieldLayers = Math.max(0, safeLayers - 1);
+  const shieldBroken = safeLayers > 0 && newShieldLayers === 0;
+
+  return {
+    nextStats: {
+      ...stats,
+      fp: Math.min(stats.maxFp, stats.fp + fpGain),
+    },
+    fpGain,
+    newShieldLayers,
+    shieldBroken,
+  };
+}
+
+export function resolveShieldBreakHit(params: {
+  shieldLayers: number;
+  neuralScars: string[];
+}): ShieldBreakResolution {
+  const { shieldLayers, neuralScars } = params;
+  const safeLayers = Number.isFinite(shieldLayers) ? Math.max(0, Math.floor(shieldLayers)) : 0;
+  const newShieldLayers = Math.max(0, safeLayers - 1);
+  const shieldBroken = safeLayers > 0 && newShieldLayers === 0;
+  const fpGain = neuralScars.includes('CALCULATION_LAG')
+    ? LAG_SCAR_SHIELD_BREAK_FP_GAIN
+    : SHIELD_BREAK_FP_GAIN;
+
+  return {
+    newShieldLayers,
+    shieldBroken,
+    isVulnerable: shieldBroken,
+    fpGain,
+  };
 }
 
 export function getAtkUpStacks(runBuffs: string[]): number {
@@ -114,7 +197,7 @@ export function getEffectiveStepCount(
 
 export function createCombatTurnState(params: {
   problem: MathProblem;
-  mode: 'ATTACK' | 'MEDITATION';
+  mode: CombatMode;
   isApex: boolean;
   runBuffs: string[];
 }): CombatTurnState {
@@ -138,7 +221,7 @@ export function createCombatTurnState(params: {
 
 export function canToggleDirectStrike(params: {
   problem: MathProblem;
-  mode: 'ATTACK' | 'MEDITATION';
+  mode: CombatMode;
   turn: CombatTurnState;
 }): boolean {
   const { problem, mode, turn } = params;
@@ -162,7 +245,7 @@ export function canToggleDirectStrike(params: {
 
 export function toggleStrikeMode(
   problem: MathProblem,
-  mode: 'ATTACK' | 'MEDITATION',
+  mode: CombatMode,
   turn: CombatTurnState
 ): CombatTurnState {
   if (!canToggleDirectStrike({ problem, mode, turn })) {
@@ -187,9 +270,19 @@ export function calculateComboStepDamage(params: {
   effectiveStepCount: number;
   patrolBaseHp: number;
   damageDealtThisProblem: number;
+  isVulnerable?: boolean;
 }): number {
-  const { stepIndex, effectiveStepCount, patrolBaseHp, damageDealtThisProblem } = params;
-  const safeBaseHp = Number.isFinite(patrolBaseHp) ? Math.max(1, Math.floor(patrolBaseHp)) : 1;
+  const {
+    stepIndex,
+    effectiveStepCount,
+    patrolBaseHp,
+    damageDealtThisProblem,
+    isVulnerable = false,
+  } = params;
+  const multiplier = isVulnerable ? APEX_VULNERABLE_MULTIPLIER : 1;
+  const safeBaseHp = Number.isFinite(patrolBaseHp)
+    ? Math.max(1, Math.floor(patrolBaseHp)) * multiplier
+    : multiplier;
   const safeSteps = Math.max(1, Math.floor(effectiveStepCount));
   const safeIndex = Math.max(0, Math.floor(stepIndex));
 
@@ -215,6 +308,7 @@ export function calculateStrikeDamage(params: {
   effectiveStepCount: number;
   patrolBaseHp: number;
   damageDealtThisProblem: number;
+  isVulnerable?: boolean;
 }): number {
   const {
     strikeMode,
@@ -223,8 +317,10 @@ export function calculateStrikeDamage(params: {
     effectiveStepCount,
     patrolBaseHp,
     damageDealtThisProblem,
+    isVulnerable = false,
   } = params;
   const safeBaseHp = Number.isFinite(patrolBaseHp) ? Math.max(1, Math.floor(patrolBaseHp)) : 1;
+  const multiplier = isVulnerable ? APEX_VULNERABLE_MULTIPLIER : 1;
 
   if (complexity === 'COMBO' && strikeMode === 'COMBO') {
     return calculateComboStepDamage({
@@ -232,14 +328,15 @@ export function calculateStrikeDamage(params: {
       effectiveStepCount: Math.max(1, effectiveStepCount),
       patrolBaseHp: safeBaseHp,
       damageDealtThisProblem,
+      isVulnerable,
     });
   }
 
   if (complexity === 'COMBO' && strikeMode === 'DIRECT') {
-    return safeBaseHp;
+    return safeBaseHp * multiplier;
   }
 
-  return Math.ceil(safeBaseHp * QUICK_STRIKE_HP_RATIO);
+  return Math.ceil(safeBaseHp * QUICK_STRIKE_HP_RATIO) * multiplier;
 }
 
 /**
@@ -331,8 +428,18 @@ export function resolveCorrectAttack(params: {
   neuralScars: string[];
   isApex: boolean;
   runBuffs: string[];
+  isVulnerable?: boolean;
 }): CorrectResolution {
-  const { problem, turn, currentEnemyHp, patrolBaseHp, neuralScars, isApex, runBuffs } = params;
+  const {
+    problem,
+    turn,
+    currentEnemyHp,
+    patrolBaseHp,
+    neuralScars,
+    isApex,
+    runBuffs,
+    isVulnerable = false,
+  } = params;
   const isComboStep =
     problem.complexity === 'COMBO' &&
     turn.strikeMode === 'COMBO' &&
@@ -351,6 +458,7 @@ export function resolveCorrectAttack(params: {
     effectiveStepCount: effectiveSteps,
     patrolBaseHp,
     damageDealtThisProblem: turn.damageDealtThisProblem,
+    isVulnerable,
   });
 
   const newEnemyHp = Math.max(0, currentEnemyHp - damage);
@@ -426,7 +534,7 @@ export function resolveCorrectAttack(params: {
 
 export function resolveWrongAttack(params: {
   problem: MathProblem;
-  mode: 'ATTACK' | 'MEDITATION';
+  mode: CombatMode;
   turn: CombatTurnState;
   tier: number;
   isApex: boolean;
@@ -500,7 +608,7 @@ export function resolveWrongAttack(params: {
     };
   }
 
-  // QUICK or MEDITATION miss reveals the answer and advances to a fresh problem
+  // QUICK or conceptual (MEDITATION / FOCUS_SCAN / SHIELD_BREAK) miss reveals the answer and advances
   return {
     damage,
     shieldAbsorbed,
@@ -527,6 +635,7 @@ export function applyTacticalHint(params: {
   patrolBaseHp: number;
   isApex: boolean;
   shieldActive?: boolean;
+  isVulnerable?: boolean;
 }): TacticalHintResolution {
   const {
     stats,
@@ -536,6 +645,7 @@ export function applyTacticalHint(params: {
     patrolBaseHp,
     isApex,
     shieldActive = false,
+    isVulnerable = false,
   } = params;
 
   if (getTotalHints(stats) <= 0) {
@@ -577,6 +687,7 @@ export function applyTacticalHint(params: {
       neuralScars: stats.neuralScars,
       isApex,
       runBuffs: stats.runBuffs,
+      isVulnerable,
     });
 
     return {

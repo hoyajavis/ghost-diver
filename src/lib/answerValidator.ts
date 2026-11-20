@@ -6,6 +6,7 @@ export interface ValidateAnswerOptions {
   inputType?: InputType;
   requireSimplified?: boolean;
   isMultiSelect?: boolean;
+  isChoice?: boolean;
 }
 
 export function gcd(a: number, b: number): number {
@@ -100,10 +101,20 @@ export function validateAnswer(
 
   if (!subTrimmed || !expTrimmed) return false;
 
-  const { inputType, requireSimplified = false, isMultiSelect = false } = options;
+  const {
+    inputType,
+    requireSimplified = false,
+    isMultiSelect = false,
+    isChoice = false,
+  } = options;
 
   if (isMultiSelect) {
     return normalizeMultiSelect(subTrimmed) === normalizeMultiSelect(expTrimmed);
+  }
+
+  if (isChoice) {
+    const normalizeChoice = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase();
+    return normalizeChoice(subTrimmed) === normalizeChoice(expTrimmed);
   }
 
   if (inputType === 'FRACTION' || expTrimmed.includes('/')) {

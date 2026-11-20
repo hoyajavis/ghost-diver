@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   APEX_INTRO_MS,
+  APEX_SHIELD_LAYERS_DEFAULT,
+  APEX_VULNERABLE_MULTIPLIER,
+  applyFocusScanSuccess,
   applyMeditationRecovery,
   applyTacticalHint,
+  BLUE_CACHE_FAIL_DAMAGE,
   calculateCombatReward,
   calculateComboStepDamage,
   calculateEnemyCounterDamage,
@@ -10,21 +14,28 @@ import {
   calculatePlayerAttackDamage,
   calculateStrikeDamage,
   canToggleDirectStrike,
+  canUseFocusScan,
   COMBAT_END_MS,
   COMBO_STEP_ADVANCE_MS,
   consumeHintPack,
   createCombatTurnState,
+  FOCUS_SCAN_FP_GAIN,
   formatMultiSelectAnswer,
   getAtkUpStacks,
   getEffectiveStepCount,
+  getInitialEnemyShieldLayers,
   getTotalHints,
   isApexEnemy,
+  LAG_SCAR_FOCUS_SCAN_FP_GAIN,
+  LAG_SCAR_SHIELD_BREAK_FP_GAIN,
   MISS_RETRY_MS,
   MISS_REVEAL_MS,
   PATROL_INTRO_MS,
   PROBLEM_ADVANCE_MS,
   resolveCorrectAttack,
+  resolveShieldBreakHit,
   resolveWrongAttack,
+  SHIELD_BREAK_FP_GAIN,
   toggleStrikeMode,
 } from '../combatLogic';
 import { getApexHpForTier, getPatrolBaseHpForTier } from '../dungeonLogic';
@@ -774,6 +785,176 @@ describe('combatLogic', () => {
         expect(Number.isFinite(dmg)).toBe(true);
         expect(dmg).toBeGreaterThanOrEqual(1);
       }
+    }
+  });
+
+  it('exports Phase 3 Focus Scan, Shield Break, Apex Vulnerable, and Blue Cache constants', () => {
+    expect(FOCUS_SCAN_FP_GAIN).toBe(15);
+    expect(LAG_SCAR_FOCUS_SCAN_FP_GAIN).toBe(8);
+    expect(SHIELD_BREAK_FP_GAIN).toBe(10);
+    expect(LAG_SCAR_SHIELD_BREAK_FP_GAIN).toBe(5);
+    expect(APEX_SHIELD_LAYERS_DEFAULT).toBe(2);
+    expect(APEX_VULNERABLE_MULTIPLIER).toBe(2);
+    expect(BLUE_CACHE_FAIL_DAMAGE).toBe(5);
+  });
+
+  it('detects Apex via isApex flag or _APEX suffix and computes initial shield layers', () => {
+    expect(isApexEnemy({ type: 'SURFACE_WASTES', isApex: true })).toBe(true);
+    expect(isApexEnemy({ type: 'SURFACE_WASTES_APEX', isApex: false })).toBe(true);
+    expect(isApexEnemy({ type: 'SURFACE_WASTES', isApex: false })).toBe(false);
+
+    expect(getInitialEnemyShieldLayers({ type: 'SURFACE_WASTES' })).toBe(0);
+    expect(getInitialEnemyShieldLayers({ type: 'SURFACE_WASTES_APEX' })).toBe(APEX_SHIELD_LAYERS_DEFAULT);
+    expect(getInitialEnemyShieldLayers({ type: 'SURFACE_WASTES', isApex: true })).toBe(APEX_SHIELD_LAYERS_DEFAULT);
+    expect(getInitialEnemyShieldLayers({ type: 'SURFACE_WASTES_APEX', shieldLayers: 1 })).toBe(1);
+    expect(getInitialEnemyShieldLayers({ type: 'SURFACE_WASTES_APEX', shieldLayers: 0 })).toBe(0);
+    expect(getInitialEnemyShieldLayers({ type: 'SURFACE_WASTES_APEX', shieldLayers: -3 })).toBe(0);
+  });
+
+  it('enforces Focus Scan 1/battle guard, never heals HP, respects CALCULATION_LAG, and cracks shields if present', () => {
+    expect(canUseFocusScan({ focusScanUsed: false, mode: 'ATTACK', shieldLayers: 0 })).toBe(true);
+    expect(canUseFocusScan({ focusScanUsed: true, mode: 'ATTACK', shieldLayers: 0 })).toBe(false);
+    expect(canUseFocusScan({ focusScanUsed: false, mode: 'SHIELD_BREAK', shieldLayers: 2 })).toBe(false);
+    expect(canUseFocusScan({ focusScanUsed: false, mode: 'FOCUS_SCAN', shieldLayers: 0 })).toBe(false);
+    expect(canUseFocusScan({ focusScanUsed: false, mode: 'MEDITATION', shieldLayers: 0 })).toBe(false);
+
+    const injuredStats = {
+      ...INITIAL_STATS,
+      hp: 40,
+      maxHp: 100,
+      fp: 20,
+      maxFp: 100,
+      neuralScars: [],
+    };
+    const scanNoShield = applyFocusScanSuccess(injuredStats, 0);
+    expect(scanNoShield.nextStats.hp).toBe(40); // NEVER heals HP
+    expect(scanNoShield.fpGain).toBe(FOCUS_SCAN_FP_GAIN);
+    expect(scanNoShield.nextStats.fp).toBe(35);
+    expect(scanNoShield.newShieldLayers).toBe(0);
+    expect(scanNoShield.shieldBroken).toBe(false);
+
+    const lagStats = { ...injuredStats, fp: 95, neuralScars: ['CALCULATION_LAG'] };
+    const scanWithLagAndShield = applyFocusScanSuccess(lagStats, 1);
+    expect(scanWithLagAndShield.nextStats.hp).toBe(40); // NEVER heals HP
+    expect(scanWithLagAndShield.fpGain).toBe(LAG_SCAR_FOCUS_SCAN_FP_GAIN);
+    expect(scanWithLagAndShield.nextStats.fp).toBe(100); // clamped to maxFp
+    expect(scanWithLagAndShield.newShieldLayers).toBe(0);
+    expect(scanWithLagAndShield.shieldBroken).toBe(true);
+
+    const scanCrackTwoLayer = applyFocusScanSuccess(injuredStats, 2);
+    expect(scanCrackTwoLayer.newShieldLayers).toBe(1);
+    expect(scanCrackTwoLayer.shieldBroken).toBe(false);
+  });
+
+  it('resolves Apex Shield Break layers 2 -> 1 -> 0 with isVulnerable transition and CALCULATION_LAG scaling', () => {
+    const hit1 = resolveShieldBreakHit({ shieldLayers: 2, neuralScars: [] });
+    expect(hit1).toEqual({
+      newShieldLayers: 1,
+      shieldBroken: false,
+      isVulnerable: false,
+      fpGain: SHIELD_BREAK_FP_GAIN,
+    });
+
+    const hit2 = resolveShieldBreakHit({
+      shieldLayers: hit1.newShieldLayers,
+      neuralScars: ['CALCULATION_LAG'],
+    });
+    expect(hit2).toEqual({
+      newShieldLayers: 0,
+      shieldBroken: true,
+      isVulnerable: true,
+      fpGain: LAG_SCAR_SHIELD_BREAK_FP_GAIN,
+    });
+
+    const alreadyBroken = resolveShieldBreakHit({ shieldLayers: 0, neuralScars: [] });
+    expect(alreadyBroken.newShieldLayers).toBe(0);
+    expect(alreadyBroken.shieldBroken).toBe(false);
+    expect(alreadyBroken.isVulnerable).toBe(false);
+  });
+
+  it('defeats a Vulnerable Apex Boss in 1 full Combo Chain or 1 Direct Strike across all 12 tiers', () => {
+    for (let tier = 1; tier <= 12; tier++) {
+      const patrolHp = getPatrolBaseHpForTier(tier);
+      const apexHp = getApexHpForTier(tier);
+
+      // 1 Direct Strike defeats Vulnerable Apex Boss
+      const directTurn = toggleStrikeMode(
+        SAMPLE_COMBO_PROBLEM,
+        'ATTACK',
+        createCombatTurnState({
+          problem: SAMPLE_COMBO_PROBLEM,
+          mode: 'ATTACK',
+          isApex: true,
+          runBuffs: [],
+        })
+      );
+      const directHit = resolveCorrectAttack({
+        problem: SAMPLE_COMBO_PROBLEM,
+        turn: directTurn,
+        currentEnemyHp: apexHp,
+        patrolBaseHp: patrolHp,
+        neuralScars: [],
+        isApex: true,
+        runBuffs: [],
+        isVulnerable: true,
+      });
+      expect(directHit.damage).toBe(patrolHp * APEX_VULNERABLE_MULTIPLIER);
+      expect(directHit.isVictory).toBe(true);
+      expect(directHit.newEnemyHp).toBe(0);
+
+      // 1 full Combo Chain defeats Vulnerable Apex Boss
+      let comboTurn = createCombatTurnState({
+        problem: SAMPLE_COMBO_PROBLEM,
+        mode: 'ATTACK',
+        isApex: true,
+        runBuffs: [],
+      });
+      let remainingHp = apexHp;
+      let defeated = false;
+      for (let step = 0; step < SAMPLE_COMBO_PROBLEM.steps!.length && !defeated; step++) {
+        const res = resolveCorrectAttack({
+          problem: SAMPLE_COMBO_PROBLEM,
+          turn: comboTurn,
+          currentEnemyHp: remainingHp,
+          patrolBaseHp: patrolHp,
+          neuralScars: [],
+          isApex: true,
+          runBuffs: [],
+          isVulnerable: true,
+        });
+        remainingHp = res.newEnemyHp;
+        comboTurn = res.nextTurn;
+        defeated = res.isVictory;
+      }
+      expect(defeated, `Tier ${tier} Vulnerable Apex should fall in 1 Combo Chain`).toBe(true);
+      expect(remainingHp).toBe(0);
+    }
+  });
+
+  it('handles FOCUS_SCAN and SHIELD_BREAK modes in turn state, Direct Strike guard, and wrong-answer resolution', () => {
+    for (const mode of ['FOCUS_SCAN', 'SHIELD_BREAK'] as const) {
+      const turn = createCombatTurnState({
+        problem: SAMPLE_COMBO_PROBLEM,
+        mode,
+        isApex: true,
+        runBuffs: [],
+      });
+      expect(turn.strikeMode).toBe('DIRECT');
+      expect(turn.stepIndex).toBeNull();
+      expect(canToggleDirectStrike({ problem: SAMPLE_COMBO_PROBLEM, mode, turn })).toBe(false);
+
+      const wrong = resolveWrongAttack({
+        problem: SAMPLE_COMBO_PROBLEM,
+        mode,
+        turn,
+        tier: 2,
+        isApex: true,
+        currentPlayerHp: 100,
+        shieldActive: false,
+      });
+      expect(wrong.revealAnswer).toBe(true);
+      expect(wrong.keepSameProblem).toBe(false);
+      expect(wrong.fellBackToCombo).toBe(false);
     }
   });
 });

@@ -108,10 +108,10 @@ export const ProblemPromptCard: React.FC<ProblemPromptCardProps> = ({
       </div>
 
       {/* Main Prompt Card */}
-      <div className={`bg-gb-0 p-3 border-2 ${cardBorderClass} gb-border text-center transition-colors`}>
+      <div className={`bg-gb-0 p-2 lg:p-3 border-2 ${cardBorderClass} gb-border text-center transition-colors`}>
         {/* Pinned Original Problem — always visible */}
         {currentStep ? (
-          <div className="relative border-b border-gb-3/30 pb-1.5 mb-2">
+          <div className="relative border-b border-gb-3/30 pb-1 mb-1 lg:pb-1.5 lg:mb-2">
             <div className="text-xs sm:text-sm font-bold text-gb-2 tracking-tight leading-snug">
               {problem.question}
             </div>
@@ -126,7 +126,7 @@ export const ProblemPromptCard: React.FC<ProblemPromptCardProps> = ({
             </div>
             <ol
               aria-label="Solution steps to inspect"
-              className="mt-2.5 pt-2 border-t border-gb-3/30 space-y-1.5 text-left font-mono text-xs sm:text-sm"
+              className="mt-2 pt-1.5 lg:mt-2.5 lg:pt-2 border-t border-gb-3/30 space-y-1 lg:space-y-1.5 text-left font-mono text-xs sm:text-sm"
             >
               {problem.promptLines!.map((line, idx) => {
                 const hasPrefix = /^Step\s+\d+\s*:/i.test(line.trim());
@@ -148,7 +148,7 @@ export const ProblemPromptCard: React.FC<ProblemPromptCardProps> = ({
           </div>
         ) : (
           <div className="relative">
-            <div className="text-lg sm:text-xl font-bold text-gb-3 tracking-tight leading-snug">
+            <div className="text-base sm:text-xl font-bold text-gb-3 tracking-tight leading-snug">
               {problem.question}
             </div>
             {applyTextBlur && (
@@ -161,7 +161,7 @@ export const ProblemPromptCard: React.FC<ProblemPromptCardProps> = ({
         {solvedBreadcrumbs.length > 0 && (
           <div
             aria-label="Solved steps"
-            className="flex flex-wrap items-center justify-center gap-1 mb-2 text-[11px] font-bold"
+            className="flex flex-wrap items-center justify-center gap-1 mb-1 lg:mb-2 text-[11px] font-bold"
           >
             {solvedBreadcrumbs.map((crumb, idx) => (
               <React.Fragment key={`${crumb.stepIndex}-${idx}`}>
@@ -181,7 +181,7 @@ export const ProblemPromptCard: React.FC<ProblemPromptCardProps> = ({
         {/* Active Step Prompt (COMBO mode) */}
         {currentStep && (
           <div className="relative">
-            <div className="text-lg sm:text-xl font-bold text-gb-3 tracking-tight leading-snug">
+            <div className="text-base sm:text-xl font-bold text-gb-3 tracking-tight leading-snug">
               {currentStep.prompt}
             </div>
             {applyTextBlur && (

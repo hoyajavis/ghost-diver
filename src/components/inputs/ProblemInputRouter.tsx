@@ -109,7 +109,7 @@ export const ProblemInputRouter: React.FC<Props> = ({
   };
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-1.5 lg:gap-2">
       {actionBarProps && <CombatActionBar {...actionBarProps} orientation="row" />}
       {renderInputWidget()}
     </div>

@@ -49,7 +49,7 @@ export const CombatActionBar: React.FC<CombatActionBarProps> = ({
             : `Use Tactical Hint: reveal clue and shield next hit (${totalHints} remaining, Shift+H)`
         }
         title={`Tactical Hint: reveal clue & shield next hit (${totalHints} left, Shift+H)`}
-        className={`${isRow ? 'flex-1' : ''} min-w-11 min-h-11 px-2 py-1.5 bg-gb-0 border ${
+        className={`${isRow ? 'flex-1' : ''} min-w-11 min-h-9 py-1 lg:min-h-11 lg:py-1.5 px-2 bg-gb-0 border ${
           shieldActive ? 'border-neon-cyan text-neon-cyan' : 'border-gb-3 text-gb-3'
         } flex items-center justify-center gap-1.5 disabled:opacity-30 hover:bg-gb-2 hover:text-gb-0 transition-colors tabular-nums`}
       >
@@ -83,7 +83,7 @@ export const CombatActionBar: React.FC<CombatActionBarProps> = ({
             ? 'Focus Scan: Used this battle'
             : `Focus Scan: Free conceptual check (+${FOCUS_SCAN_FP_GAIN} FP, no heal, Shift+S)`
         }
-        className={`${isRow ? 'flex-1' : ''} min-w-11 min-h-11 px-2 py-1.5 bg-gb-0 border ${
+        className={`${isRow ? 'flex-1' : ''} min-w-11 min-h-9 py-1 lg:min-h-11 lg:py-1.5 px-2 bg-gb-0 border ${
           !focusScanUsed && !focusScanDisabled
             ? 'border-neon-cyan text-neon-cyan'
             : 'border-gb-3 text-gb-3'
@@ -106,7 +106,7 @@ export const CombatActionBar: React.FC<CombatActionBarProps> = ({
         disabled={meditationDisabled}
         aria-label={`Emergency Heal: costs ${MEDITATION_FP_COST} FP to restore +${MEDITATION_HEAL_AMOUNT} HP (Shift+F)`}
         title={`Emergency Heal (${MEDITATION_FP_COST} FP -> +${MEDITATION_HEAL_AMOUNT} HP, Shift+F)`}
-        className={`${isRow ? 'flex-1' : ''} min-w-11 min-h-11 px-2 py-1.5 bg-gb-0 border border-gb-3 text-gb-3 flex items-center justify-center gap-1.5 disabled:opacity-30 hover:bg-gb-2 hover:text-gb-0 transition-colors`}
+        className={`${isRow ? 'flex-1' : ''} min-w-11 min-h-9 py-1 lg:min-h-11 lg:py-1.5 px-2 bg-gb-0 border border-gb-3 text-gb-3 flex items-center justify-center gap-1.5 disabled:opacity-30 hover:bg-gb-2 hover:text-gb-0 transition-colors`}
       >
         <BrainCircuit className="w-4 h-4 shrink-0" />
         <span className="text-xs font-bold leading-none whitespace-nowrap">HEAL</span>

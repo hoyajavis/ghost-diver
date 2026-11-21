@@ -631,23 +631,23 @@ export const Combat: React.FC<Props> = ({
       </AnimatePresence>
 
       {/* Top HUD */}
-      <header className="grid grid-cols-3 items-center px-3 py-2 bg-gb-1 border-b-2 border-gb-3 shadow-lg z-10 shrink-0 tabular-nums">
+      <header className="grid grid-cols-[auto_1fr_minmax(0,1fr)] items-center gap-2 px-2.5 py-1.5 lg:px-3 lg:py-2 bg-gb-1 border-b-2 border-gb-3 shadow-lg z-10 shrink-0 tabular-nums">
         <div className="flex flex-col min-w-0">
-          <span className="text-xs text-gb-2 leading-tight">Diver</span>
+          <span className="text-[11px] lg:text-xs text-gb-2 leading-tight">Diver</span>
           <span className="text-xs sm:text-sm font-bold truncate">{diverLabel}</span>
         </div>
 
-        <div className="flex flex-col items-center justify-center">
-          <span className="text-xs text-gb-2 leading-tight">Depth</span>
+        <div className="flex flex-col items-center justify-center min-w-0">
+          <span className="text-[11px] lg:text-xs text-gb-2 leading-tight">Depth</span>
           <span className="text-xs sm:text-sm font-bold text-neon-cyan whitespace-nowrap">
             Sector {tier} · F{floor}
           </span>
         </div>
 
-        <div className="flex items-center justify-end gap-2 min-w-0">
+        <div className="flex items-center justify-end gap-1.5 lg:gap-2 min-w-0">
           <div className="flex flex-col items-end min-w-0">
-            <span className="text-xs text-gb-2 leading-tight">Target</span>
-            <span className="text-xs sm:text-sm font-bold text-neon-magenta truncate max-w-[140px] sm:max-w-[220px]">
+            <span className="text-[11px] lg:text-xs text-gb-2 leading-tight">Target</span>
+            <span className="text-xs sm:text-sm font-bold text-neon-magenta truncate max-w-full">
               {enemy.type}
             </span>
           </div>
@@ -655,7 +655,7 @@ export const Combat: React.FC<Props> = ({
             type="button"
             onClick={() => setShowSystemMenu(true)}
             aria-label="Open combat systems menu"
-            className="min-h-10 min-w-10 flex items-center justify-center border border-gb-3 bg-gb-0 text-gb-3 hover:text-neon-cyan hover:border-neon-cyan transition-colors shrink-0"
+            className="min-h-9 min-w-9 lg:min-h-10 lg:min-w-10 flex items-center justify-center border border-gb-3 bg-gb-0 text-gb-3 hover:text-neon-cyan hover:border-neon-cyan transition-colors shrink-0"
           >
             <Settings className="w-4 h-4" />
           </button>
@@ -749,25 +749,25 @@ export const Combat: React.FC<Props> = ({
         )}
       </AnimatePresence>
 
-      {/* Main Split Body (Desktop side-by-side / Mobile stacked with scrollable terminal) */}
+      {/* Main Split Body (Desktop side-by-side / Mobile stacked without overflow) */}
       <div className="flex-1 min-h-0 flex flex-col lg:grid lg:grid-cols-12 wireframe-bg dither-heavy overflow-hidden">
         {/* Left / Top: Battle Arena + Feedback */}
         <div className="lg:col-span-6 flex flex-col justify-between shrink-0 lg:shrink lg:border-r-2 lg:border-gb-3">
           {/* Side-View Battle Scene */}
-          <div className="flex-1 flex items-center justify-around px-4 py-3 lg:py-8 relative">
+          <div className="flex-1 flex items-center justify-around px-3 py-1.5 lg:px-4 lg:py-8 relative">
             {/* Player Side */}
             <motion.div
               animate={isAttacking === 'PLAYER' ? { x: [0, 60, 0] } : { x: 0 }}
               transition={{ duration: 0.35 }}
-              className="flex flex-col items-center gap-2"
+              className="flex flex-col items-center gap-1 lg:gap-2"
             >
               <div className="relative">
                 <div
-                  className={`w-16 h-16 lg:w-20 lg:h-20 bg-gb-0 border-2 ${
+                  className={`w-11 h-11 lg:w-20 lg:h-20 bg-gb-0 border-2 ${
                     shieldActive ? 'border-neon-cyan shadow-[0_0_12px_rgba(34,211,238,0.45)]' : 'border-gb-3'
                   } rounded-lg flex items-center justify-center gb-border overflow-hidden transition-all`}
                 >
-                  <User className="w-9 h-9 lg:w-11 lg:h-11 text-neon-cyan" />
+                  <User className="w-6 h-6 lg:w-11 lg:h-11 text-neon-cyan" />
                   <div className="absolute inset-0 bg-neon-cyan/10 pointer-events-none" />
                 </div>
                 {shieldActive && (
@@ -784,19 +784,19 @@ export const Combat: React.FC<Props> = ({
                     animate={{ opacity: [0, 1, 0] }}
                     className="absolute inset-0 bg-red-500/50 flex items-center justify-center rounded-lg"
                   >
-                    <Zap className="w-9 h-9 text-white" />
+                    <Zap className="w-7 h-7 lg:w-9 lg:h-9 text-white" />
                   </motion.div>
                 )}
               </div>
-              <div className="w-32 lg:w-40 tabular-nums space-y-1">
+              <div className="w-28 lg:w-40 tabular-nums space-y-0.5 lg:space-y-1">
                 <div>
-                  <div className="flex justify-between text-xs font-bold mb-0.5">
+                  <div className="flex justify-between text-[11px] lg:text-xs font-bold mb-0.5">
                     <span>HP</span>
                     <span>
                       {stats.hp}/{stats.maxHp}
                     </span>
                   </div>
-                  <div className="h-2 bg-gb-0 border border-gb-3 p-[1px]">
+                  <div className="h-1.5 lg:h-2 bg-gb-0 border border-gb-3 p-[1px]">
                     <div
                       className="h-full bg-neon-green transition-all duration-300"
                       style={{ width: `${(stats.hp / stats.maxHp) * 100}%` }}
@@ -804,7 +804,7 @@ export const Combat: React.FC<Props> = ({
                   </div>
                 </div>
                 <div>
-                  <div className="flex justify-between text-xs font-bold mb-0.5">
+                  <div className="flex justify-between text-[11px] lg:text-xs font-bold mb-0.5">
                     <span>FP</span>
                     <span>
                       {stats.fp}/{stats.maxFp}
@@ -821,7 +821,7 @@ export const Combat: React.FC<Props> = ({
             </motion.div>
 
             {/* VS Divider */}
-            <div className="text-xl lg:text-3xl font-black italic text-gb-3/30 select-none" aria-hidden="true">
+            <div className="text-base lg:text-3xl font-black italic text-gb-3/30 select-none" aria-hidden="true">
               VS
             </div>
 
@@ -829,15 +829,15 @@ export const Combat: React.FC<Props> = ({
             <motion.div
               animate={isAttacking === 'ENEMY' ? { x: [0, -60, 0] } : { x: 0 }}
               transition={{ duration: 0.35 }}
-              className="flex flex-col items-center gap-2"
+              className="flex flex-col items-center gap-1 lg:gap-2"
             >
               <div className="relative">
                 <div
-                  className={`w-16 h-16 lg:w-20 lg:h-20 bg-gb-0 border-2 ${
+                  className={`w-11 h-11 lg:w-20 lg:h-20 bg-gb-0 border-2 ${
                     isApex ? 'border-amber-400 shadow-[0_0_14px_rgba(255,0,255,0.5)]' : 'border-neon-magenta'
                   } rounded-lg flex items-center justify-center gb-border-sm overflow-hidden`}
                 >
-                  <Skull className="w-9 h-9 lg:w-11 lg:h-11 text-neon-magenta" />
+                  <Skull className="w-6 h-6 lg:w-11 lg:h-11 text-neon-magenta" />
                   <div className="absolute inset-0 bg-neon-magenta/10 pointer-events-none" />
                 </div>
                 {isApex && (
@@ -854,23 +854,23 @@ export const Combat: React.FC<Props> = ({
                     animate={{ opacity: [0, 1, 0] }}
                     className="absolute inset-0 bg-white/50 flex items-center justify-center rounded-lg"
                   >
-                    <Zap className="w-9 h-9 text-neon-cyan" />
+                    <Zap className="w-7 h-7 lg:w-9 lg:h-9 text-neon-cyan" />
                   </motion.div>
                 )}
               </div>
-              <div className="w-32 lg:w-40 tabular-nums space-y-1">
+              <div className="w-28 lg:w-40 tabular-nums space-y-0.5 lg:space-y-1">
                 {isApex && maxShieldLayers > 0 && (
                   <div>
-                    <div className="flex justify-between text-[11px] font-bold mb-0.5">
+                    <div className="flex justify-between items-center gap-1 text-[10px] lg:text-[11px] font-bold mb-0.5">
                       <span className={shieldLayers > 0 ? 'text-neon-cyan' : 'text-amber-300'}>
                         SHIELD
                       </span>
-                      <span className={shieldLayers > 0 ? 'text-neon-cyan' : 'text-amber-300'}>
-                        {shieldLayers > 0 ? `${shieldLayers}/${maxShieldLayers}` : 'VULNERABLE 2×'}
+                      <span className={`${shieldLayers > 0 ? 'text-neon-cyan' : 'text-amber-300'} whitespace-nowrap`}>
+                        {shieldLayers > 0 ? `${shieldLayers}/${maxShieldLayers}` : '2× VULN'}
                       </span>
                     </div>
                     <div
-                      className="flex gap-1 h-2"
+                      className="flex gap-1 h-1.5 lg:h-2"
                       aria-label={
                         shieldLayers > 0
                           ? `Logic Shield ${shieldLayers} of ${maxShieldLayers}`
@@ -891,20 +891,20 @@ export const Combat: React.FC<Props> = ({
                   </div>
                 )}
                 <div>
-                  <div className="flex justify-between text-xs font-bold mb-0.5">
+                  <div className="flex justify-between text-[11px] lg:text-xs font-bold mb-0.5">
                     <span>INT</span>
                     <span>
                       {currentEnemyHp}/{enemy.maxHp}
                     </span>
                   </div>
-                  <div className="h-2 bg-gb-0 border border-neon-magenta p-[1px]">
+                  <div className="h-1.5 lg:h-2 bg-gb-0 border border-neon-magenta p-[1px]">
                     <div
                       className="h-full bg-neon-magenta transition-all duration-300"
                       style={{ width: `${(currentEnemyHp / enemy.maxHp) * 100}%` }}
                     />
                   </div>
                 </div>
-                <div className="text-xs mt-1 text-center lg:text-right text-gb-2 font-semibold truncate">
+                <div className="hidden lg:block text-xs mt-1 text-right text-gb-2 font-semibold truncate">
                   {enemyDisplayName}
                 </div>
               </div>
@@ -919,7 +919,7 @@ export const Combat: React.FC<Props> = ({
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
                 role="status"
-                className="mx-3 mb-2 px-3 py-1.5 bg-amber-400/20 border-2 border-amber-400 text-amber-200 font-black italic uppercase tracking-wider text-xs sm:text-sm text-center shadow-[0_0_16px_rgba(251,191,36,0.35)]"
+                className="mx-3 mb-1.5 lg:mb-2 px-3 py-1 lg:py-1.5 bg-amber-400/20 border-2 border-amber-400 text-amber-200 font-black italic uppercase tracking-wider text-[11px] sm:text-sm text-center shadow-[0_0_16px_rgba(251,191,36,0.35)]"
               >
                 {phaseBanner}
               </motion.div>
@@ -929,7 +929,7 @@ export const Combat: React.FC<Props> = ({
           {/* Combat Log / Feedback Banner */}
           <div
             aria-live="polite"
-            className="min-h-10 px-3 py-1.5 flex items-center justify-center bg-gb-0/90 border-y lg:border-b-0 border-gb-3"
+            className="min-h-7 lg:min-h-10 px-2.5 py-1 lg:px-3 lg:py-1.5 flex items-center justify-center bg-gb-0/90 border-y lg:border-b-0 border-gb-3"
           >
             <AnimatePresence mode="wait">
               {feedback === 'CORRECT' && (
@@ -959,7 +959,7 @@ export const Combat: React.FC<Props> = ({
                   key="idle"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  className="text-gb-2 text-xs text-center"
+                  className="text-gb-2 text-[11px] lg:text-xs text-center"
                 >
                   {feedbackMessage ??
                     (mode === 'SHIELD_BREAK'
@@ -971,9 +971,9 @@ export const Combat: React.FC<Props> = ({
           </div>
         </div>
 
-        {/* Right / Bottom: Scrollable Problem & Input Terminal */}
-        <div className="lg:col-span-6 flex-1 min-h-0 overflow-y-auto custom-scrollbar p-3 lg:p-6 bg-gb-1 border-t-2 lg:border-t-0 border-gb-3 dither flex flex-col justify-start lg:justify-center">
-          <div className="w-full max-w-md mx-auto flex flex-col gap-3">
+        {/* Right / Bottom: Problem & Input Terminal */}
+        <div className="lg:col-span-6 flex-1 min-h-0 overflow-y-auto custom-scrollbar p-2 lg:p-6 bg-gb-1 border-t-2 lg:border-t-0 border-gb-3 dither flex flex-col justify-start lg:justify-center">
+          <div className="w-full max-w-md mx-auto flex flex-col gap-1.5 lg:gap-3">
             <ProblemPromptCard
               problem={problem}
               modeLabel={modeLabel}
@@ -994,7 +994,7 @@ export const Combat: React.FC<Props> = ({
                 disabled={feedback !== 'IDLE' || isIntro}
                 onClick={handleToggleDirectStrike}
                 aria-pressed={turn.strikeMode === 'DIRECT'}
-                className={`w-full min-h-10 px-3 py-1.5 border text-xs font-bold uppercase tracking-wide flex items-center justify-center gap-2 transition-colors disabled:opacity-40 ${
+                className={`w-full min-h-8 lg:min-h-10 px-2.5 py-1 lg:px-3 lg:py-1.5 border text-[11px] lg:text-xs font-bold uppercase tracking-wide flex items-center justify-center gap-1.5 lg:gap-2 transition-colors disabled:opacity-40 ${
                   turn.strikeMode === 'DIRECT'
                     ? 'bg-amber-400/20 border-amber-400 text-amber-200 hover:bg-amber-400/30'
                     : 'bg-gb-0 border-amber-400/60 text-amber-300 hover:bg-amber-400/15'

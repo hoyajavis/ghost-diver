@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { InputType } from '../types';
+import { resolveRelationshipShortcutKey } from '../lib/inputUtils';
 
 interface UseCombatInputProps {
   showSystemMenu: boolean;
@@ -9,11 +10,13 @@ interface UseCombatInputProps {
   onSkipIntro?: () => void;
   onToggleDirectStrike?: () => void;
   onTacticalHint?: () => void;
+  onFocusScan?: () => void;
   onMeditation?: () => void;
   activeChoices?: string[];
   activeMultiSelectOptions?: string[];
   onToggleOption?: (option: string) => void;
   currentInputType: InputType;
+  includeInclusiveRelationship?: boolean;
   setInput: React.Dispatch<React.SetStateAction<string>>;
   handleSubmit: (overrideInput?: string) => void;
   fractionInput: { num: string; den: string };
@@ -30,11 +33,13 @@ export function useCombatInput({
   onSkipIntro,
   onToggleDirectStrike,
   onTacticalHint,
+  onFocusScan,
   onMeditation,
   activeChoices,
   activeMultiSelectOptions,
   onToggleOption,
   currentInputType,
+  includeInclusiveRelationship = false,
   setInput,
   handleSubmit,
   fractionInput,
@@ -72,6 +77,11 @@ export function useCombatInput({
         if (upper === 'H' && onTacticalHint) {
           e.preventDefault();
           onTacticalHint();
+          return;
+        }
+        if (upper === 'S' && onFocusScan) {
+          e.preventDefault();
+          onFocusScan();
           return;
         }
         if (upper === 'F' && onMeditation) {
@@ -149,9 +159,14 @@ export function useCombatInput({
       }
 
       if (currentInputType === 'RELATIONSHIP') {
-        if (['<', '>', '=', '≤', '≥'].includes(e.key)) {
-          setInput(e.key);
-          handleSubmit(e.key);
+        const resolved = resolveRelationshipShortcutKey(
+          e.key,
+          e.shiftKey,
+          includeInclusiveRelationship
+        );
+        if (resolved) {
+          setInput(resolved);
+          handleSubmit(resolved);
         } else if (e.key === 'Escape') {
           setShowSystemMenu(true);
         }
@@ -202,8 +217,9 @@ export function useCombatInput({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
     showSystemMenu, setShowSystemMenu, feedback, isIntro,
-    onSkipIntro, onToggleDirectStrike, onTacticalHint, onMeditation,
+    onSkipIntro, onToggleDirectStrike, onTacticalHint, onFocusScan, onMeditation,
     activeChoices, activeMultiSelectOptions, onToggleOption, currentInputType,
+    includeInclusiveRelationship,
     setInput, handleSubmit, fractionInput, setFractionInput, fractionFocus, setFractionFocus
   ]);
 }

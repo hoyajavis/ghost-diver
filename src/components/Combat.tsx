@@ -1,23 +1,28 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { PlayerStats, Enemy, MathProblem } from '../types';
+import { CombatMode, PlayerStats, Enemy, MathProblem, ProblemType } from '../types';
 import { generateProblem } from '../lib/mathEngine';
 import { ENEMY_TIERS } from '../lib/enemyData';
 import {
   APEX_INTRO_MS,
+  applyFocusScanSuccess,
   applyMeditationRecovery,
   applyTacticalHint,
   calculateCombatReward,
   canToggleDirectStrike,
+  canUseFocusScan,
   CombatTurnState,
   createCombatTurnState,
   formatMultiSelectAnswer,
   getAtkUpStacks,
+  getInitialEnemyShieldLayers,
   getTotalHints,
   isApexEnemy,
   MEDITATION_FP_COST,
+  MEDITATION_HEAL_AMOUNT,
   PATROL_INTRO_MS,
   PROBLEM_ADVANCE_MS,
   resolveCorrectAttack,
+  resolveShieldBreakHit,
   resolveWrongAttack,
   toggleStrikeMode,
 } from '../lib/combatLogic';
@@ -33,7 +38,7 @@ import {
 import { validateAnswer } from '../lib/answerValidator';
 import { getScarName } from '../lib/scarData';
 import { recordProblemTelemetry } from '../lib/storage';
-import { Shield, ShieldAlert, Skull, Zap, User, Settings, X, LogOut } from 'lucide-react';
+import { Crown, Shield, ShieldAlert, Skull, Zap, User, Settings, X, LogOut } from 'lucide-react';
 import { ProblemInputRouter } from './inputs/ProblemInputRouter';
 import { ProblemPromptCard } from './ProblemPromptCard';
 import { motion, AnimatePresence } from 'motion/react';
@@ -51,6 +56,12 @@ interface Props {
   onUpdateStats: (newStats: PlayerStats) => void;
 }
 
+function getProblemTypeForMode(combatMode: CombatMode): ProblemType {
+  if (combatMode === 'ATTACK') return 'ATTACK';
+  if (combatMode === 'SHIELD_BREAK') return 'SHIELD_BREAK';
+  return 'MEDITATION';
+}
+
 export const Combat: React.FC<Props> = ({
   stats,
   enemy,
@@ -65,14 +76,23 @@ export const Combat: React.FC<Props> = ({
   const isBossIntro = isApex || floor % 5 === 0;
   const patrolBaseHp = getPatrolBaseHpForTier(tier);
   const atkUpStacks = getAtkUpStacks(stats.runBuffs);
+  const initialShieldLayers = getInitialEnemyShieldLayers(enemy);
+  const maxShieldLayers = enemy.maxShieldLayers ?? initialShieldLayers;
+  const initialMode: CombatMode = initialShieldLayers > 0 ? 'SHIELD_BREAK' : 'ATTACK';
 
   const [currentEnemyHp, setCurrentEnemyHp] = useState(enemy.hp);
-  const [problem, setProblem] = useState<MathProblem>(() => generateProblem(tier, 'ATTACK', enemy.variant));
-  const [mode, setMode] = useState<'ATTACK' | 'MEDITATION'>('ATTACK');
+  const [shieldLayers, setShieldLayers] = useState<number>(initialShieldLayers);
+  const [isVulnerable, setIsVulnerable] = useState<boolean>(false);
+  const [focusScanUsed, setFocusScanUsed] = useState<boolean>(false);
+  const [phaseBanner, setPhaseBanner] = useState<string | null>(null);
+  const [mode, setMode] = useState<CombatMode>(initialMode);
+  const [problem, setProblem] = useState<MathProblem>(() =>
+    generateProblem(tier, getProblemTypeForMode(initialMode), enemy.variant)
+  );
   const [turn, setTurn] = useState<CombatTurnState>(() =>
     createCombatTurnState({
       problem,
-      mode: 'ATTACK',
+      mode: initialMode,
       isApex,
       runBuffs: stats.runBuffs,
     })
@@ -119,11 +139,18 @@ export const Combat: React.FC<Props> = ({
     }, introDelayMs);
   }, [scheduleTimeout, isBossIntro]);
 
-  const emitProblemTelemetry = (firstTryCorrect: boolean, activeMode: 'ATTACK' | 'MEDITATION') => {
+  const emitProblemTelemetry = (
+    firstTryCorrect: boolean,
+    activeMode: CombatMode,
+    activeProblem: MathProblem
+  ) => {
     const solveMs = Math.max(0, Date.now() - problemStartTimeRef.current);
     recordProblemTelemetry({
       tierVariant: activeMode === 'ATTACK' ? `${tier}-${enemy.variant}` : undefined,
-      archetype: activeMode === 'MEDITATION' ? 'MEDITATION' : undefined,
+      archetype:
+        activeMode !== 'ATTACK'
+          ? (activeProblem.archetype ?? activeMode)
+          : undefined,
       solveMs,
       firstTryCorrect,
     });
@@ -137,6 +164,7 @@ export const Combat: React.FC<Props> = ({
   const activeMultiSelectOptions = getActiveMultiSelectOptions(problem, currentStep);
   const requireSimplified = getRequireSimplified(problem, currentStep);
   const directStrikeAvailable = canToggleDirectStrike({ problem, mode, turn });
+  const focusScanAvailable = canUseFocusScan({ focusScanUsed, mode, shieldLayers });
   const includeInclusiveRelationship =
     expectedAnswer === '≤' ||
     expectedAnswer === '≥' ||
@@ -148,16 +176,21 @@ export const Combat: React.FC<Props> = ({
     ENEMY_TIERS[tier]?.variants[enemy.variant]?.fullName || enemy.type || `Sentinel T${tier}`;
 
   const scheduleNextProblem = (
-    nextMode: 'ATTACK' | 'MEDITATION',
+    nextMode: CombatMode,
     delayMs: number,
-    runBuffs: string[]
+    runBuffs: string[],
+    clearPhaseBanner = false
   ) => {
     scheduleTimeout(() => {
-      const nextProblem = generateProblem(tier, nextMode, enemy.variant);
+      const nextProblem = generateProblem(tier, getProblemTypeForMode(nextMode), enemy.variant);
+      setMode(nextMode);
       setFeedback('IDLE');
       setFeedbackMessage(null);
       setIsAttacking(null);
       setActiveClue(null);
+      if (clearPhaseBanner) {
+        setPhaseBanner(null);
+      }
       setProblem(nextProblem);
       setTurn(
         createCombatTurnState({
@@ -212,6 +245,7 @@ export const Combat: React.FC<Props> = ({
       inputType: currentInputType,
       requireSimplified,
       isMultiSelect: Boolean(activeMultiSelectOptions),
+      isChoice: Boolean(activeChoices),
     });
 
     if (isCorrect) {
@@ -227,6 +261,7 @@ export const Combat: React.FC<Props> = ({
           neuralScars: stats.neuralScars,
           isApex,
           runBuffs: stats.runBuffs,
+          isVulnerable,
         });
 
         setCurrentEnemyHp(res.newEnemyHp);
@@ -238,7 +273,9 @@ export const Combat: React.FC<Props> = ({
               ? `Direct Strike Kill: -${res.damage} INT (+50% Shards)`
               : res.nextTurn.comboStreak >= 2
                 ? `${res.nextTurn.comboStreak}× Combo Hit: -${res.damage} INT`
-                : `Critical Hit: -${res.damage} INT`
+                : isVulnerable
+                  ? `2× Vulnerable Hit: -${res.damage} INT`
+                  : `Critical Hit: -${res.damage} INT`
         );
 
         onUpdateStats({
@@ -247,7 +284,7 @@ export const Combat: React.FC<Props> = ({
         });
 
         if (res.isVictory) {
-          emitProblemTelemetry(!hadWrongAttemptRef.current, 'ATTACK');
+          emitProblemTelemetry(!hadWrongAttemptRef.current, 'ATTACK', problem);
           scheduleTimeout(() => {
             onWin(
               calculateCombatReward({
@@ -272,16 +309,66 @@ export const Combat: React.FC<Props> = ({
           return;
         }
 
-        emitProblemTelemetry(!hadWrongAttemptRef.current, 'ATTACK');
+        emitProblemTelemetry(!hadWrongAttemptRef.current, 'ATTACK', problem);
         scheduleNextProblem('ATTACK', res.delayMs, stats.runBuffs);
         return;
       }
 
-      emitProblemTelemetry(!hadWrongAttemptRef.current, 'MEDITATION');
+      if (mode === 'SHIELD_BREAK') {
+        setIsAttacking('PLAYER');
+        emitProblemTelemetry(!hadWrongAttemptRef.current, 'SHIELD_BREAK', problem);
+        const res = resolveShieldBreakHit({
+          shieldLayers,
+          neuralScars: stats.neuralScars,
+        });
+        setShieldLayers(res.newShieldLayers);
+        onUpdateStats({
+          ...stats,
+          fp: Math.min(stats.maxFp, stats.fp + res.fpGain),
+        });
+
+        if (res.shieldBroken) {
+          setIsVulnerable(true);
+          setPhaseBanner('SHIELD BROKEN — 2× VULNERABLE');
+          setFeedbackMessage(`Logic Shield Shattered! +${res.fpGain} FP · 2× Vulnerable`);
+          scheduleNextProblem('ATTACK', 1200, stats.runBuffs, true);
+        } else {
+          setFeedbackMessage(
+            `Logic Shield Cracked (${res.newShieldLayers}/${maxShieldLayers}) · +${res.fpGain} FP`
+          );
+          scheduleNextProblem('SHIELD_BREAK', PROBLEM_ADVANCE_MS, stats.runBuffs);
+        }
+        return;
+      }
+
+      if (mode === 'FOCUS_SCAN') {
+        emitProblemTelemetry(!hadWrongAttemptRef.current, 'FOCUS_SCAN', problem);
+        const res = applyFocusScanSuccess(stats, shieldLayers);
+        onUpdateStats(res.nextStats);
+        setShieldLayers(res.newShieldLayers);
+
+        if (res.shieldBroken) {
+          setIsVulnerable(true);
+          setPhaseBanner('SHIELD BROKEN — 2× VULNERABLE');
+          setFeedbackMessage(`Focus Scan Shattered Shield! +${res.fpGain} FP · 2× Vulnerable`);
+          scheduleNextProblem('ATTACK', 1200, res.nextStats.runBuffs, true);
+        } else {
+          setFeedbackMessage(
+            shieldLayers > 0
+              ? `Focus Scan: +${res.fpGain} FP · Shield Cracked`
+              : `Focus Scan Complete: +${res.fpGain} FP`
+          );
+          const nextMode: CombatMode = res.newShieldLayers > 0 ? 'SHIELD_BREAK' : 'ATTACK';
+          scheduleNextProblem(nextMode, PROBLEM_ADVANCE_MS, res.nextStats.runBuffs);
+        }
+        return;
+      }
+
+      emitProblemTelemetry(!hadWrongAttemptRef.current, 'MEDITATION', problem);
       onUpdateStats(applyMeditationRecovery(stats));
-      setFeedbackMessage('System Recovery Complete');
-      setMode('ATTACK');
-      scheduleNextProblem('ATTACK', PROBLEM_ADVANCE_MS, stats.runBuffs);
+      setFeedbackMessage(`Emergency Heal Complete: +${MEDITATION_HEAL_AMOUNT} HP`);
+      const nextModeAfterHeal: CombatMode = shieldLayers > 0 ? 'SHIELD_BREAK' : 'ATTACK';
+      scheduleNextProblem(nextModeAfterHeal, PROBLEM_ADVANCE_MS, stats.runBuffs);
       return;
     }
 
@@ -321,7 +408,7 @@ export const Combat: React.FC<Props> = ({
     setFeedbackMessage(`${hitPrefix}${hitSuffix}`);
 
     if (res.isDefeat) {
-      emitProblemTelemetry(false, mode);
+      emitProblemTelemetry(false, mode, problem);
       scheduleTimeout(onLose, res.delayMs);
       return;
     }
@@ -339,8 +426,37 @@ export const Combat: React.FC<Props> = ({
       return;
     }
 
-    emitProblemTelemetry(false, mode);
-    scheduleNextProblem(mode, res.delayMs, stats.runBuffs);
+    emitProblemTelemetry(false, mode, problem);
+    const nextModeAfterMiss: CombatMode =
+      mode === 'FOCUS_SCAN'
+        ? shieldLayers > 0
+          ? 'SHIELD_BREAK'
+          : 'ATTACK'
+        : mode;
+    scheduleNextProblem(nextModeAfterMiss, res.delayMs, stats.runBuffs);
+  };
+
+  const handleFocusScanClick = () => {
+    if (!focusScanAvailable || feedback !== 'IDLE' || isIntro) return;
+    clearAllTimeouts();
+    const nextProblem = generateProblem(tier, 'MEDITATION', enemy.variant);
+    setFocusScanUsed(true);
+    setMode('FOCUS_SCAN');
+    setProblem(nextProblem);
+    setTurn(
+      createCombatTurnState({
+        problem: nextProblem,
+        mode: 'FOCUS_SCAN',
+        isApex,
+        runBuffs: stats.runBuffs,
+      })
+    );
+    setActiveClue(null);
+    setFeedback('IDLE');
+    setFeedbackMessage(null);
+    problemStartTimeRef.current = Date.now();
+    hadWrongAttemptRef.current = false;
+    resetInputs();
   };
 
   const handleMeditationClick = () => {
@@ -377,6 +493,7 @@ export const Combat: React.FC<Props> = ({
       patrolBaseHp,
       isApex,
       shieldActive,
+      isVulnerable,
     });
 
     const statsAfterHint = hintResult.nextStats;
@@ -403,7 +520,7 @@ export const Combat: React.FC<Props> = ({
       });
 
       if (res.isVictory) {
-        emitProblemTelemetry(!hadWrongAttemptRef.current, 'ATTACK');
+        emitProblemTelemetry(!hadWrongAttemptRef.current, 'ATTACK', problem);
         scheduleTimeout(() => {
           onWin(
             calculateCombatReward({
@@ -428,7 +545,7 @@ export const Combat: React.FC<Props> = ({
         return;
       }
 
-      emitProblemTelemetry(!hadWrongAttemptRef.current, 'ATTACK');
+      emitProblemTelemetry(!hadWrongAttemptRef.current, 'ATTACK', problem);
       scheduleNextProblem('ATTACK', res.delayMs, statsAfterHint.runBuffs);
       return;
     }
@@ -445,11 +562,13 @@ export const Combat: React.FC<Props> = ({
     onSkipIntro: skipIntro,
     onToggleDirectStrike: directStrikeAvailable ? handleToggleDirectStrike : undefined,
     onTacticalHint: handleHintClick,
+    onFocusScan: handleFocusScanClick,
     onMeditation: handleMeditationClick,
     activeChoices,
     activeMultiSelectOptions,
     onToggleOption: handleToggleOption,
     currentInputType,
+    includeInclusiveRelationship,
     setInput,
     handleSubmit,
     fractionInput,
@@ -460,13 +579,27 @@ export const Combat: React.FC<Props> = ({
 
   const actionBarProps = {
     onHintClick: handleHintClick,
+    onFocusScanClick: handleFocusScanClick,
     onMeditationClick: handleMeditationClick,
     totalHints,
     hintDisabled: totalHints <= 0 || mode !== 'ATTACK' || feedback !== 'IDLE' || isIntro,
+    focusScanDisabled: !focusScanAvailable || feedback !== 'IDLE' || isIntro,
+    focusScanUsed,
     meditationDisabled:
       stats.fp < MEDITATION_FP_COST || mode === 'MEDITATION' || feedback !== 'IDLE' || isIntro,
     shieldActive,
   };
+
+  const modeLabel =
+    mode === 'SHIELD_BREAK'
+      ? 'Logic Shield Breach'
+      : mode === 'FOCUS_SCAN'
+        ? 'Focus Scan'
+        : mode === 'MEDITATION'
+          ? 'Emergency Heal'
+          : 'Cipher Attack';
+  const promptAccent: 'cyan' | 'purple' =
+    mode === 'SHIELD_BREAK' || mode === 'FOCUS_SCAN' ? 'purple' : 'cyan';
 
   return (
     <div className="flex flex-col h-full bg-gb-0 text-gb-3 scanlines overflow-hidden terminal-text">
@@ -699,10 +832,22 @@ export const Combat: React.FC<Props> = ({
               className="flex flex-col items-center gap-2"
             >
               <div className="relative">
-                <div className="w-16 h-16 lg:w-20 lg:h-20 bg-gb-0 border-2 border-neon-magenta rounded-lg flex items-center justify-center gb-border-sm overflow-hidden">
+                <div
+                  className={`w-16 h-16 lg:w-20 lg:h-20 bg-gb-0 border-2 ${
+                    isApex ? 'border-amber-400 shadow-[0_0_14px_rgba(255,0,255,0.5)]' : 'border-neon-magenta'
+                  } rounded-lg flex items-center justify-center gb-border-sm overflow-hidden`}
+                >
                   <Skull className="w-9 h-9 lg:w-11 lg:h-11 text-neon-magenta" />
                   <div className="absolute inset-0 bg-neon-magenta/10 pointer-events-none" />
                 </div>
+                {isApex && (
+                  <div
+                    aria-label="Apex Sentinel"
+                    className="absolute -top-2 -right-2 px-1 py-0.5 bg-gb-0 border border-amber-400 text-amber-300 text-[10px] font-black flex items-center gap-0.5"
+                  >
+                    <Crown className="w-3 h-3" />
+                  </div>
+                )}
                 {isAttacking === 'PLAYER' && feedback === 'CORRECT' && (
                   <motion.div
                     initial={{ opacity: 0 }}
@@ -713,18 +858,51 @@ export const Combat: React.FC<Props> = ({
                   </motion.div>
                 )}
               </div>
-              <div className="w-32 lg:w-40 tabular-nums">
-                <div className="flex justify-between text-xs font-bold mb-0.5">
-                  <span>INT</span>
-                  <span>
-                    {currentEnemyHp}/{enemy.maxHp}
-                  </span>
-                </div>
-                <div className="h-2 bg-gb-0 border border-neon-magenta p-[1px]">
-                  <div
-                    className="h-full bg-neon-magenta transition-all duration-300"
-                    style={{ width: `${(currentEnemyHp / enemy.maxHp) * 100}%` }}
-                  />
+              <div className="w-32 lg:w-40 tabular-nums space-y-1">
+                {isApex && maxShieldLayers > 0 && (
+                  <div>
+                    <div className="flex justify-between text-[11px] font-bold mb-0.5">
+                      <span className={shieldLayers > 0 ? 'text-neon-cyan' : 'text-amber-300'}>
+                        SHIELD
+                      </span>
+                      <span className={shieldLayers > 0 ? 'text-neon-cyan' : 'text-amber-300'}>
+                        {shieldLayers > 0 ? `${shieldLayers}/${maxShieldLayers}` : 'VULNERABLE 2×'}
+                      </span>
+                    </div>
+                    <div
+                      className="flex gap-1 h-2"
+                      aria-label={
+                        shieldLayers > 0
+                          ? `Logic Shield ${shieldLayers} of ${maxShieldLayers}`
+                          : 'Logic Shield Broken — 2× Vulnerable'
+                      }
+                    >
+                      {Array.from({ length: maxShieldLayers }).map((_, idx) => (
+                        <div
+                          key={idx}
+                          className={`flex-1 border transition-all duration-300 ${
+                            idx < shieldLayers
+                              ? 'bg-neon-cyan border-neon-cyan shadow-[0_0_6px_rgba(0,243,255,0.6)]'
+                              : 'bg-gb-0 border-gb-3/30'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div>
+                  <div className="flex justify-between text-xs font-bold mb-0.5">
+                    <span>INT</span>
+                    <span>
+                      {currentEnemyHp}/{enemy.maxHp}
+                    </span>
+                  </div>
+                  <div className="h-2 bg-gb-0 border border-neon-magenta p-[1px]">
+                    <div
+                      className="h-full bg-neon-magenta transition-all duration-300"
+                      style={{ width: `${(currentEnemyHp / enemy.maxHp) * 100}%` }}
+                    />
+                  </div>
                 </div>
                 <div className="text-xs mt-1 text-center lg:text-right text-gb-2 font-semibold truncate">
                   {enemyDisplayName}
@@ -732,6 +910,21 @@ export const Combat: React.FC<Props> = ({
               </div>
             </motion.div>
           </div>
+
+          {/* Phase Transition Banner */}
+          <AnimatePresence>
+            {phaseBanner && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.92 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                role="status"
+                className="mx-3 mb-2 px-3 py-1.5 bg-amber-400/20 border-2 border-amber-400 text-amber-200 font-black italic uppercase tracking-wider text-xs sm:text-sm text-center shadow-[0_0_16px_rgba(251,191,36,0.35)]"
+              >
+                {phaseBanner}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Combat Log / Feedback Banner */}
           <div
@@ -768,7 +961,10 @@ export const Combat: React.FC<Props> = ({
                   animate={{ opacity: 1 }}
                   className="text-gb-2 text-xs text-center"
                 >
-                  {feedbackMessage ?? 'Solve the problem to breach Sentinel shields.'}
+                  {feedbackMessage ??
+                    (mode === 'SHIELD_BREAK'
+                      ? 'Crack the Apex Logic Shield with conceptual checks.'
+                      : 'Solve the problem to breach Sentinel shields.')}
                 </motion.div>
               )}
             </AnimatePresence>
@@ -780,7 +976,7 @@ export const Combat: React.FC<Props> = ({
           <div className="w-full max-w-md mx-auto flex flex-col gap-3">
             <ProblemPromptCard
               problem={problem}
-              modeLabel={mode === 'ATTACK' ? 'Cipher Attack' : 'Meditation Recovery'}
+              modeLabel={modeLabel}
               strikeMode={turn.strikeMode}
               stepIndex={activeStepIndex}
               effectiveStepCount={turn.effectiveStepCount}
@@ -789,7 +985,7 @@ export const Combat: React.FC<Props> = ({
               activeClue={activeClue}
               isBlurred={stats.neuralScars.includes('THE_BLUR')}
               feedback={feedback}
-              accent="cyan"
+              accent={promptAccent}
             />
 
             {directStrikeAvailable && (

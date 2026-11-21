@@ -17,8 +17,10 @@ import {
   getDiveCost,
   getNextUnlockedFloor,
   getTierForFloor,
+  isFloorExitLocked,
   stepEnemies,
 } from '../lib/dungeonLogic';
+import { BLUE_CACHE_FAIL_DAMAGE } from '../lib/combatLogic';
 import { LORE_ENTRIES } from '../lib/lore';
 import { getRandomScar } from '../lib/scarData';
 import {
@@ -40,6 +42,8 @@ export function useGameEngine() {
   const [stats, setStats] = useState<PlayerStats>(INITIAL_STATS);
   const [dungeon, setDungeon] = useState<DungeonState | null>(null);
   const [currentEnemy, setCurrentEnemy] = useState<Enemy | null>(null);
+  const [activeLockedChest, setActiveLockedChest] = useState<Chest | null>(null);
+  const [dungeonAlert, setDungeonAlert] = useState<string | null>(null);
   const [lootMessage, setLootMessage] = useState<{ text: string; type: 'CHEST' | 'LOG' } | null>(null);
   const [currentSlot, setCurrentSlot] = useState<number | null>(null);
   const [slots, setSlots] = useState<SaveSlot[]>([]);
@@ -126,6 +130,8 @@ export function useGameEngine() {
     setCacheProfile(getAnonymizedCacheProfile());
 
     const startTier = getTierForFloor(safeFloor);
+    setActiveLockedChest(null);
+    setDungeonAlert(null);
     setDungeon(generateFloor(safeFloor, startTier));
     setGameState('DUNGEON');
   };
@@ -150,6 +156,8 @@ export function useGameEngine() {
     // Wall check
     if (dungeon.walls.some((w) => w.x === newX && w.y === newY)) return;
 
+    setDungeonAlert(null);
+
     // Enemy check
     const enemyIndex = dungeon.enemies.findIndex((e) => e.pos.x === newX && e.pos.y === newY);
     if (enemyIndex !== -1) {
@@ -173,6 +181,11 @@ export function useGameEngine() {
     if (chestIndex !== -1) {
       const chest = dungeon.chests[chestIndex];
       if (!chest.opened) {
+        if (chest.type === 'BLUE' && chest.locked !== false) {
+          setActiveLockedChest(chest);
+          setGameState('LOCK_MODAL');
+          return;
+        }
         chestToOpen = chest;
         const message = applyChestReward(chest);
         setLootMessage({ text: message, type: 'CHEST' });
@@ -202,6 +215,10 @@ export function useGameEngine() {
 
     // Stairs check
     if (newX === dungeon.stairs.x && newY === dungeon.stairs.y) {
+      if (isFloorExitLocked(dungeon)) {
+        setDungeonAlert('Exit Node Locked — Defeat the Floor 5 Apex Sentinel to unlock!');
+        return;
+      }
       if (dungeon.floor % 5 === 0) {
         setGameState('SANCTUARY');
       } else {
@@ -243,6 +260,46 @@ export function useGameEngine() {
     });
   };
 
+  const handleBlueCacheSuccess = () => {
+    if (!activeLockedChest) {
+      setGameState('DUNGEON');
+      return;
+    }
+    const unlockedChestId = activeLockedChest.id;
+    setDungeon((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        chests: prev.chests.map((c) =>
+          c.id === unlockedChestId ? { ...c, opened: true, locked: false } : c
+        ),
+      };
+    });
+    setStats((prev) => ({
+      ...prev,
+      runHintPacks: prev.runHintPacks + 1,
+      runBuffs: [...prev.runBuffs, 'ATK_UP'],
+    }));
+    setActiveLockedChest(null);
+    setLootMessage({
+      text: 'Blue Cache Unlocked: +1 Hint Pack & Neural Overclock (+15% Shards)',
+      type: 'CHEST',
+    });
+    setGameState('CHEST_LOOT');
+  };
+
+  const handleBlueCacheFail = (damage: number = BLUE_CACHE_FAIL_DAMAGE) => {
+    setStats((prev) => ({
+      ...prev,
+      hp: Math.max(1, prev.hp - damage),
+    }));
+  };
+
+  const handleBlueCacheClose = () => {
+    setActiveLockedChest(null);
+    setGameState('DUNGEON');
+  };
+
   const handleCombatWin = (knowledgeGained: number) => {
     if (!dungeon || !currentEnemy) return;
 
@@ -263,6 +320,7 @@ export function useGameEngine() {
     setCacheProfile(getAnonymizedCacheProfile());
 
     setCurrentEnemy(null);
+    setDungeonAlert(null);
     setGameState('DUNGEON');
   };
 
@@ -279,6 +337,8 @@ export function useGameEngine() {
     });
     recordTelemetryEvent('DEFEAT');
     setCacheProfile(getAnonymizedCacheProfile());
+    setActiveLockedChest(null);
+    setDungeonAlert(null);
     setGameState('GAMEOVER');
   };
 
@@ -295,12 +355,16 @@ export function useGameEngine() {
     }));
     recordTelemetryEvent('EXTRACTION', extractedKnowledge);
     setCacheProfile(getAnonymizedCacheProfile());
+    setActiveLockedChest(null);
+    setDungeonAlert(null);
     setGameState('HOME');
   };
 
   const handleDiveDeeper = () => {
     if (!dungeon || !canDescendFromFloor(dungeon.floor)) return;
     const nextFloor = dungeon.floor + 1;
+    setActiveLockedChest(null);
+    setDungeonAlert(null);
     setDungeon(generateFloor(nextFloor, getTierForFloor(nextFloor)));
     setGameState('DUNGEON');
   };
@@ -322,6 +386,20 @@ export function useGameEngine() {
     }
   };
 
+  const handleCalibrateScar = (scarToClear: string) => {
+    setStats((prev) => {
+      const newScars = [...prev.neuralScars];
+      const index = newScars.indexOf(scarToClear);
+      if (index > -1) {
+        newScars.splice(index, 1);
+      }
+      return {
+        ...prev,
+        neuralScars: newScars,
+      };
+    });
+  };
+
   const handleEmergencyEject = () => {
     setStats((prev) => ({
       ...prev,
@@ -329,6 +407,8 @@ export function useGameEngine() {
       runHintPacks: 0,
       runBuffs: [],
     }));
+    setActiveLockedChest(null);
+    setDungeonAlert(null);
     setGameState('HOME');
   };
 
@@ -386,6 +466,8 @@ export function useGameEngine() {
     setStats,
     dungeon,
     currentEnemy,
+    activeLockedChest,
+    dungeonAlert,
     lootMessage,
     setLootMessage,
     currentSlot,
@@ -398,11 +480,15 @@ export function useGameEngine() {
     handleExportCache,
     startDive,
     handleMove,
+    handleBlueCacheSuccess,
+    handleBlueCacheFail,
+    handleBlueCacheClose,
     handleCombatWin,
     handleCombatLose,
     handleBankAndExit,
     handleDiveDeeper,
     handleHealScar,
+    handleCalibrateScar,
     handleEmergencyEject,
     handleUpgrade,
     handleUnlockDemo,

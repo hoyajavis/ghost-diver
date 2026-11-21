@@ -155,6 +155,7 @@ export const TrainingSim: React.FC<Props> = ({ variantId, onClose }) => {
       inputType: currentInputType,
       requireSimplified,
       isMultiSelect: Boolean(activeMultiSelectOptions),
+      isChoice: Boolean(activeChoices),
     });
 
     if (isCorrect) {
@@ -223,6 +224,7 @@ export const TrainingSim: React.FC<Props> = ({ variantId, onClose }) => {
     activeMultiSelectOptions,
     onToggleOption: handleToggleOption,
     currentInputType,
+    includeInclusiveRelationship,
     setInput,
     handleSubmit,
     fractionInput,

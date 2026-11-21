@@ -5,6 +5,7 @@ import { Dungeon } from './components/Dungeon';
 import { Combat } from './components/Combat';
 import { Sanctuary } from './components/Sanctuary';
 import { ChestLoot } from './components/ChestLoot';
+import { LockModal } from './components/LockModal';
 import { motion, MotionConfig } from 'motion/react';
 import { useGameEngine } from './hooks/useGameEngine';
 
@@ -16,6 +17,8 @@ export default function App() {
     setStats,
     dungeon,
     currentEnemy,
+    activeLockedChest,
+    dungeonAlert,
     lootMessage,
     currentSlot,
     slots,
@@ -27,11 +30,15 @@ export default function App() {
     handleExportCache,
     startDive,
     handleMove,
+    handleBlueCacheSuccess,
+    handleBlueCacheFail,
+    handleBlueCacheClose,
     handleCombatWin,
     handleCombatLose,
     handleBankAndExit,
     handleDiveDeeper,
     handleHealScar,
+    handleCalibrateScar,
     handleEmergencyEject,
     handleUpgrade,
     handleUnlockDemo,
@@ -57,30 +64,43 @@ export default function App() {
             stats={stats}
             onStartDive={startDive}
             onHealScar={handleHealScar}
+            onCalibrateScar={handleCalibrateScar}
             onUpgrade={handleUpgrade}
             onUnlockDemo={handleUnlockDemo}
             onLogout={() => setGameState('TITLE')}
           />
         )}
 
-        {(gameState === 'DUNGEON' || gameState === 'CHEST_LOOT') && dungeon && (
-          <div className="relative h-full">
-            <Dungeon
-              dungeon={dungeon}
-              stats={stats}
-              onMove={handleMove}
-              onEject={handleEmergencyEject}
-              isActive={gameState === 'DUNGEON'}
-            />
-            {gameState === 'CHEST_LOOT' && lootMessage && (
-              <ChestLoot
-                message={lootMessage.text}
-                type={lootMessage.type}
-                onDismiss={() => setGameState('DUNGEON')}
+        {(gameState === 'DUNGEON' || gameState === 'CHEST_LOOT' || gameState === 'LOCK_MODAL') &&
+          dungeon && (
+            <div className="relative h-full">
+              <Dungeon
+                dungeon={dungeon}
+                stats={stats}
+                onMove={handleMove}
+                onEject={handleEmergencyEject}
+                isActive={gameState === 'DUNGEON'}
+                dungeonAlert={dungeonAlert}
               />
-            )}
-          </div>
-        )}
+              {gameState === 'CHEST_LOOT' && lootMessage && (
+                <ChestLoot
+                  message={lootMessage.text}
+                  type={lootMessage.type}
+                  onDismiss={() => setGameState('DUNGEON')}
+                />
+              )}
+              {gameState === 'LOCK_MODAL' && activeLockedChest && (
+                <LockModal
+                  tier={dungeon.tier}
+                  playerHp={stats.hp}
+                  playerMaxHp={stats.maxHp}
+                  onSuccess={handleBlueCacheSuccess}
+                  onMiss={handleBlueCacheFail}
+                  onClose={handleBlueCacheClose}
+                />
+              )}
+            </div>
+          )}
 
         {gameState === 'COMBAT' && currentEnemy && dungeon && (
           <Combat

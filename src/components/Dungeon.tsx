@@ -1,7 +1,8 @@
 import React, { useEffect, useCallback } from 'react';
 import { DungeonState, PlayerStats } from '../types';
 import { getScarName } from '../lib/scarData';
-import { getAtkUpStacks } from '../lib/combatLogic';
+import { getAtkUpStacks, isApexEnemy } from '../lib/combatLogic';
+import { isFloorExitLocked } from '../lib/dungeonLogic';
 import {
   Cpu,
   ArrowUp,
@@ -18,6 +19,8 @@ import {
   X,
   ShieldAlert,
   FileText,
+  Lock,
+  Crown,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -27,6 +30,7 @@ interface Props {
   onMove: (dx: number, dy: number) => void;
   onEject: () => void;
   isActive?: boolean;
+  dungeonAlert?: string | null;
 }
 
 const LEGEND_ITEMS = [
@@ -55,10 +59,18 @@ const LEGEND_ITEMS = [
     ),
   },
   {
-    label: 'Cache (+Shards)',
+    label: 'Red Cache (+Buff)',
     icon: (
       <div className="w-6 h-6 bg-gb-0 border-2 border-amber-500 flex items-center justify-center rounded-sm shrink-0">
         <Box className="w-3.5 h-3.5 text-amber-500" />
+      </div>
+    ),
+  },
+  {
+    label: 'Blue Cache (Lock)',
+    icon: (
+      <div className="w-6 h-6 bg-gb-0 border-2 border-neon-cyan flex items-center justify-center rounded-sm shrink-0">
+        <Lock className="w-3.5 h-3.5 text-neon-cyan" />
       </div>
     ),
   },
@@ -76,9 +88,18 @@ const LEGEND_ITEMS = [
   },
 ];
 
-export const Dungeon: React.FC<Props> = ({ dungeon, stats, onMove, onEject, isActive = true }) => {
+export const Dungeon: React.FC<Props> = ({
+  dungeon,
+  stats,
+  onMove,
+  onEject,
+  isActive = true,
+  dungeonAlert = null,
+}) => {
   const [showSystemMenu, setShowSystemMenu] = React.useState(false);
   const atkUpStacks = getAtkUpStacks(stats.runBuffs);
+  const exitLocked = isFloorExitLocked(dungeon);
+  const unopenedBlueCaches = dungeon.chests.filter((c) => !c.opened && c.type === 'BLUE').length;
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -143,7 +164,14 @@ export const Dungeon: React.FC<Props> = ({ dungeon, stats, onMove, onEject, isAc
             </motion.div>
           );
         } else if (dungeon.stairs.x === x && dungeon.stairs.y === y) {
-          content = (
+          content = exitLocked ? (
+            <div
+              title="Defeat the Apex Sentinel to unlock Exit Node"
+              className="w-full h-full bg-gb-0 border-2 border-neon-magenta/70 flex items-center justify-center rounded-sm shadow-[0_0_8px_rgba(255,0,255,0.35)]"
+            >
+              <Lock className="w-3.5 h-3.5 text-neon-magenta" />
+            </div>
+          ) : (
             <div className="w-full h-full bg-neon-magenta flex items-center justify-center rounded-sm animate-pulse shadow-[0_0_10px_rgba(255,0,255,0.7)]">
               <Zap className="w-4 h-4 text-gb-0" />
             </div>
@@ -154,8 +182,17 @@ export const Dungeon: React.FC<Props> = ({ dungeon, stats, onMove, onEject, isAc
         } else {
           const enemy = dungeon.enemies.find((e) => e.pos.x === x && e.pos.y === y);
           if (enemy) {
-            const hasStaticEye = stats.neuralScars.includes('STATIC_EYE');
-            content = (
+            const enemyIsApex = isApexEnemy(enemy);
+            const hasStaticEye = !enemyIsApex && stats.neuralScars.includes('STATIC_EYE');
+            content = enemyIsApex ? (
+              <div
+                title="Floor 5 Apex Sentinel"
+                className="w-full h-full bg-neon-magenta/20 border-2 border-amber-400 flex items-center justify-center rounded-sm shadow-[0_0_12px_rgba(255,0,255,0.65)] relative"
+              >
+                <Skull className="w-4 h-4 text-neon-magenta" />
+                <Crown className="w-2.5 h-2.5 text-amber-300 absolute -top-1 -right-1 drop-shadow-[0_0_3px_#000]" />
+              </div>
+            ) : (
               <div
                 className={`w-full h-full bg-gb-0 border-2 border-neon-magenta flex items-center justify-center rounded-sm shadow-[0_0_8px_rgba(255,0,255,0.4)] ${
                   hasStaticEye ? 'opacity-40 animate-pulse' : ''
@@ -167,11 +204,19 @@ export const Dungeon: React.FC<Props> = ({ dungeon, stats, onMove, onEject, isAc
           } else {
             const chest = dungeon.chests.find((c) => c.pos.x === x && c.pos.y === y);
             if (chest && !chest.opened) {
-              content = (
-                <div className="w-full h-full bg-gb-0 border-2 border-amber-500 flex items-center justify-center rounded-sm shadow-[0_0_8px_rgba(245,158,11,0.4)]">
-                  <Box className="w-4 h-4 text-amber-500" />
-                </div>
-              );
+              content =
+                chest.type === 'BLUE' ? (
+                  <div
+                    title="Locked Blue Cache (Conceptual Check)"
+                    className="w-full h-full bg-gb-0 border-2 border-neon-cyan flex items-center justify-center rounded-sm shadow-[0_0_8px_rgba(0,243,255,0.5)]"
+                  >
+                    <Lock className="w-3.5 h-3.5 text-neon-cyan" />
+                  </div>
+                ) : (
+                  <div className="w-full h-full bg-gb-0 border-2 border-amber-500 flex items-center justify-center rounded-sm shadow-[0_0_8px_rgba(245,158,11,0.4)]">
+                    <Box className="w-4 h-4 text-amber-500" />
+                  </div>
+                );
             } else if (chest && chest.opened) {
               content = <div className="w-full h-full bg-gb-1 opacity-20 border border-gb-2/10" />;
             } else {
@@ -269,6 +314,16 @@ export const Dungeon: React.FC<Props> = ({ dungeon, stats, onMove, onEject, isAc
       <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 wireframe-bg dither overflow-y-auto custom-scrollbar">
         {/* Dungeon Grid Column */}
         <div className="lg:col-span-8 flex flex-col items-center justify-center p-3 md:p-6 gap-3">
+          {dungeonAlert && (
+            <div
+              role="alert"
+              aria-live="polite"
+              className="max-w-md w-full px-3 py-2 bg-neon-magenta/15 border-2 border-neon-magenta text-neon-magenta text-xs font-bold uppercase tracking-wider text-center gb-border-sm"
+            >
+              {dungeonAlert}
+            </div>
+          )}
+
           <div
             className="grid gap-0 bg-gb-1 p-1 gb-border shadow-[0_0_30px_rgba(0,243,255,0.1)] aspect-square flex-shrink-0"
             style={{
@@ -283,7 +338,7 @@ export const Dungeon: React.FC<Props> = ({ dungeon, stats, onMove, onEject, isAc
 
           {/* Compact Legend Strip on mobile/tablet */}
           <div className="lg:hidden flex flex-wrap justify-center gap-x-4 gap-y-1.5 px-3 py-2 bg-gb-0/90 border border-gb-3/40 text-xs max-w-md w-full">
-            {LEGEND_ITEMS.slice(0, 5).map((item) => (
+            {LEGEND_ITEMS.map((item) => (
               <div key={item.label} className="flex items-center gap-1.5">
                 {item.icon}
                 <span className="text-gb-3 font-medium">{item.label}</span>
@@ -363,6 +418,14 @@ export const Dungeon: React.FC<Props> = ({ dungeon, stats, onMove, onEject, isAc
               Floor Status
             </h2>
             <div className="bg-gb-0 border border-gb-3 p-3 gb-border-sm space-y-2 text-xs">
+              {dungeon.floor % 5 === 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gb-2">Apex Gatekeeper</span>
+                  <span className={`font-bold ${exitLocked ? 'text-amber-300' : 'text-neon-green'}`}>
+                    {exitLocked ? 'Active — Exit Locked' : 'Breached — Exit Open'}
+                  </span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-gb-2">Sentinels Active</span>
                 <span className="font-bold text-neon-magenta">{dungeon.enemies.length}</span>
@@ -373,6 +436,12 @@ export const Dungeon: React.FC<Props> = ({ dungeon, stats, onMove, onEject, isAc
                   {dungeon.chests.filter((c) => !c.opened).length}
                 </span>
               </div>
+              {unopenedBlueCaches > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gb-2">Locked Blue Caches</span>
+                  <span className="font-bold text-neon-cyan">{unopenedBlueCaches}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-gb-2">Active Buffs</span>
                 <span className="font-bold text-neon-cyan">

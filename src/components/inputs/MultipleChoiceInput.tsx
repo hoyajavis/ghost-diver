@@ -28,11 +28,12 @@ export const MultipleChoiceInput: React.FC<Props> = ({
             <button
               key={idx}
               type="button"
+              disabled={disabled}
               onClick={() => {
                 if (disabled) return;
                 onSelectChoice(choice);
               }}
-              className="w-full text-left p-2 border border-gb-3 bg-gb-0 hover:bg-gb-2 hover:text-gb-0 transition-colors text-xs flex items-center gap-2 gb-border-sm"
+              className="w-full text-left p-2 border border-gb-3 bg-gb-0 hover:bg-gb-2 hover:text-gb-0 transition-colors text-xs flex items-center gap-2 gb-border-sm disabled:opacity-40"
             >
               <span className="font-bold text-neon-cyan">[{letter}]</span>
               <span>{choice}</span>

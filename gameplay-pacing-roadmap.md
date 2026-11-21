@@ -131,7 +131,7 @@ Each phase below ends with a **mandatory Playtest Gate**. Do not start the next 
 **Goal:** Make conceptual math fluency impossible to miss, tie it directly to each sector's curriculum, upgrade level generation (`mapGen.ts`) so every floor has a deliberate spatial arc (*Spawn Safe Zone → Spiral Skirmishes + Off-Path Conceptual Locks → Far-Zone Exit / Floor 5 Apex Gatekeeper*), and deliver dedicated UI/input support for conceptual prompts.
 
 ### Generators & Data Contracts
-- [ ] **Create Tier-Mapped Conceptual Generator Module (`src/lib/generators/conceptual.ts`):**
+- [x] **Create Tier-Mapped Conceptual Generator Module (`src/lib/generators/conceptual.ts`):**
   - Build fast, paper-free conceptual prompts for **Tiers 1–12**—starting with **2–3 strong parameterized archetypes per tier** (expanding after Playtest Gate 3) drawn from the 7 arcade archetypes:
     1. *Magnitude & Estimation* (closest power of 10 / reasonable product)
     2. *Benchmark `< / = / >`* (e.g., is `5/8 + 4/9` less than, equal to, or greater than `1`?)
@@ -140,45 +140,45 @@ Each phase below ends with a **mandatory Playtest Gate**. Do not start the next 
     5. *Sign & Behavior Prediction* (sign of products/quotients/differences without computing)
     6. *Equivalence & Structure* (distributive/commutative/inverse structure matching)
     7. *Visual / Quadrant Intuition* (quadrant identification, axis behavior)
-- [ ] **Expand Domain Types (`src/types.ts`):**
+- [x] **Expand Domain Types (`src/types.ts`):**
   - `MathProblem`: add `category?: 'PROCEDURAL' | 'CONCEPTUAL'`, `archetype?: ConceptualArchetype`, optional `promptLines?: string[]` (structured lines for *Spot the Glitch*), and expand `type` to include `'LOCK'` and `'SHIELD_BREAK'`.
   - `Chest`: expand `type` to `'RED' | 'BLUE'` plus `locked?: boolean`.
   - `Enemy`: add `isApex?: boolean`, `shieldLayers?: number`, `maxShieldLayers?: number`.
-- [ ] **Split Focus Scan from Emergency Heal (`mathEngine.ts`, `combatLogic.ts`):**
+- [x] **Split Focus Scan from Emergency Heal (`mathEngine.ts`, `combatLogic.ts`):**
   - Wire conceptual combat actions to the **active tier's conceptual generator** (replacing the static 5-question pool).
   - Separate **Focus Scan** (1 free/low-FP conceptual check per battle that builds `+FP` or cracks a Logic Shield, without healing HP) from **Emergency Heal** (`MEDITATION_FP_COST`, restores HP) so lowering the conceptual threshold never creates an infinite-heal exploit.
 
 ### Distance-Aware MapGen & Spiral Sequencing (`src/lib/mapGen.ts`, `src/lib/dungeonLogic.ts`)
-- [ ] **Full BFS Distance Map from `(0, 0)`:** Extend existing reachability checks to compute exact shortest-path distance to every reachable tile.
-- [ ] **Safe Spawn Buffer:** Never place enemies within BFS distance ≤ 2 of `(0, 0)` so players cannot be ambushed on step 1.
-- [ ] **Far-Zone Exit Node:** Place the Exit Node in the furthest BFS distance quartile (minimum distance ≥ `gridSize`, e.g., ≥ 8–10 tiles) so players cannot skip a floor in 2 moves.
-- [ ] **Off-Path Blue Caches (Conceptual Locks):** Place 1–2 locked **Blue Caches** off the shortest path to the Exit as optional risk/reward detours; opening one requires solving a single tier-matched conceptual prompt (granting a strong buff, Hint Pack, or Neural Chip unlock in Phase 5).
-- [ ] **Spiral Variant & Concept-First Sequencing:**
+- [x] **Full BFS Distance Map from `(0, 0)`:** Extend existing reachability checks to compute exact shortest-path distance to every reachable tile.
+- [x] **Safe Spawn Buffer:** Never place enemies within BFS distance ≤ 2 of `(0, 0)` so players cannot be ambushed on step 1.
+- [x] **Far-Zone Exit Node:** Place the Exit Node in the furthest BFS distance quartile (minimum distance ≥ `gridSize`, e.g., ≥ 8–10 tiles) so players cannot skip a floor in 2 moves.
+- [x] **Off-Path Blue Caches (Conceptual Locks):** Place 1–2 locked **Blue Caches** off the shortest path to the Exit as optional risk/reward detours; opening one requires solving a single tier-matched conceptual prompt (granting a strong buff, Hint Pack, or Neural Chip unlock in Phase 5).
+- [x] **Spiral Variant & Concept-First Sequencing:**
   - **Floor 1 (Concept Primer):** Guarantee a Blue Cache introducing the sector's core conceptual anchor alongside Variant 1 Sentinels.
   - **Floors 2–4 (75/25 Spiral Review):** Spawn ~75% of the floor's featured variant + ~25% spiral review from earlier variants in the same sector (spaced retrieval before Floor 5).
   - **Floor 5 (Apex Breach Gatekeeper):** Reduce hallway clutter to **1–2 guard Sentinels + 1 Two-Phase Apex Boss** guarding the Exit Node:
     - **Exit Anchoring:** Keep `isApex` stationary/leashed at the Exit approach (or lock the Floor 5 Exit Node until the Apex Boss is defeated) so `stepEnemies` never lets players kite the boss aside and skip it.
     - *Phase 1 — Logic Shield (Conceptual Break):* 1–2 rapid tier-matched conceptual checks crack the boss's shield and apply **Vulnerable (2× damage)**.
     - *Phase 2 — Core Breach (Combo Chain):* Multi-step Combo Chain (or Direct Strike) defeats the Apex Boss.
-- [ ] **Expand `mapGen.test.ts`:** Add automated tests verifying Safe Spawn Buffer (enemy distance ≥ 3), Far-Zone Exit distance, Blue Cache reachability, Floor 5 Apex anchoring, and 75/25 spiral variant distribution.
+- [x] **Expand `mapGen.test.ts`:** Add automated tests verifying Safe Spawn Buffer (enemy distance ≥ 3), Far-Zone Exit distance, Blue Cache reachability, Floor 5 Apex anchoring, and 75/25 spiral variant distribution.
 
 ### UI & Presentation Layer
-- [ ] **Multi-Line *Spot the Glitch* Card (`ProblemPromptCard`):**
+- [x] **Multi-Line *Spot the Glitch* Card (`ProblemPromptCard`):**
   - Render `problem.promptLines` as a clean, left-aligned numbered step list (e.g., `Step 1: ...`, `Step 2: ...`, `Step 3: ...`) paired with `[A] / [B] / [C]` choice buttons instead of cramming it into a single centered line.
   - Ensure `THE_BLUR` neural scar effect never renders multi-line conceptual text illegible/inaccessible.
-- [ ] **Dungeon Grid & Legend Updates (`Dungeon.tsx`):**
+- [x] **Dungeon Grid & Legend Updates (`Dungeon.tsx`):**
   - Add a distinct cyan/blue **Blue Cache** tile icon, a **7th Map Legend item**, and a distinct **Apex Boss crown/badge** on Floor 5 so players read patrol vs. boss vs. conceptual cache at a glance.
-- [ ] **Lightweight Blue Cache `LockModal`:**
+- [x] **Lightweight Blue Cache `LockModal`:**
   - Opening a Blue Cache triggers a focused, fast **Lock Modal** reusing `ProblemInputRouter` + `useCombatInput` (no HP/FP arena or `Battle Start` delay).
   - **Failure Rule:** Missing a Blue Cache lock deals minor static feedback (`-5 HP`) and lets the player retry or close the modal without permanently destroying the cache.
-- [ ] **Apex Boss Logic Shield Bar (`Combat.tsx`):**
+- [x] **Apex Boss Logic Shield Bar (`Combat.tsx`):**
   - Render a segmented **Logic Shield** bar above the Apex Boss's `INT` bar with a clear phase transition banner (`SHIELD BROKEN — 2× VULNERABLE`) when Phase 1 completes.
-- [ ] **Free Conceptual Scar Calibration (`DiveStation.tsx`):**
+- [x] **Free Conceptual Scar Calibration (`DiveStation.tsx`):**
   - Add a **"Recalibrate (Free · 0/3)"** modal alongside **"Repair (50 Shards)"** for Neural Scars: pass 3 consecutive conceptual checks from unlocked tiers to clear a scar through mastery.
-- [ ] **Update `ManualStation.tsx`:** Document Blue Caches, Logic Shields, Apex Breaches, Focus Scan, and free Scar Recalibration.
+- [x] **Update `ManualStation.tsx`:** Document Blue Caches, Logic Shields, Apex Breaches, Focus Scan, and free Scar Recalibration.
 
 ### Player Input & Ergonomics
-- [ ] **Fast Keyboard Shortcuts on `RelationshipInput` (`useCombatInput.ts`, `RelationshipInput.tsx`):**
+- [x] **Fast Keyboard Shortcuts on `RelationshipInput` (`useCombatInput.ts`, `RelationshipInput.tsx`):**
   - Add visible single-key badges (`[1]` / `[2]` / `[3]` or `[A]` / `[B]` / `[C]`, alongside `<`, `=`, `>`, `≤`, `≥`) so *Benchmark `< / = / >`* conceptual prompts don't require `Shift` combos or untypable `≤`/`≥` keys on Chromebooks/desktops.
 
 ### Playtest Gate 3: "The Floor Arc & Conceptual Discoverability Test"

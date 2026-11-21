@@ -10,6 +10,7 @@ interface Props {
   setSelectedFloor: React.Dispatch<React.SetStateAction<number>>;
   onStartDive: (startFloor?: number) => void;
   onHealScar: (scar: string) => void;
+  onCalibrateScar: (scar: string) => void;
 }
 
 export const DiveStation: React.FC<Props> = ({
@@ -18,6 +19,7 @@ export const DiveStation: React.FC<Props> = ({
   setSelectedFloor,
   onStartDive,
   onHealScar,
+  onCalibrateScar,
 }) => {
   const maxUnlocked = clampFloor(stats.maxExtractedFloor);
   const clampedFloor = Math.max(1, Math.min(maxUnlocked, selectedFloor));
@@ -91,17 +93,26 @@ export const DiveStation: React.FC<Props> = ({
           {stats.neuralScars.map((scar, i) => (
             <div
               key={`${scar}-${i}`}
-              className="flex justify-between items-center gap-3 bg-gb-0 p-3 border border-neon-magenta/40"
+              className="flex flex-wrap justify-between items-center gap-2 bg-gb-0 p-3 border border-neon-magenta/40"
             >
               <span className="text-xs font-bold text-neon-magenta">{getScarName(scar)}</span>
-              <button
-                type="button"
-                onClick={() => onHealScar(scar)}
-                disabled={stats.knowledge < 50}
-                className="min-h-10 text-xs font-bold border border-gb-3 px-3 py-1.5 hover:bg-gb-3 hover:text-gb-0 disabled:opacity-30 transition-colors whitespace-nowrap tabular-nums"
-              >
-                Repair (50 Shards)
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => onCalibrateScar(scar)}
+                  className="min-h-10 text-xs font-bold border border-neon-cyan text-neon-cyan px-3 py-1.5 hover:bg-neon-cyan hover:text-gb-0 transition-colors whitespace-nowrap tabular-nums"
+                >
+                  Recalibrate (Free · 0/3)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onHealScar(scar)}
+                  disabled={stats.knowledge < 50}
+                  className="min-h-10 text-xs font-bold border border-gb-3 px-3 py-1.5 hover:bg-gb-3 hover:text-gb-0 disabled:opacity-30 transition-colors whitespace-nowrap tabular-nums"
+                >
+                  Repair (50 Shards)
+                </button>
+              </div>
             </div>
           ))}
         </div>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { PlayerStats, Position } from '../types';
 import { TrainingSim } from './TrainingSim';
+import { ScarCalibrationModal } from './ScarCalibrationModal';
 import { DiveStation } from './stations/DiveStation';
 import { WorkbenchStation } from './stations/WorkbenchStation';
 import { ArchivistStation } from './stations/ArchivistStation';
@@ -30,6 +31,7 @@ interface Props {
   stats: PlayerStats;
   onStartDive: (startFloor?: number) => void;
   onHealScar: (scar: string) => void;
+  onCalibrateScar: (scar: string) => void;
   onUpgrade: (type: 'hp' | 'fp' | 'hints' | 'buy_hint') => void;
   onUnlockDemo: (variantId: string) => void;
   onLogout: () => void;
@@ -103,6 +105,7 @@ export const HomeBase: React.FC<Props> = ({
   stats,
   onStartDive,
   onHealScar,
+  onCalibrateScar,
   onUpgrade,
   onUnlockDemo,
   onLogout,
@@ -111,6 +114,7 @@ export const HomeBase: React.FC<Props> = ({
   const [activeStation, setActiveStation] = useState<BaseStation>('NONE');
   const [selectedFloor, setSelectedFloor] = useState(1);
   const [activeSimTier, setActiveSimTier] = useState<string | null>(null);
+  const [calibratingScar, setCalibratingScar] = useState<string | null>(null);
 
   const handleMove = useCallback((dx: number, dy: number) => {
     setPlayerPos((prev) => ({
@@ -121,7 +125,7 @@ export const HomeBase: React.FC<Props> = ({
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      if (activeSimTier !== null) return;
+      if (activeSimTier !== null || calibratingScar !== null) return;
 
       if (activeStation !== 'NONE') {
         if (e.key === 'Escape') setActiveStation('NONE');
@@ -170,7 +174,7 @@ export const HomeBase: React.FC<Props> = ({
         handleMove(dx, dy);
       }
     },
-    [activeSimTier, activeStation, playerPos, handleMove]
+    [activeSimTier, calibratingScar, activeStation, playerPos, handleMove]
   );
 
   useEffect(() => {
@@ -429,6 +433,7 @@ export const HomeBase: React.FC<Props> = ({
                   setSelectedFloor={setSelectedFloor}
                   onStartDive={onStartDive}
                   onHealScar={onHealScar}
+                  onCalibrateScar={(scar) => setCalibratingScar(scar)}
                 />
               )}
 
@@ -459,6 +464,20 @@ export const HomeBase: React.FC<Props> = ({
       <AnimatePresence>
         {activeSimTier !== null && (
           <TrainingSim variantId={activeSimTier} onClose={() => setActiveSimTier(null)} />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {calibratingScar !== null && (
+          <ScarCalibrationModal
+            scar={calibratingScar}
+            maxExtractedFloor={stats.maxExtractedFloor}
+            onComplete={(clearedScar) => {
+              onCalibrateScar(clearedScar);
+              setCalibratingScar(null);
+            }}
+            onClose={() => setCalibratingScar(null)}
+          />
         )}
       </AnimatePresence>
     </div>

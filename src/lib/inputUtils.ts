@@ -64,3 +64,33 @@ export function inferInputType(problem: MathProblem, currentStep: MathStep | nul
   }
   return problem.inputType ?? 'NUMPAD';
 }
+
+export const RELATIONSHIP_SYMBOLS = ['<', '=', '>'] as const;
+export const INCLUSIVE_RELATIONSHIP_SYMBOLS = ['<', '≤', '=', '≥', '>'] as const;
+
+export function resolveRelationshipShortcutKey(
+  key: string,
+  shiftKey: boolean,
+  includeInclusive: boolean
+): string | null {
+  const symbols: readonly string[] = includeInclusive
+    ? INCLUSIVE_RELATIONSHIP_SYMBOLS
+    : RELATIONSHIP_SYMBOLS;
+
+  if (symbols.includes(key)) {
+    return key;
+  }
+
+  if (!shiftKey) {
+    const upper = key.toUpperCase();
+    const letterIdx = ['A', 'B', 'C', 'D', 'E'].indexOf(upper);
+    const numIdx = ['1', '2', '3', '4', '5'].indexOf(upper);
+    const idx = letterIdx !== -1 ? letterIdx : numIdx;
+    if (idx !== -1 && idx < symbols.length) {
+      return symbols[idx];
+    }
+  }
+
+  return null;
+}
+

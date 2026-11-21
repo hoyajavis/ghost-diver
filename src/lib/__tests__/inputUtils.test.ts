@@ -7,7 +7,10 @@ import {
   getExpectedAnswer,
   getRequireSimplified,
   hasProblemSteps,
+  INCLUSIVE_RELATIONSHIP_SYMBOLS,
   inferInputType,
+  RELATIONSHIP_SYMBOLS,
+  resolveRelationshipShortcutKey,
 } from '../inputUtils';
 
 describe('inputUtils', () => {
@@ -105,5 +108,67 @@ describe('inputUtils', () => {
   it('falls back to problem.inputType or NUMPAD when not in hint mode', () => {
     expect(inferInputType({ question: 'q', answer: '1/2', type: 'ATTACK', complexity: 'QUICK', inputType: 'FRACTION' }, null)).toBe('FRACTION');
     expect(inferInputType({ question: 'q', answer: 5, type: 'ATTACK', complexity: 'QUICK' }, null)).toBe('NUMPAD');
+  });
+});
+
+describe('resolveRelationshipShortcutKey', () => {
+  it('maps 1-3 and A-C (case-insensitive) to <, =, > in 3-symbol mode when shiftKey is false', () => {
+    expect(RELATIONSHIP_SYMBOLS).toEqual(['<', '=', '>']);
+
+    expect(resolveRelationshipShortcutKey('1', false, false)).toBe('<');
+    expect(resolveRelationshipShortcutKey('2', false, false)).toBe('=');
+    expect(resolveRelationshipShortcutKey('3', false, false)).toBe('>');
+
+    expect(resolveRelationshipShortcutKey('a', false, false)).toBe('<');
+    expect(resolveRelationshipShortcutKey('b', false, false)).toBe('=');
+    expect(resolveRelationshipShortcutKey('c', false, false)).toBe('>');
+    expect(resolveRelationshipShortcutKey('A', false, false)).toBe('<');
+    expect(resolveRelationshipShortcutKey('B', false, false)).toBe('=');
+    expect(resolveRelationshipShortcutKey('C', false, false)).toBe('>');
+
+    // Out-of-range keys return null in 3-symbol mode
+    expect(resolveRelationshipShortcutKey('4', false, false)).toBeNull();
+    expect(resolveRelationshipShortcutKey('5', false, false)).toBeNull();
+    expect(resolveRelationshipShortcutKey('d', false, false)).toBeNull();
+    expect(resolveRelationshipShortcutKey('e', false, false)).toBeNull();
+  });
+
+  it('maps 1-5 and A-E (case-insensitive) to <, ≤, =, ≥, > in 5-symbol inclusive mode when shiftKey is false', () => {
+    expect(INCLUSIVE_RELATIONSHIP_SYMBOLS).toEqual(['<', '≤', '=', '≥', '>']);
+
+    expect(resolveRelationshipShortcutKey('1', false, true)).toBe('<');
+    expect(resolveRelationshipShortcutKey('2', false, true)).toBe('≤');
+    expect(resolveRelationshipShortcutKey('3', false, true)).toBe('=');
+    expect(resolveRelationshipShortcutKey('4', false, true)).toBe('≥');
+    expect(resolveRelationshipShortcutKey('5', false, true)).toBe('>');
+
+    expect(resolveRelationshipShortcutKey('a', false, true)).toBe('<');
+    expect(resolveRelationshipShortcutKey('b', false, true)).toBe('≤');
+    expect(resolveRelationshipShortcutKey('c', false, true)).toBe('=');
+    expect(resolveRelationshipShortcutKey('d', false, true)).toBe('≥');
+    expect(resolveRelationshipShortcutKey('e', false, true)).toBe('>');
+  });
+
+  it('accepts literal relationship symbols regardless of shiftKey (e.g., Shift+< and Shift+> on US keyboards)', () => {
+    expect(resolveRelationshipShortcutKey('<', true, false)).toBe('<');
+    expect(resolveRelationshipShortcutKey('>', true, false)).toBe('>');
+    expect(resolveRelationshipShortcutKey('=', false, false)).toBe('=');
+
+    // Inclusive symbols only accepted when includeInclusive is true
+    expect(resolveRelationshipShortcutKey('≤', false, false)).toBeNull();
+    expect(resolveRelationshipShortcutKey('≥', false, false)).toBeNull();
+    expect(resolveRelationshipShortcutKey('≤', false, true)).toBe('≤');
+    expect(resolveRelationshipShortcutKey('≥', false, true)).toBe('≥');
+    expect(resolveRelationshipShortcutKey('<', true, true)).toBe('<');
+    expect(resolveRelationshipShortcutKey('>', true, true)).toBe('>');
+  });
+
+  it('ignores 1-5 and A-E when shiftKey is true so Shift+D/H/S/F hotkeys are never shadowed', () => {
+    expect(resolveRelationshipShortcutKey('D', true, true)).toBeNull();
+    expect(resolveRelationshipShortcutKey('A', true, false)).toBeNull();
+    expect(resolveRelationshipShortcutKey('1', true, false)).toBeNull();
+    expect(resolveRelationshipShortcutKey('5', true, true)).toBeNull();
+    expect(resolveRelationshipShortcutKey('Escape', false, false)).toBeNull();
+    expect(resolveRelationshipShortcutKey('Escape', true, true)).toBeNull();
   });
 });

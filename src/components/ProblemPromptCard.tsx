@@ -31,6 +31,8 @@ export const ProblemPromptCard: React.FC<ProblemPromptCardProps> = ({
   accent = 'cyan',
 }) => {
   const problemHasSteps = hasProblemSteps(problem);
+  const hasPromptLines = Array.isArray(problem.promptLines) && problem.promptLines.length > 0;
+  const applyTextBlur = isBlurred && !hasPromptLines && problem.category !== 'CONCEPTUAL';
   const activeStepIndex = strikeMode === 'COMBO' ? stepIndex : null;
   const currentStep = getCurrentStep(problem, activeStepIndex);
   const totalSteps =
@@ -53,7 +55,9 @@ export const ProblemPromptCard: React.FC<ProblemPromptCardProps> = ({
       ? 'border-neon-green'
       : feedback === 'WRONG'
         ? 'border-neon-magenta'
-        : 'border-gb-3';
+        : isBlurred && !applyTextBlur
+          ? 'border-neon-magenta/70'
+          : 'border-gb-3';
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -111,16 +115,43 @@ export const ProblemPromptCard: React.FC<ProblemPromptCardProps> = ({
             <div className="text-xs sm:text-sm font-bold text-gb-2 tracking-tight leading-snug">
               {problem.question}
             </div>
-            {isBlurred && (
+            {applyTextBlur && (
               <div className="absolute inset-0 backdrop-blur-[1.5px] pointer-events-none" />
             )}
+          </div>
+        ) : hasPromptLines ? (
+          <div>
+            <div className="text-sm sm:text-base font-bold text-gb-3 tracking-tight leading-snug">
+              {problem.question}
+            </div>
+            <ol
+              aria-label="Solution steps to inspect"
+              className="mt-2.5 pt-2 border-t border-gb-3/30 space-y-1.5 text-left font-mono text-xs sm:text-sm"
+            >
+              {problem.promptLines!.map((line, idx) => {
+                const hasPrefix = /^Step\s+\d+\s*:/i.test(line.trim());
+                return (
+                  <li
+                    key={idx}
+                    className="px-2 py-1 bg-gb-1/80 border border-gb-3/30 text-gb-3 flex items-baseline gap-2 leading-snug"
+                  >
+                    {!hasPrefix && (
+                      <span className={`${headerAccentClass} font-bold shrink-0`}>
+                        Step {idx + 1}:
+                      </span>
+                    )}
+                    <span className="break-words">{line}</span>
+                  </li>
+                );
+              })}
+            </ol>
           </div>
         ) : (
           <div className="relative">
             <div className="text-lg sm:text-xl font-bold text-gb-3 tracking-tight leading-snug">
               {problem.question}
             </div>
-            {isBlurred && (
+            {applyTextBlur && (
               <div className="absolute inset-0 backdrop-blur-[1.5px] pointer-events-none" />
             )}
           </div>
@@ -153,7 +184,7 @@ export const ProblemPromptCard: React.FC<ProblemPromptCardProps> = ({
             <div className="text-lg sm:text-xl font-bold text-gb-3 tracking-tight leading-snug">
               {currentStep.prompt}
             </div>
-            {isBlurred && (
+            {applyTextBlur && (
               <div className="absolute inset-0 backdrop-blur-[1.5px] pointer-events-none" />
             )}
           </div>

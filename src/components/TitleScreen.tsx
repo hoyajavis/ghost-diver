@@ -183,14 +183,8 @@ export const TitleScreen: React.FC<Props> = ({
               ))}
             </div>
 
-            <div className="mt-2.5 lg:mt-5 text-[11px] lg:text-xs text-gb-2 text-center leading-snug space-y-0.5 lg:space-y-1">
-              <p className="hidden sm:block">Choose a profile slot to enter the Cradle Bunker.</p>
-              <p className="text-[10px] lg:text-[11px] text-gb-2/80 font-mono truncate">
-                {cacheProfile.storageMode === 'localStorage'
-                  ? 'Local Browser Cache'
-                  : 'Memory Fallback'}{' '}
-                &bull; ID: <span className="text-gb-3">{cacheProfile.anonymousId}</span>
-              </p>
+            <div className="mt-2.5 lg:mt-5 text-[11px] lg:text-xs text-gb-2 text-center leading-snug">
+              Choose a profile slot to enter the Cradle Bunker.
             </div>
           </div>
         </div>

@@ -231,6 +231,56 @@ Each phase below ends with a **mandatory Playtest Gate**. Do not start the next 
 
 ---
 
+## Phase 4.5: Conceptual Variety, Anti-Repeat & Non-Intrusive Spaced Repetition
+
+**Goal:** Eliminate early-sector conceptual repeats surfaced in Playtest Gate 4 by doubling tier-level conceptual variety (including an 8th tracked archetype for **Effect-of-Change & Scaling**), adding a cross-tier foundational pool, enforcing universal anti-repeat deduplication across every conceptual surface, and layering **non-intrusive spaced repetition** under the hood so missed concepts resurface naturally without flashcards or nag UI.
+
+### Conceptual Pool Expansion & 8th Archetype (`src/types.ts`, `src/lib/generators/conceptual.ts`)
+- [ ] **Add `EFFECT_OF_CHANGE` ("Scaling & Change") as 8th Tracked `ConceptualArchetype`:**
+  - Register `EFFECT_OF_CHANGE` in `ConceptualArchetype` (`src/types.ts`), `ARCHETYPE_LABELS` (`src/lib/signalSweepLogic.ts`), and `storage.ts` (backward-compatible with existing v4 saves).
+  - Surfaces automatically on the Signal Sweep Archetype Breakdown scorecard and in anonymized playtest JSON telemetry.
+- [ ] **Expand Tiers 1–12 from 3 → 6+ Parameterized Templates Each (72+ Tier Templates Total):**
+  - Add tier-specific **`EFFECT_OF_CHANGE`** generators across every tier (e.g., T1 place-value/addend shift; T2 doubling a factor; T3 doubling divisor vs. dividend; T4 increasing numerator vs. denominator; T5 scaling prism dimensions; T6 shifting decimal point; T7 scaling ratio/percent; T8 shifting on integer number line; T9 changing exponent/coefficient; T10 adding an outlier to Mean vs. Median; T11 scaling rate/time in `I = Prt`; T12 flipping a sign in a rational product).
+  - Add **2+ additional missing archetypes per tier** so every sector mixes a wide set of the 8 archetypes.
+- [ ] **Add Cross-Tier Foundational Conceptual Pool:**
+  - Add grade-appropriate cross-tier number sense, estimation, and scaling templates that early-sector Signal Sweeps can draw from so Sector 1–2 players experience rich variety across a full 10-node sprint.
+- [ ] **Share Full Expanded Pool Across All Conceptual Surfaces (`mathEngine.ts`):**
+  - Automatically surface all new conceptual templates across **Meditation (Emergency Heal)**, **Focus Scan**, **Blue Caches (`LockModal`)**, **Apex Logic Shields**, **Scar Calibration**, and **Signal Sweep**.
+
+### Universal Anti-Repeat Deduplication (`src/lib/generators/conceptual.ts`, `signalSweepLogic.ts`, `Combat.tsx`, `ScarCalibrationModal.tsx`)
+- [ ] **Deduplicate Prompts & Templates Across Sessions:**
+  - Prevent exact prompt repeats and back-to-back identical templates/archetypes in:
+    - **Signal Sweep** (10-node deck in `signalSweepLogic.ts`, even when only Tier 1 is unlocked)
+    - **Scar Calibration** (3-check sequence in `ScarCalibrationModal.tsx`)
+    - **Consecutive combat conceptual checks** (Shield Break, Focus Scan, Meditation in `Combat.tsx`).
+
+### Non-Intrusive Concept Spaced Repetition (`src/lib/conceptSpacedRep.ts`, `src/lib/storage.ts`, `useGameEngine.ts`)
+- [ ] **Leitner-Style Concept Scheduling (Zero Nag UI, PII-Free):**
+  - Track lightweight per-concept mastery keyed by `tier:archetype` (e.g., `{ box: 0..4, nextDueStep: number, lastResult: 'PASS' | 'MISS' }`) alongside a monotonic local `conceptStepCounter` in `PlayerStats` / `storage.ts` (explicitly added to `hydrateSaveData()` and the `toPersistedSaveData()` strict allow-list; no exact timestamps or PII).
+  - **Update Rule:** Every conceptual answer across Signal Sweep, Meditation, Focus Scan, Blue Caches, Apex Shields, and Scar Calibration updates its concept card:
+    - *Correct:* advance Leitner box (`min(4, box + 1)`) with spaced encounter intervals (`[1, 3, 6, 12, 24]` conceptual checks).
+    - *Missed:* reset to `box = 0` (`nextDueStep = currentStep + 1`) so it gently resurfaces soon without repeating back-to-back.
+  - **Silent Weighted Selection:** `generateConceptualProblem()` and `generateSignalSweepDeck()` prioritize due / low-box `(tier, archetype)` concepts (~65% weight when due concepts exist) while blending fresh/unseen concepts (~35%) and honoring anti-repeat deduplication.
+  - Expose aggregate concept box distribution in **Export Anonymized JSON** for playtest/learning-curve analysis without adding flashcards, popups, or review queues to the game UI.
+
+### Verification & Fuzz Tests (`generators.test.ts`, `signalSweepLogic.test.ts`, `storage.test.ts`, `conceptSpacedRep.test.ts`)
+- [ ] **Expand Fuzz & Scheduler Tests:**
+  - Fuzz-test all 72+ tier templates + cross-tier foundational templates for valid choices, `promptLines`, and `answerValidator` accuracy.
+  - Verify zero duplicate prompts and no back-to-back identical archetypes in 10-node Tier-1 Signal Sweep decks.
+  - Unit-test Leitner box promotion/reset, silent due-concept weighting, anti-repeat interaction, and strict PII allow-list persistence.
+
+### Playtest Gate 4.5: "Zero-Repeat Variety & Natural Retention Check"
+- **Format:** Run 2–3 back-to-back Signal Sweeps and a Sector 1–2 dive (using Focus Scan, Meditation, Blue Caches, and Apex Shields).
+- **What to Observe:**
+  - Do Sector 1–2 players feel genuine variety with zero annoying repeats in a 10-node Signal Sweep?
+  - Are `EFFECT_OF_CHANGE` prompts clear, snappy (3–10s), and immediately readable on mobile?
+  - When a player misses a concept (e.g., fraction denominator scaling), does it resurface naturally a few checks later without feeling repetitive or intrusive?
+- **Exit Criteria to Advance:**
+  - Zero duplicate prompts within a 10-node Signal Sweep or 3-check Scar Calibration.
+  - Missed concepts naturally reappear within the next 2–5 conceptual checks and show improved follow-up accuracy.
+
+---
+
 ## Phase 5: Lightweight Meta-Progression — Neural Loadout Chips & Mastery
 
 **Goal:** Deliver meaningful RPG build identity, extraction motivation, and learner differentiation **without** a second currency, branching skill tree UI, or letting players opt out of either conceptual or procedural math.

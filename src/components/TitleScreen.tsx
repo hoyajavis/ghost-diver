@@ -71,31 +71,32 @@ export const TitleScreen: React.FC<Props> = ({
   };
 
   return (
-    <div className="h-full w-full bg-gb-0 text-gb-3 p-4 md:p-8 scanlines relative overflow-y-auto custom-scrollbar terminal-text wireframe-bg flex items-center justify-center">
-      <div className="max-w-5xl w-full grid grid-cols-1 lg:grid-cols-12 gap-8 items-center z-10 my-auto">
+    <div className="h-full w-full bg-gb-0 text-gb-3 p-3 sm:p-4 md:p-8 scanlines relative overflow-y-auto custom-scrollbar terminal-text wireframe-bg flex items-center justify-center">
+      <div className="max-w-5xl w-full grid grid-cols-1 lg:grid-cols-12 gap-3.5 lg:gap-8 items-center z-10 my-auto">
         {/* Title & Briefing Summary */}
         <motion.div
           initial={{ y: -24, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          className="lg:col-span-6 text-center lg:text-left space-y-4"
+          className="lg:col-span-6 text-center lg:text-left space-y-1.5 lg:space-y-4"
         >
-          <p className="text-xs font-bold uppercase tracking-[0.25em] text-gb-2">
+          <p className="text-[11px] lg:text-xs font-bold uppercase tracking-[0.2em] lg:tracking-[0.25em] text-gb-2">
             Ghost Diver Protocol
           </p>
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black italic tracking-tight text-neon-cyan drop-shadow-[4px_4px_0px_#000] leading-none text-balance">
+          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black italic tracking-tight text-neon-cyan drop-shadow-[4px_4px_0px_#000] leading-none text-balance">
             The Extraction Academy
           </h1>
-          <p className="text-sm md:text-base text-gb-3/90 max-w-lg mx-auto lg:mx-0 font-sans leading-relaxed">
+          <p className="text-xs sm:text-sm md:text-base text-gb-3/90 max-w-lg mx-auto lg:mx-0 font-sans leading-snug lg:leading-relaxed">
             Dive into the archive strata, break Sentinel shields with math, and extract Knowledge Shards before your neural integrity fails.
           </p>
-          <div className="pt-2 flex flex-wrap items-center justify-center lg:justify-start gap-3">
+          <div className="pt-1 lg:pt-2 flex flex-wrap items-center justify-center lg:justify-start gap-2 lg:gap-3">
             <button
               type="button"
               onClick={() => setShowConcept(true)}
-              className="min-h-11 px-4 py-2 border-2 border-neon-cyan bg-gb-0 text-neon-cyan hover:bg-neon-cyan hover:text-gb-0 transition-colors flex items-center gap-2 text-xs font-bold uppercase tracking-wider gb-border-sm"
+              className="min-h-9 lg:min-h-11 px-3 lg:px-4 py-1.5 lg:py-2 border-2 border-neon-cyan bg-gb-0 text-neon-cyan hover:bg-neon-cyan hover:text-gb-0 transition-colors flex items-center gap-1.5 lg:gap-2 text-[11px] lg:text-xs font-bold uppercase tracking-wider gb-border-sm whitespace-nowrap"
             >
-              <Info className="w-4 h-4" />
-              Mission Briefing
+              <Info className="w-3.5 h-3.5 lg:w-4 lg:h-4 shrink-0" />
+              <span className="sm:hidden">Briefing</span>
+              <span className="hidden sm:inline">Mission Briefing</span>
             </button>
             <button
               type="button"
@@ -103,31 +104,32 @@ export const TitleScreen: React.FC<Props> = ({
                 setConfirmClearAll(false);
                 setShowPrivacyModal(true);
               }}
-              className="min-h-11 px-4 py-2 border-2 border-gb-3 bg-gb-0 text-gb-3 hover:border-neon-green hover:text-neon-green transition-colors flex items-center gap-2 text-xs font-bold uppercase tracking-wider gb-border-sm"
+              className="min-h-9 lg:min-h-11 px-3 lg:px-4 py-1.5 lg:py-2 border-2 border-gb-3 bg-gb-0 text-gb-3 hover:border-neon-green hover:text-neon-green transition-colors flex items-center gap-1.5 lg:gap-2 text-[11px] lg:text-xs font-bold uppercase tracking-wider gb-border-sm whitespace-nowrap"
             >
-              <ShieldCheck className="w-4 h-4" />
-              Local Cache &amp; Privacy
+              <ShieldCheck className="w-3.5 h-3.5 lg:w-4 lg:h-4 shrink-0" />
+              <span className="sm:hidden">Cache &amp; Privacy</span>
+              <span className="hidden sm:inline">Local Cache &amp; Privacy</span>
             </button>
           </div>
         </motion.div>
 
         {/* Save Slot Terminal */}
         <div className="lg:col-span-6 w-full max-w-md mx-auto lg:max-w-none">
-          <div className="bg-gb-1 border-2 border-gb-3 p-5 gb-border dither relative">
-            <div className="flex justify-between items-center mb-4 border-b border-gb-3 pb-3">
+          <div className="bg-gb-1 border-2 border-gb-3 p-3 lg:p-5 gb-border dither relative">
+            <div className="flex justify-between items-center mb-2.5 pb-2 lg:mb-4 lg:pb-3 border-b border-gb-3">
               <span className="text-xs font-bold text-gb-3 uppercase tracking-wider">
                 Select Save Slot
               </span>
               <span className="text-xs text-gb-2 tabular-nums">3 Slots Available</span>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-2 lg:space-y-3">
               {slots.map((slot) => (
                 <div key={slot.id} className="flex items-stretch gap-2">
                   <button
                     type="button"
                     onClick={() => onSelectSlot(slot.id)}
-                    className={`flex-1 min-h-[72px] p-3 border-2 transition-all flex flex-col items-start justify-center gap-1.5 gb-border-sm text-left ${
+                    className={`flex-1 min-h-[54px] lg:min-h-[72px] p-2 lg:p-3 border-2 transition-all flex flex-col items-start justify-center gap-1 lg:gap-1.5 gb-border-sm text-left ${
                       slot.stats
                         ? 'bg-gb-0 border-gb-3 hover:border-neon-cyan'
                         : 'bg-gb-1 border-gb-2 border-dashed hover:border-gb-3'
@@ -170,7 +172,7 @@ export const TitleScreen: React.FC<Props> = ({
                     <button
                       type="button"
                       onClick={() => setPendingDeleteSlotId(slot.id)}
-                      className="min-w-11 min-h-11 px-3 border-2 border-gb-3 bg-gb-0 text-gb-2 hover:border-neon-magenta hover:text-neon-magenta transition-colors flex items-center justify-center gb-border-sm"
+                      className="min-w-10 min-h-10 lg:min-w-11 lg:min-h-11 px-2.5 lg:px-3 border-2 border-gb-3 bg-gb-0 text-gb-2 hover:border-neon-magenta hover:text-neon-magenta transition-colors flex items-center justify-center gb-border-sm"
                       aria-label={`Delete save slot ${slot.id}`}
                       title={`Delete save slot ${slot.id}`}
                     >
@@ -181,12 +183,12 @@ export const TitleScreen: React.FC<Props> = ({
               ))}
             </div>
 
-            <div className="mt-5 text-xs text-gb-2 text-center leading-relaxed space-y-1">
-              <p>Choose a profile slot to enter the Cradle Bunker.</p>
-              <p className="text-[11px] text-gb-2/80 font-mono">
+            <div className="mt-2.5 lg:mt-5 text-[11px] lg:text-xs text-gb-2 text-center leading-snug space-y-0.5 lg:space-y-1">
+              <p className="hidden sm:block">Choose a profile slot to enter the Cradle Bunker.</p>
+              <p className="text-[10px] lg:text-[11px] text-gb-2/80 font-mono truncate">
                 {cacheProfile.storageMode === 'localStorage'
-                  ? 'Anonymized Local Browser Cache'
-                  : 'Session Memory Fallback'}{' '}
+                  ? 'Local Browser Cache'
+                  : 'Memory Fallback'}{' '}
                 &bull; ID: <span className="text-gb-3">{cacheProfile.anonymousId}</span>
               </p>
             </div>

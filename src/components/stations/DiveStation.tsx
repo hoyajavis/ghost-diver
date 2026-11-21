@@ -2,7 +2,8 @@ import React from 'react';
 import { PlayerStats } from '../../types';
 import { clampFloor, getDiveCost, MAX_FLOOR, MAX_TIER } from '../../lib/dungeonLogic';
 import { getScarName } from '../../lib/scarData';
-import { Activity, ChevronLeft, ChevronRight, Database } from 'lucide-react';
+import { getReconBuffOption } from '../../lib/signalSweepLogic';
+import { Activity, ChevronLeft, ChevronRight, Database, Sparkles } from 'lucide-react';
 
 interface Props {
   stats: PlayerStats;
@@ -25,6 +26,7 @@ export const DiveStation: React.FC<Props> = ({
   const clampedFloor = Math.max(1, Math.min(maxUnlocked, selectedFloor));
   const diveCost = getDiveCost(clampedFloor);
   const canAffordDive = stats.knowledge >= diveCost;
+  const armedReconBuff = getReconBuffOption(stats.activeReconBuff);
 
   return (
     <div className="space-y-4">
@@ -74,6 +76,24 @@ export const DiveStation: React.FC<Props> = ({
             {diveCost === 0 ? 'Free' : `${diveCost} Shards`}
           </span>
         </div>
+
+        {armedReconBuff ? (
+          <div className="w-full border border-neon-cyan bg-neon-cyan/10 p-2.5 flex items-start gap-2 text-left">
+            <Sparkles className="w-4 h-4 text-neon-cyan shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <div className="text-xs font-black uppercase text-neon-cyan">
+                Armed Recon Buff: {armedReconBuff.name}
+              </div>
+              <div className="text-[11px] text-gb-2 font-sans">
+                {armedReconBuff.description}
+              </div>
+            </div>
+          </div>
+        ) : stats.reconRewardAvailable ? (
+          <div className="w-full text-[11px] text-gb-2 font-sans text-center">
+            Tip: Run <strong className="text-neon-cyan font-mono">Signal Sweep</strong> in the Combat Simulator to arm a free Recon Buff before diving.
+          </div>
+        ) : null}
 
         <button
           type="button"

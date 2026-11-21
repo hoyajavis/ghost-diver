@@ -3,6 +3,7 @@ import { DungeonState, PlayerStats } from '../types';
 import { getScarName } from '../lib/scarData';
 import { getAtkUpStacks, isApexEnemy } from '../lib/combatLogic';
 import { isFloorExitLocked } from '../lib/dungeonLogic';
+import { RECON_BUFF_RUN_TOKENS } from '../lib/signalSweepLogic';
 import {
   Cpu,
   ArrowUp,
@@ -17,6 +18,7 @@ import {
   LogOut,
   Settings,
   X,
+  Shield,
   ShieldAlert,
   FileText,
   Lock,
@@ -98,6 +100,8 @@ export const Dungeon: React.FC<Props> = ({
 }) => {
   const [showSystemMenu, setShowSystemMenu] = React.useState(false);
   const atkUpStacks = getAtkUpStacks(stats.runBuffs);
+  const hasReconShard = stats.runBuffs.includes(RECON_BUFF_RUN_TOKENS.SHARD_BONUS_15);
+  const hasReconShield = stats.runBuffs.includes(RECON_BUFF_RUN_TOKENS.FREE_SHIELD);
   const exitLocked = isFloorExitLocked(dungeon);
   const unopenedBlueCaches = dungeon.chests.filter((c) => !c.opened && c.type === 'BLUE').length;
 
@@ -289,6 +293,24 @@ export const Dungeon: React.FC<Props> = ({
               <Cpu className="w-3.5 h-3.5" />
               <span>+{stats.runHintPacks}</span>
             </div>
+            {hasReconShard && (
+              <div
+                title="Recon Buff: +15% Shard Extraction"
+                className="flex items-center gap-1 px-1.5 py-0.5 bg-neon-cyan/15 border border-neon-cyan text-neon-cyan text-[10px] font-black uppercase whitespace-nowrap"
+              >
+                <Zap className="w-3 h-3 shrink-0" />
+                <span>Recon +15%</span>
+              </div>
+            )}
+            {hasReconShield && (
+              <div
+                title="Recon Buff: 1 Free Shield Charge"
+                className="flex items-center gap-1 px-1.5 py-0.5 bg-amber-400/15 border border-amber-400 text-amber-300 text-[10px] font-black uppercase whitespace-nowrap"
+              >
+                <Shield className="w-3 h-3 shrink-0" />
+                <span>Shield ×1</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -442,10 +464,16 @@ export const Dungeon: React.FC<Props> = ({
                   <span className="font-bold text-neon-cyan">{unopenedBlueCaches}</span>
                 </div>
               )}
-              <div className="flex justify-between">
-                <span className="text-gb-2">Active Buffs</span>
-                <span className="font-bold text-neon-cyan">
-                  {atkUpStacks > 0 ? `+${atkUpStacks * 15}% Shards` : 'None'}
+              <div className="flex justify-between gap-2">
+                <span className="text-gb-2 shrink-0">Active Buffs</span>
+                <span className="font-bold text-neon-cyan text-right">
+                  {[
+                    atkUpStacks > 0 ? `+${atkUpStacks * 15}% Overclock` : null,
+                    hasReconShard ? '+15% Recon Extraction' : null,
+                    hasReconShield ? 'Recon Shield ×1' : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ') || 'None'}
                 </span>
               </div>
               <div className="flex justify-between">
@@ -525,9 +553,23 @@ export const Dungeon: React.FC<Props> = ({
                     <Zap className="w-4 h-4" />
                     Active Buffs
                   </div>
-                  {atkUpStacks > 0 ? (
-                    <div className="text-xs font-bold text-neon-cyan">
-                      Neural Overclock (+{atkUpStacks * 15}% Shards · Apex Step-Skip)
+                  {atkUpStacks > 0 || hasReconShard || hasReconShield ? (
+                    <div className="space-y-1 text-xs font-bold">
+                      {atkUpStacks > 0 && (
+                        <div className="text-neon-cyan">
+                          Neural Overclock (+{atkUpStacks * 15}% Shards · Apex Step-Skip)
+                        </div>
+                      )}
+                      {hasReconShard && (
+                        <div className="text-neon-green">
+                          Recon: +15% Shard Extraction
+                        </div>
+                      )}
+                      {hasReconShield && (
+                        <div className="text-amber-300">
+                          Recon: 1 Free Shield Charge
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="text-xs text-gb-2">No active buffs</div>

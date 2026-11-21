@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { PlayerStats, Position } from '../types';
+import { PlayerStats, Position, ReconBuffType } from '../types';
+import { SignalSweepNodeOutcome } from '../lib/signalSweepLogic';
 import { TrainingSim } from './TrainingSim';
 import { ScarCalibrationModal } from './ScarCalibrationModal';
+import { SignalSweep } from './SignalSweep';
 import { DiveStation } from './stations/DiveStation';
 import { WorkbenchStation } from './stations/WorkbenchStation';
 import { ArchivistStation } from './stations/ArchivistStation';
@@ -34,6 +36,8 @@ interface Props {
   onCalibrateScar: (scar: string) => void;
   onUpgrade: (type: 'hp' | 'fp' | 'hints' | 'buy_hint') => void;
   onUnlockDemo: (variantId: string) => void;
+  onRecordArchetypeStats: (outcomes: readonly SignalSweepNodeOutcome[]) => void;
+  onClaimReconBuff: (buff: ReconBuffType) => void;
   onLogout: () => void;
 }
 
@@ -97,7 +101,7 @@ const STATIONS: Record<Exclude<BaseStation, 'NONE'>, StationConfig> = {
     icon: <BrainCircuit className="w-5 h-5 text-purple-400" />,
     shortLabel: 'Sim',
     label: 'Combat Simulator',
-    summary: 'Practice defeated Sentinel patterns',
+    summary: 'Signal Sweep recon & Sentinel practice',
   },
 };
 
@@ -108,6 +112,8 @@ export const HomeBase: React.FC<Props> = ({
   onCalibrateScar,
   onUpgrade,
   onUnlockDemo,
+  onRecordArchetypeStats,
+  onClaimReconBuff,
   onLogout,
 }) => {
   const [playerPos, setPlayerPos] = useState<Position>({ x: 2, y: 3 });
@@ -115,6 +121,7 @@ export const HomeBase: React.FC<Props> = ({
   const [selectedFloor, setSelectedFloor] = useState(1);
   const [activeSimTier, setActiveSimTier] = useState<string | null>(null);
   const [calibratingScar, setCalibratingScar] = useState<string | null>(null);
+  const [signalSweepConfig, setSignalSweepConfig] = useState<{ timed: boolean } | null>(null);
 
   const handleMove = useCallback((dx: number, dy: number) => {
     setPlayerPos((prev) => ({
@@ -125,7 +132,7 @@ export const HomeBase: React.FC<Props> = ({
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      if (activeSimTier !== null || calibratingScar !== null) return;
+      if (activeSimTier !== null || calibratingScar !== null || signalSweepConfig !== null) return;
 
       if (activeStation !== 'NONE') {
         if (e.key === 'Escape') setActiveStation('NONE');
@@ -174,7 +181,7 @@ export const HomeBase: React.FC<Props> = ({
         handleMove(dx, dy);
       }
     },
-    [activeSimTier, calibratingScar, activeStation, playerPos, handleMove]
+    [activeSimTier, calibratingScar, signalSweepConfig, activeStation, playerPos, handleMove]
   );
 
   useEffect(() => {
@@ -450,6 +457,7 @@ export const HomeBase: React.FC<Props> = ({
                   stats={stats}
                   onUnlockDemo={onUnlockDemo}
                   onRunSim={(variantId) => setActiveSimTier(variantId)}
+                  onLaunchSignalSweep={(config) => setSignalSweepConfig(config)}
                 />
               )}
 
@@ -477,6 +485,18 @@ export const HomeBase: React.FC<Props> = ({
               setCalibratingScar(null);
             }}
             onClose={() => setCalibratingScar(null)}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {signalSweepConfig !== null && (
+          <SignalSweep
+            stats={stats}
+            initialTimed={signalSweepConfig.timed}
+            onCompleteRun={onRecordArchetypeStats}
+            onClaimReconBuff={onClaimReconBuff}
+            onClose={() => setSignalSweepConfig(null)}
           />
         )}
       </AnimatePresence>

@@ -8,6 +8,7 @@ import {
   Chest,
   DataLog,
   SaveSlot,
+  ReconBuffType,
 } from '../types';
 import { generateFloor } from '../lib/mapGen';
 import {
@@ -21,6 +22,13 @@ import {
   stepEnemies,
 } from '../lib/dungeonLogic';
 import { BLUE_CACHE_FAIL_DAMAGE } from '../lib/combatLogic';
+import {
+  calculateExtractedKnowledge,
+  mergeArchetypeStats,
+  RECON_BUFF_RUN_TOKENS,
+  RECON_START_FP_BONUS,
+  SignalSweepNodeOutcome,
+} from '../lib/signalSweepLogic';
 import { LORE_ENTRIES } from '../lib/lore';
 import { getRandomScar } from '../lib/scarData';
 import {
@@ -107,6 +115,9 @@ export function useGameEngine() {
     stats.unlockedLore,
     stats.encounteredTiers,
     stats.unlockedDemos,
+    stats.activeReconBuff,
+    stats.reconRewardAvailable,
+    stats.archetypeStats,
     currentSlot,
     gameState,
   ]);
@@ -116,15 +127,27 @@ export function useGameEngine() {
     const cost = getDiveCost(safeFloor);
     if (stats.knowledge < cost) return;
 
-    setStats((prev) => ({
-      ...prev,
-      knowledge: prev.knowledge - cost,
-      hp: prev.maxHp,
-      fp: 0,
-      runKnowledge: 0,
-      runHintPacks: prev.upgrades.hints,
-      runBuffs: [],
-    }));
+    setStats((prev) => {
+      const startFp =
+        prev.activeReconBuff === 'START_FP_20' ? Math.min(prev.maxFp, RECON_START_FP_BONUS) : 0;
+      const initialRunBuffs =
+        prev.activeReconBuff === 'SHARD_BONUS_15'
+          ? [RECON_BUFF_RUN_TOKENS.SHARD_BONUS_15]
+          : prev.activeReconBuff === 'FREE_SHIELD'
+            ? [RECON_BUFF_RUN_TOKENS.FREE_SHIELD]
+            : [];
+
+      return {
+        ...prev,
+        knowledge: prev.knowledge - cost,
+        hp: prev.maxHp,
+        fp: startFp,
+        runKnowledge: 0,
+        runHintPacks: prev.upgrades.hints,
+        runBuffs: initialRunBuffs,
+        activeReconBuff: null,
+      };
+    });
 
     recordTelemetryEvent('DIVE_STARTED');
     setCacheProfile(getAnonymizedCacheProfile());
@@ -343,16 +366,20 @@ export function useGameEngine() {
   };
 
   const handleBankAndExit = () => {
-    const extractedKnowledge = stats.runKnowledge;
-    setStats((prev) => ({
-      ...prev,
-      knowledge: prev.knowledge + prev.runKnowledge,
-      hintPacks: prev.hintPacks + getBankableHintPacks(prev.runHintPacks, prev.upgrades.hints),
-      runKnowledge: 0,
-      runHintPacks: 0,
-      runBuffs: [],
-      maxExtractedFloor: getNextUnlockedFloor(dungeon?.floor ?? 1, prev.maxExtractedFloor),
-    }));
+    const extractedKnowledge = calculateExtractedKnowledge(stats.runKnowledge, stats.runBuffs);
+    setStats((prev) => {
+      const bankedKnowledge = calculateExtractedKnowledge(prev.runKnowledge, prev.runBuffs);
+      return {
+        ...prev,
+        knowledge: prev.knowledge + bankedKnowledge,
+        hintPacks: prev.hintPacks + getBankableHintPacks(prev.runHintPacks, prev.upgrades.hints),
+        runKnowledge: 0,
+        runHintPacks: 0,
+        runBuffs: [],
+        maxExtractedFloor: getNextUnlockedFloor(dungeon?.floor ?? 1, prev.maxExtractedFloor),
+        reconRewardAvailable: true,
+      };
+    });
     recordTelemetryEvent('EXTRACTION', extractedKnowledge);
     setCacheProfile(getAnonymizedCacheProfile());
     setActiveLockedChest(null);
@@ -459,6 +486,25 @@ export function useGameEngine() {
     }
   };
 
+  const handleRecordArchetypeStats = (outcomes: readonly SignalSweepNodeOutcome[]) => {
+    if (outcomes.length === 0) return;
+    setStats((prev) => ({
+      ...prev,
+      archetypeStats: mergeArchetypeStats(prev.archetypeStats, outcomes),
+    }));
+  };
+
+  const handleClaimReconBuff = (buff: ReconBuffType) => {
+    setStats((prev) => {
+      if (!prev.reconRewardAvailable) return prev;
+      return {
+        ...prev,
+        activeReconBuff: buff,
+        reconRewardAvailable: false,
+      };
+    });
+  };
+
   return {
     gameState,
     setGameState,
@@ -492,5 +538,7 @@ export function useGameEngine() {
     handleEmergencyEject,
     handleUpgrade,
     handleUnlockDemo,
+    handleRecordArchetypeStats,
+    handleClaimReconBuff,
   };
 }

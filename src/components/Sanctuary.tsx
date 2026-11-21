@@ -2,6 +2,7 @@ import React from 'react';
 import { PlayerStats } from '../types';
 import { canDescendFromFloor, getBankableHintPacks, MAX_FLOOR, MAX_TIER } from '../lib/dungeonLogic';
 import { getScarName } from '../lib/scarData';
+import { calculateExtractedKnowledge, RECON_BUFF_RUN_TOKENS } from '../lib/signalSweepLogic';
 import { Home, ArrowDownToLine, Activity, Database, ShieldAlert, Cpu, Lock } from 'lucide-react';
 
 interface Props {
@@ -14,6 +15,8 @@ interface Props {
 export const Sanctuary: React.FC<Props> = ({ stats, floor, onBankAndExit, onDiveDeeper }) => {
   const bankableHints = getBankableHintPacks(stats.runHintPacks, stats.upgrades.hints);
   const canDescend = canDescendFromFloor(floor);
+  const hasReconShardBonus = stats.runBuffs.includes(RECON_BUFF_RUN_TOKENS.SHARD_BONUS_15);
+  const extractedKnowledge = calculateExtractedKnowledge(stats.runKnowledge, stats.runBuffs);
 
   return (
     <div className="flex flex-col items-center justify-center h-full bg-gb-0 text-gb-3 p-4 scanlines relative overflow-y-auto custom-scrollbar terminal-text wireframe-bg">
@@ -37,7 +40,12 @@ export const Sanctuary: React.FC<Props> = ({ stats, floor, onBankAndExit, onDive
           <div className="bg-gb-0 border border-gb-3 p-3 gb-border-sm flex flex-col items-center">
             <Database className="w-4 h-4 text-neon-green mb-1" />
             <span className="text-xs text-gb-2 font-bold">Unbanked Shards</span>
-            <span className="text-xl font-bold text-gb-3">+{stats.runKnowledge}</span>
+            <span className="text-xl font-bold text-gb-3">+{extractedKnowledge}</span>
+            {hasReconShardBonus && (
+              <span className="text-[10px] font-bold text-neon-cyan uppercase mt-0.5 text-center">
+                +15% Recon Bonus
+              </span>
+            )}
           </div>
           <div className="bg-gb-0 border border-gb-3 p-3 gb-border-sm flex flex-col items-center">
             <Cpu className="w-4 h-4 text-neon-cyan mb-1" />

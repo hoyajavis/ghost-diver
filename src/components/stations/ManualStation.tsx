@@ -58,7 +58,14 @@ export const ManualStation: React.FC = () => {
         </section>
 
         <section>
-          <h4 className="text-xs font-mono text-neon-cyan font-bold uppercase mb-1">7. Controls &amp; Shortcuts</h4>
+          <h4 className="text-xs font-mono text-neon-cyan font-bold uppercase mb-1">7. Signal Sweep &amp; Recon Buffs</h4>
+          <p className="text-gb-2">
+            Open the <strong>Combat Simulator</strong> and choose the <strong>Signal Sweep</strong> tab for a fast 10-node conceptual sprint across all Sectors you have reached (toggle between <strong>Arcade Timer</strong> and untimed <strong>Relaxed Focus</strong>). Scoring <strong>≥ 70%</strong> lets you arm 1 of 3 <strong>Recon Buffs</strong> for your next dive (<em>Start with +20 FP</em>, <em>+15% Shard Extraction</em>, or <em>1 Free Shield Charge</em>). You can earn 1 rewarded buff per completed extraction—additional sweeps stay open for unlimited practice.
+          </p>
+        </section>
+
+        <section>
+          <h4 className="text-xs font-mono text-neon-cyan font-bold uppercase mb-1">8. Controls &amp; Shortcuts</h4>
           <ul className="text-gb-2 space-y-1 text-xs font-mono">
             <li><span className="text-gb-3 font-bold">Shift + D</span> — Toggle Direct Strike (before Step 1)</li>
             <li><span className="text-gb-3 font-bold">Shift + H</span> — Use Tactical Hint Pack (Clue + Shield)</li>

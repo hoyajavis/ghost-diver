@@ -42,6 +42,8 @@ export default function App() {
     handleEmergencyEject,
     handleUpgrade,
     handleUnlockDemo,
+    handleRecordArchetypeStats,
+    handleClaimReconBuff,
   } = useGameEngine();
 
   return (
@@ -67,6 +69,8 @@ export default function App() {
             onCalibrateScar={handleCalibrateScar}
             onUpgrade={handleUpgrade}
             onUnlockDemo={handleUnlockDemo}
+            onRecordArchetypeStats={handleRecordArchetypeStats}
+            onClaimReconBuff={handleClaimReconBuff}
             onLogout={() => setGameState('TITLE')}
           />
         )}

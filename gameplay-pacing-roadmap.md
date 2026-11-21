@@ -202,22 +202,22 @@ Each phase below ends with a **mandatory Playtest Gate**. Do not start the next 
 **Goal:** Give players (and classrooms) a dedicated, ultra-fast, zero-paper conceptual warm-up mode in the Cradle Bunker that feeds tangible rewards into their next dungeon dive.
 
 ### Data & Persistence
-- [ ] **Save Schema & Allow-List Update (`src/lib/storage.ts`, `src/types.ts`):**
+- [x] **Save Schema & Allow-List Update (`src/lib/storage.ts`, `src/types.ts`):**
   - Bump `SAVE_SCHEMA_VERSION` and explicitly add `activeReconBuff` (consumed on next dive), `reconRewardAvailable` (anti-farming flag), and archetype accuracy stats to both `hydrateSaveData()` and the `toPersistedSaveData()` strict PII allow-list.
 
 ### Gameplay & UI (`SignalSweep.tsx`, `SimulatorStation.tsx`, `Dungeon.tsx`)
-- [ ] **Build `SignalSweep.tsx` inside `SimulatorStation.tsx`:**
+- [x] **Build `SignalSweep.tsx` inside `SimulatorStation.tsx`:**
   - Mount Signal Sweep as a dedicated tab inside `SimulatorStation.tsx` (avoiding extra stations on the 5×5 `HomeBase` grid).
   - **10-Node Rapid Conceptual Sprint** pulling tier-matched conceptual archetypes from all tiers the player has reached, displaying a clean 10-pip progress bar.
   - Optional **"Arcade Timer"** toggle vs. **"Relaxed Focus" (untimed)** mode so time-sensitive learners aren't stressed.
   - End-of-sprint **Accuracy Streak** & **Archetype Breakdown** scorecard (e.g., *Estimation: 3/3 · Spot the Glitch: 2/3*).
-- [ ] **Connect Signal Sweep Rewards to Dungeon Runs (Anti-Farm Gated):**
+- [x] **Connect Signal Sweep Rewards to Dungeon Runs (Anti-Farm Gated):**
   - Completing a Signal Sweep (≥ 70% accuracy) opens a 1-of-3 **Recon Buff** picker (*Start with +20 FP*, *+15% Shard Extraction*, or *1 Free Shield Charge*).
   - Limit rewarded Recon Buffs to **1 per completed dive** (additional sweeps remain playable for warm-up/high-score practice).
   - Display the armed Recon Buff clearly in `DiveStation` and the `Dungeon` HUD until consumed.
 
 ### Player Input & Ergonomics
-- [ ] **Keyboard-Complete Sprint Flow:** Reuse `ProblemInputRouter` + `useCombatInput` (with `e.repeat` protection) for all 10 nodes, plus `1–3` / `Enter` keyboard selection for the post-run Recon Buff picker.
+- [x] **Keyboard-Complete Sprint Flow:** Reuse `ProblemInputRouter` + `useCombatInput` (with `e.repeat` protection) for all 10 nodes, plus `1–3` / `Enter` keyboard selection for the post-run Recon Buff picker.
 
 ### Playtest Gate 4: "The 3-Minute Warm-Up & Retention Test"
 - **Format:** Test Signal Sweep both as a standalone 3-minute session and immediately before a 5-floor dungeon dive.

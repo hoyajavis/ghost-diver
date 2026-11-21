@@ -27,6 +27,7 @@ import {
   toggleStrikeMode,
 } from '../lib/combatLogic';
 import { getPatrolBaseHpForTier } from '../lib/dungeonLogic';
+import { RECON_BUFF_RUN_TOKENS, removeRunBuff } from '../lib/signalSweepLogic';
 import {
   getActiveChoices,
   getActiveMultiSelectOptions,
@@ -76,6 +77,8 @@ export const Combat: React.FC<Props> = ({
   const isBossIntro = isApex || floor % 5 === 0;
   const patrolBaseHp = getPatrolBaseHpForTier(tier);
   const atkUpStacks = getAtkUpStacks(stats.runBuffs);
+  const hasReconShield = stats.runBuffs.includes(RECON_BUFF_RUN_TOKENS.FREE_SHIELD);
+  const hasReconShard = stats.runBuffs.includes(RECON_BUFF_RUN_TOKENS.SHARD_BONUS_15);
   const initialShieldLayers = getInitialEnemyShieldLayers(enemy);
   const maxShieldLayers = enemy.maxShieldLayers ?? initialShieldLayers;
   const initialMode: CombatMode = initialShieldLayers > 0 ? 'SHIELD_BREAK' : 'ATTACK';
@@ -97,7 +100,8 @@ export const Combat: React.FC<Props> = ({
       runBuffs: stats.runBuffs,
     })
   );
-  const [shieldActive, setShieldActive] = useState(false);
+  const [hintShieldActive, setHintShieldActive] = useState(false);
+  const effectiveShieldActive = hintShieldActive || hasReconShield;
   const [activeClue, setActiveClue] = useState<string | null>(null);
   const [input, setInput] = useState('');
   const [feedback, setFeedback] = useState<'IDLE' | 'CORRECT' | 'WRONG'>('IDLE');
@@ -383,14 +387,23 @@ export const Combat: React.FC<Props> = ({
       tier,
       isApex,
       currentPlayerHp: stats.hp,
-      shieldActive,
+      shieldActive: effectiveShieldActive,
     });
 
-    setShieldActive(res.nextShieldActive);
+    let nextRunBuffs = stats.runBuffs;
+    if (res.shieldAbsorbed) {
+      if (hintShieldActive) {
+        setHintShieldActive(false);
+      } else if (hasReconShield) {
+        nextRunBuffs = removeRunBuff(stats.runBuffs, RECON_BUFF_RUN_TOKENS.FREE_SHIELD);
+      }
+    }
+
     setTurn(res.nextTurn);
     onUpdateStats({
       ...stats,
       hp: res.newPlayerHp,
+      runBuffs: nextRunBuffs,
     });
 
     const hitPrefix = res.shieldAbsorbed
@@ -433,7 +446,7 @@ export const Combat: React.FC<Props> = ({
           ? 'SHIELD_BREAK'
           : 'ATTACK'
         : mode;
-    scheduleNextProblem(nextModeAfterMiss, res.delayMs, stats.runBuffs);
+    scheduleNextProblem(nextModeAfterMiss, res.delayMs, nextRunBuffs);
   };
 
   const handleFocusScanClick = () => {
@@ -492,12 +505,12 @@ export const Combat: React.FC<Props> = ({
       currentEnemyHp,
       patrolBaseHp,
       isApex,
-      shieldActive,
+      shieldActive: effectiveShieldActive,
       isVulnerable,
     });
 
     const statsAfterHint = hintResult.nextStats;
-    setShieldActive(hintResult.nextShieldActive);
+    setHintShieldActive(hintResult.nextShieldActive);
     if (hintResult.clueText) {
       setActiveClue(hintResult.clueText);
     }
@@ -587,7 +600,7 @@ export const Combat: React.FC<Props> = ({
     focusScanUsed,
     meditationDisabled:
       stats.fp < MEDITATION_FP_COST || mode === 'MEDITATION' || feedback !== 'IDLE' || isIntro,
-    shieldActive,
+    shieldActive: effectiveShieldActive,
   };
 
   const modeLabel =
@@ -717,9 +730,23 @@ export const Combat: React.FC<Props> = ({
                     <Zap className="w-4 h-4" />
                     Active Buffs
                   </div>
-                  {atkUpStacks > 0 ? (
-                    <div className="text-xs font-bold text-neon-cyan">
-                      Neural Overclock (+{atkUpStacks * 15}% Shards · Apex Step-Skip)
+                  {atkUpStacks > 0 || hasReconShard || hasReconShield ? (
+                    <div className="space-y-1 text-xs font-bold">
+                      {atkUpStacks > 0 && (
+                        <div className="text-neon-cyan">
+                          Neural Overclock (+{atkUpStacks * 15}% Shards · Apex Step-Skip)
+                        </div>
+                      )}
+                      {hasReconShard && (
+                        <div className="text-neon-green">
+                          Recon: +15% Shard Extraction
+                        </div>
+                      )}
+                      {hasReconShield && (
+                        <div className="text-amber-300">
+                          Recon: 1 Free Shield Charge
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="text-xs text-gb-2">None</div>
@@ -764,13 +791,15 @@ export const Combat: React.FC<Props> = ({
               <div className="relative">
                 <div
                   className={`w-11 h-11 lg:w-20 lg:h-20 bg-gb-0 border-2 ${
-                    shieldActive ? 'border-neon-cyan shadow-[0_0_12px_rgba(34,211,238,0.45)]' : 'border-gb-3'
+                    effectiveShieldActive
+                      ? 'border-neon-cyan shadow-[0_0_12px_rgba(34,211,238,0.45)]'
+                      : 'border-gb-3'
                   } rounded-lg flex items-center justify-center gb-border overflow-hidden transition-all`}
                 >
                   <User className="w-6 h-6 lg:w-11 lg:h-11 text-neon-cyan" />
                   <div className="absolute inset-0 bg-neon-cyan/10 pointer-events-none" />
                 </div>
-                {shieldActive && (
+                {effectiveShieldActive && (
                   <div
                     aria-label="Tactical Shield active"
                     className="absolute -top-2 -right-2 px-1 py-0.5 bg-gb-0 border border-neon-cyan text-neon-cyan text-[10px] font-black flex items-center gap-0.5"

@@ -2,14 +2,17 @@ import {
   AnonymizedCacheExport,
   AnonymizedCacheProfile,
   AnonymizedPlayerTelemetry,
+  ArchetypeAccuracyMap,
+  ConceptualArchetype,
   PlayerStats,
   ProblemMetricSummary,
+  ReconBuffType,
   SaveSlot,
   UpgradeLevels,
 } from '../types';
 import { clampFloor } from './dungeonLogic';
 
-export const SAVE_SCHEMA_VERSION = 3;
+export const SAVE_SCHEMA_VERSION = 4;
 
 const SLOT_IDS = [1, 2, 3] as const;
 const SAVE_KEY_PREFIX = 'ghost_diver_save_';
@@ -20,6 +23,22 @@ const MAX_SOLVE_SAMPLES = 50;
 const MAX_SOLVE_MS = 300_000;
 const TIER_VARIANT_KEY_REGEX = /^\d{1,2}-\d{1,2}$/;
 const ARCHETYPE_KEY_REGEX = /^[A-Z0-9_-]{1,32}$/;
+
+const VALID_RECON_BUFFS = new Set<ReconBuffType>([
+  'START_FP_20',
+  'SHARD_BONUS_15',
+  'FREE_SHIELD',
+]);
+
+const VALID_CONCEPTUAL_ARCHETYPES = new Set<ConceptualArchetype>([
+  'MAGNITUDE_ESTIMATION',
+  'BENCHMARK_COMPARE',
+  'SPOT_THE_GLITCH',
+  'FIRST_STEP_STRATEGY',
+  'SIGN_PREDICTION',
+  'EQUIVALENCE_STRUCTURE',
+  'VISUAL_QUADRANT',
+]);
 
 export interface PersistedSaveData {
   schemaVersion: number;
@@ -33,6 +52,9 @@ export interface PersistedSaveData {
   unlockedLore: string[];
   encounteredTiers: string[];
   unlockedDemos: string[];
+  activeReconBuff: ReconBuffType | null;
+  reconRewardAvailable: boolean;
+  archetypeStats: ArchetypeAccuracyMap;
 }
 
 export const INITIAL_STATS: PlayerStats = {
@@ -55,6 +77,9 @@ export const INITIAL_STATS: PlayerStats = {
   unlockedLore: [],
   encounteredTiers: [],
   unlockedDemos: [],
+  activeReconBuff: null,
+  reconRewardAvailable: true,
+  archetypeStats: {},
 };
 
 export const INITIAL_TELEMETRY: AnonymizedPlayerTelemetry = {
@@ -218,6 +243,27 @@ function migrateVariantList(value: unknown): string[] {
   return Array.from(new Set(migrated));
 }
 
+function sanitizeReconBuff(value: unknown): ReconBuffType | null {
+  if (typeof value === 'string' && VALID_RECON_BUFFS.has(value as ReconBuffType)) {
+    return value as ReconBuffType;
+  }
+  return null;
+}
+
+function sanitizeArchetypeStats(raw: unknown): ArchetypeAccuracyMap {
+  if (!isRecord(raw)) return {};
+  const result: ArchetypeAccuracyMap = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (!VALID_CONCEPTUAL_ARCHETYPES.has(key as ConceptualArchetype)) continue;
+    if (!isRecord(value)) continue;
+    const attempts = toNonNegativeInt(value.attempts, 0);
+    if (attempts === 0) continue;
+    const correct = Math.min(attempts, toNonNegativeInt(value.correct, 0));
+    result[key as ConceptualArchetype] = { attempts, correct };
+  }
+  return result;
+}
+
 export function hydrateSaveData(raw: unknown): PlayerStats | null {
   if (!isRecord(raw)) return null;
 
@@ -241,6 +287,10 @@ export function hydrateSaveData(raw: unknown): PlayerStats | null {
     unlockedLore: Array.from(new Set(toStringArray(raw.unlockedLore))),
     encounteredTiers: migrateVariantList(raw.encounteredTiers),
     unlockedDemos: migrateVariantList(raw.unlockedDemos),
+    activeReconBuff: sanitizeReconBuff(raw.activeReconBuff),
+    reconRewardAvailable:
+      typeof raw.reconRewardAvailable === 'boolean' ? raw.reconRewardAvailable : true,
+    archetypeStats: sanitizeArchetypeStats(raw.archetypeStats),
     maxHp,
     maxFp,
     hp: maxHp,
@@ -272,6 +322,10 @@ export function toPersistedSaveData(
     unlockedLore: Array.from(new Set(toStringArray(stats.unlockedLore))),
     encounteredTiers: Array.from(new Set(toStringArray(stats.encounteredTiers))),
     unlockedDemos: Array.from(new Set(toStringArray(stats.unlockedDemos))),
+    activeReconBuff: sanitizeReconBuff(stats.activeReconBuff),
+    reconRewardAvailable:
+      typeof stats.reconRewardAvailable === 'boolean' ? stats.reconRewardAvailable : true,
+    archetypeStats: sanitizeArchetypeStats(stats.archetypeStats),
   };
 }
 

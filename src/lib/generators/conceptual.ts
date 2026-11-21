@@ -1168,6 +1168,12 @@ export const CONCEPTUAL_GENERATORS: Record<number, readonly ConceptualGenerator[
     ])
   );
 
+export function getConceptualArchetypesForTier(tier: number): readonly ConceptualArchetype[] {
+  const safeTier = clampTier(tier);
+  const tierEntries = TAGGED_CONCEPTUAL_GENERATORS[safeTier] || TAGGED_CONCEPTUAL_GENERATORS[1];
+  return tierEntries.map((entry) => entry.archetype);
+}
+
 export function generateConceptualProblem(
   tier: number,
   type: Exclude<ProblemType, 'ATTACK'> = 'MEDITATION',

@@ -106,18 +106,116 @@ describe('storage schema hydration', () => {
     expect(hydrated?.unlockedDemos).toEqual(['3-1', '3-2']);
   });
 
-  it('serializes persisted save data with current schemaVersion, anonymousId, and coarse UTC day', () => {
+  it('serializes persisted save data with schemaVersion 4, anonymousId, coarse UTC day, and v4 defaults', () => {
+    expect(SAVE_SCHEMA_VERSION).toBe(4);
     const persisted = toPersistedSaveData({
       ...INITIAL_STATS,
       knowledge: 500,
       maxExtractedFloor: 15,
     });
 
-    expect(persisted.schemaVersion).toBe(SAVE_SCHEMA_VERSION);
+    expect(persisted.schemaVersion).toBe(4);
     expect(persisted.anonymousId).toMatch(/^gd-[a-f0-9]{8}-[a-f0-9]{4}$/);
     expect(persisted.updatedAtDay).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(persisted.knowledge).toBe(500);
     expect(persisted.maxExtractedFloor).toBe(15);
+    expect(persisted.activeReconBuff).toBeNull();
+    expect(persisted.reconRewardAvailable).toBe(true);
+    expect(persisted.archetypeStats).toEqual({});
+  });
+
+  it('migrates schema v3 payloads to v4 defaults cleanly', () => {
+    const hydrated = hydrateSaveData({
+      schemaVersion: 3,
+      knowledge: 180,
+      maxExtractedFloor: 6,
+      upgrades: { hp: 1, fp: 0, hints: 1 },
+      unlockedLore: ['lore-1'],
+      encounteredTiers: ['1-1', '2-1'],
+      unlockedDemos: ['1-1'],
+    });
+
+    expect(hydrated).not.toBeNull();
+    expect(hydrated?.activeReconBuff).toBeNull();
+    expect(hydrated?.reconRewardAvailable).toBe(true);
+    expect(hydrated?.archetypeStats).toEqual({});
+
+    // Non-boolean reconRewardAvailable also defaults to true
+    const malformedFlag = hydrateSaveData({
+      schemaVersion: 3,
+      reconRewardAvailable: 'false',
+    });
+    expect(malformedFlag?.reconRewardAvailable).toBe(true);
+  });
+
+  it('round-trips activeReconBuff, reconRewardAvailable, and archetypeStats through localStorage', () => {
+    saveSlot(1, {
+      ...INITIAL_STATS,
+      knowledge: 300,
+      activeReconBuff: 'SHARD_BONUS_15',
+      reconRewardAvailable: false,
+      archetypeStats: {
+        MAGNITUDE_ESTIMATION: { attempts: 6, correct: 5 },
+        SPOT_THE_GLITCH: { attempts: 4, correct: 4 },
+      },
+    });
+
+    const slots = loadSlots();
+    expect(slots[0].stats?.activeReconBuff).toBe('SHARD_BONUS_15');
+    expect(slots[0].stats?.reconRewardAvailable).toBe(false);
+    expect(slots[0].stats?.archetypeStats).toEqual({
+      MAGNITUDE_ESTIMATION: { attempts: 6, correct: 5 },
+      SPOT_THE_GLITCH: { attempts: 4, correct: 4 },
+    });
+  });
+
+  it('sanitizes invalid recon buffs, strips unknown/PII archetype keys, clamps correct <= attempts, and omits zero-attempt entries', () => {
+    const dirtyPayload = {
+      schemaVersion: 4,
+      activeReconBuff: 'UNLIMITED_GOD_MODE',
+      reconRewardAvailable: false,
+      archetypeStats: {
+        BENCHMARK_COMPARE: { attempts: 5, correct: 99 },
+        SIGN_PREDICTION: { attempts: 0, correct: 0 },
+        VISUAL_QUADRANT: { attempts: -3, correct: 2 },
+        'jane@example.com': { attempts: 10, correct: 10 },
+        CUSTOM_PII_KEY: { attempts: 4, correct: 3 },
+      },
+    };
+
+    const hydrated = hydrateSaveData(dirtyPayload);
+    expect(hydrated?.activeReconBuff).toBeNull();
+    expect(hydrated?.reconRewardAvailable).toBe(false);
+    expect(hydrated?.archetypeStats).toEqual({
+      BENCHMARK_COMPARE: { attempts: 5, correct: 5 },
+    });
+
+    const dirtyStats = {
+      ...INITIAL_STATS,
+      activeReconBuff: 'INVALID_BUFF',
+      reconRewardAvailable: false,
+      archetypeStats: {
+        EQUIVALENCE_STRUCTURE: { attempts: 3, correct: 8 },
+        FIRST_STEP_STRATEGY: { attempts: 0, correct: 0 },
+        'student-name-pii': { attempts: 2, correct: 2 },
+      },
+    };
+
+    const persisted = toPersistedSaveData(dirtyStats as unknown as typeof INITIAL_STATS);
+    expect(persisted.activeReconBuff).toBeNull();
+    expect(persisted.reconRewardAvailable).toBe(false);
+    expect(persisted.archetypeStats).toEqual({
+      EQUIVALENCE_STRUCTURE: { attempts: 3, correct: 3 },
+    });
+    expect(persisted.archetypeStats).not.toHaveProperty('student-name-pii');
+    expect(persisted.archetypeStats).not.toHaveProperty('FIRST_STEP_STRATEGY');
+
+    saveSlot(2, dirtyStats as unknown as typeof INITIAL_STATS);
+    const exported = exportAnonymizedCacheData();
+    const serialized = JSON.stringify(exported);
+    expect(exported.schemaVersion).toBe(4);
+    expect(serialized).not.toContain('student-name-pii');
+    expect(serialized).not.toContain('INVALID_BUFF');
   });
 
   it('strictly strips non-allowlisted PII fields from persisted and exported data', () => {

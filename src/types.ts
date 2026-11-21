@@ -14,6 +14,15 @@ export interface UpgradeLevels {
   hints: number;
 }
 
+export type ReconBuffType = 'START_FP_20' | 'SHARD_BONUS_15' | 'FREE_SHIELD';
+
+export interface ArchetypeAccuracyStat {
+  attempts: number;
+  correct: number;
+}
+
+export type ArchetypeAccuracyMap = Partial<Record<ConceptualArchetype, ArchetypeAccuracyStat>>;
+
 export interface PlayerStats {
   hp: number;
   maxHp: number;
@@ -30,6 +39,9 @@ export interface PlayerStats {
   unlockedLore: string[];
   encounteredTiers: string[];
   unlockedDemos: string[];
+  activeReconBuff: ReconBuffType | null;
+  reconRewardAvailable: boolean;
+  archetypeStats: ArchetypeAccuracyMap;
 }
 
 export interface Position {

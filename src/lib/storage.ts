@@ -6,10 +6,12 @@ import {
   ConceptScheduleMap,
   ConceptualArchetype,
   LeitnerBox,
+  NeuralChipId,
   PlayerStats,
   ProblemMetricSummary,
   ReconBuffType,
   SaveSlot,
+  SectorMasteryMap,
   UpgradeLevels,
 } from '../types';
 import {
@@ -18,8 +20,9 @@ import {
   summarizeConceptBoxDistribution,
 } from './conceptSpacedRep';
 import { clampFloor } from './dungeonLogic';
+import { MAX_EQUIPPED_CHIPS, NEURAL_CHIP_IDS } from './loadoutChips';
 
-export const SAVE_SCHEMA_VERSION = 5;
+export const SAVE_SCHEMA_VERSION = 6;
 
 const SLOT_IDS = [1, 2, 3] as const;
 const SAVE_KEY_PREFIX = 'ghost_diver_save_';
@@ -30,6 +33,7 @@ const MAX_SOLVE_SAMPLES = 50;
 const MAX_SOLVE_MS = 300_000;
 const TIER_VARIANT_KEY_REGEX = /^\d{1,2}-\d{1,2}$/;
 const ARCHETYPE_KEY_REGEX = /^[A-Z0-9_-]{1,32}$/;
+const SECTOR_MASTERY_KEY_REGEX = /^(?:[1-9]|1[0-2])$/;
 
 const VALID_RECON_BUFFS = new Set<ReconBuffType>([
   'START_FP_20',
@@ -48,6 +52,8 @@ export const VALID_CONCEPTUAL_ARCHETYPES = new Set<ConceptualArchetype>([
   'EFFECT_OF_CHANGE',
 ]);
 
+export const VALID_NEURAL_CHIPS = new Set<NeuralChipId>(NEURAL_CHIP_IDS);
+
 export interface PersistedSaveData {
   schemaVersion: number;
   anonymousId: string;
@@ -65,6 +71,10 @@ export interface PersistedSaveData {
   archetypeStats: ArchetypeAccuracyMap;
   conceptSchedule: ConceptScheduleMap;
   conceptStepCounter: number;
+  unlockedChips: NeuralChipId[];
+  equippedChips: NeuralChipId[];
+  sectorMastery: SectorMasteryMap;
+  lifetimeShardsExtracted: number;
 }
 
 export const INITIAL_STATS: PlayerStats = {
@@ -92,6 +102,10 @@ export const INITIAL_STATS: PlayerStats = {
   archetypeStats: {},
   conceptSchedule: {},
   conceptStepCounter: 0,
+  unlockedChips: [],
+  equippedChips: [],
+  sectorMastery: {},
+  lifetimeShardsExtracted: 0,
 };
 
 export const INITIAL_TELEMETRY: AnonymizedPlayerTelemetry = {
@@ -296,6 +310,57 @@ export function sanitizeConceptSchedule(raw: unknown): ConceptScheduleMap {
   return result;
 }
 
+export function sanitizeUnlockedChips(raw: unknown): NeuralChipId[] {
+  return Array.from(
+    new Set(
+      toStringArray(raw).filter((id): id is NeuralChipId =>
+        VALID_NEURAL_CHIPS.has(id as NeuralChipId)
+      )
+    )
+  );
+}
+
+export function sanitizeEquippedChips(
+  raw: unknown,
+  unlockedChips: readonly NeuralChipId[]
+): NeuralChipId[] {
+  const unlockedSet = new Set<NeuralChipId>(unlockedChips);
+  return Array.from(
+    new Set(
+      toStringArray(raw).filter(
+        (id): id is NeuralChipId =>
+          VALID_NEURAL_CHIPS.has(id as NeuralChipId) && unlockedSet.has(id as NeuralChipId)
+      )
+    )
+  ).slice(0, MAX_EQUIPPED_CHIPS);
+}
+
+export function sanitizeSectorMastery(raw: unknown): SectorMasteryMap {
+  if (!isRecord(raw)) return {};
+  const result: SectorMasteryMap = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (!SECTOR_MASTERY_KEY_REGEX.test(key)) continue;
+    if (!isRecord(value)) continue;
+    const proceduralCorrect = toNonNegativeInt(value.proceduralCorrect, 0);
+    const conceptualCorrect = toNonNegativeInt(value.conceptualCorrect, 0);
+    if (proceduralCorrect === 0 && conceptualCorrect === 0) continue;
+    result[Number(key)] = { proceduralCorrect, conceptualCorrect };
+  }
+  return result;
+}
+
+function estimateLegacyUpgradeSpend(upgrades: UpgradeLevels): number {
+  const triangularSpend = (level: number): number => {
+    const safe = toNonNegativeInt(level, 0);
+    return ((safe * (safe + 1)) / 2) * 100;
+  };
+  return (
+    triangularSpend(upgrades.hp) +
+    triangularSpend(upgrades.fp) +
+    triangularSpend(upgrades.hints)
+  );
+}
+
 export function hydrateSaveData(raw: unknown): PlayerStats | null {
   if (!isRecord(raw)) return null;
 
@@ -308,23 +373,40 @@ export function hydrateSaveData(raw: unknown): PlayerStats | null {
 
   const maxHp = 100 + upgrades.hp * 20;
   const maxFp = 100 + upgrades.fp * 20;
+  const knowledge = toNonNegativeInt(raw.knowledge, 0);
+  const unlockedDemos = migrateVariantList(raw.unlockedDemos);
+  const unlockedChips = sanitizeUnlockedChips(raw.unlockedChips);
+  const equippedChips = sanitizeEquippedChips(raw.equippedChips, unlockedChips);
+  const sectorMastery = sanitizeSectorMastery(raw.sectorMastery);
+  const lifetimeShardsExtracted =
+    typeof raw.lifetimeShardsExtracted === 'number' &&
+    Number.isFinite(raw.lifetimeShardsExtracted)
+      ? toNonNegativeInt(raw.lifetimeShardsExtracted, 0)
+      : toNonNegativeInt(
+          knowledge + estimateLegacyUpgradeSpend(upgrades) + unlockedDemos.length * 100,
+          0
+        );
 
   return {
     ...INITIAL_STATS,
-    knowledge: toNonNegativeInt(raw.knowledge, 0),
+    knowledge,
     hintPacks: toNonNegativeInt(raw.hintPacks, 0),
     neuralScars: toStringArray(raw.neuralScars),
     maxExtractedFloor: clampFloor(toNonNegativeInt(raw.maxExtractedFloor, 1)),
     upgrades,
     unlockedLore: Array.from(new Set(toStringArray(raw.unlockedLore))),
     encounteredTiers: migrateVariantList(raw.encounteredTiers),
-    unlockedDemos: migrateVariantList(raw.unlockedDemos),
+    unlockedDemos,
     activeReconBuff: sanitizeReconBuff(raw.activeReconBuff),
     reconRewardAvailable:
       typeof raw.reconRewardAvailable === 'boolean' ? raw.reconRewardAvailable : true,
     archetypeStats: sanitizeArchetypeStats(raw.archetypeStats),
     conceptSchedule: sanitizeConceptSchedule(raw.conceptSchedule),
     conceptStepCounter: toNonNegativeInt(raw.conceptStepCounter, 0),
+    unlockedChips,
+    equippedChips,
+    sectorMastery,
+    lifetimeShardsExtracted,
     maxHp,
     maxFp,
     hp: maxHp,
@@ -340,6 +422,9 @@ export function toPersistedSaveData(
   stats: PlayerStats,
   anonymousId: string = getOrCreateAnonymousId()
 ): PersistedSaveData {
+  const unlockedChips = sanitizeUnlockedChips(stats.unlockedChips);
+  const equippedChips = sanitizeEquippedChips(stats.equippedChips, unlockedChips);
+
   return {
     schemaVersion: SAVE_SCHEMA_VERSION,
     anonymousId,
@@ -362,6 +447,10 @@ export function toPersistedSaveData(
     archetypeStats: sanitizeArchetypeStats(stats.archetypeStats),
     conceptSchedule: sanitizeConceptSchedule(stats.conceptSchedule),
     conceptStepCounter: toNonNegativeInt(stats.conceptStepCounter, 0),
+    unlockedChips,
+    equippedChips,
+    sectorMastery: sanitizeSectorMastery(stats.sectorMastery),
+    lifetimeShardsExtracted: toNonNegativeInt(stats.lifetimeShardsExtracted, 0),
   };
 }
 

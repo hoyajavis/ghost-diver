@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  advanceSyncOnConceptual,
   APEX_INTRO_MS,
   APEX_SHIELD_LAYERS_DEFAULT,
   APEX_VULNERABLE_MULTIPLIER,
@@ -11,6 +12,7 @@ import {
   calculateComboStepDamage,
   calculateEnemyCounterDamage,
   calculateFpGain,
+  calculateParryDamage,
   calculatePlayerAttackDamage,
   calculateStrikeDamage,
   canToggleDirectStrike,
@@ -18,13 +20,17 @@ import {
   COMBAT_END_MS,
   COMBO_STEP_ADVANCE_MS,
   consumeHintPack,
+  consumeSyncOnProcedural,
   createCombatTurnState,
+  DAMPENED_LAG_FOCUS_SCAN_FP_GAIN,
+  DAMPENED_LAG_SHIELD_BREAK_FP_GAIN,
   FOCUS_SCAN_FP_GAIN,
   formatMultiSelectAnswer,
   getAtkUpStacks,
   getEffectiveStepCount,
   getInitialEnemyShieldLayers,
   getTotalHints,
+  INITIAL_SYNC_MATRIX_STATE,
   isApexEnemy,
   LAG_SCAR_FOCUS_SCAN_FP_GAIN,
   LAG_SCAR_SHIELD_BREAK_FP_GAIN,
@@ -853,6 +859,7 @@ describe('combatLogic', () => {
       shieldBroken: false,
       isVulnerable: false,
       fpGain: SHIELD_BREAK_FP_GAIN,
+      bonusEnemyDamage: 0,
     });
 
     const hit2 = resolveShieldBreakHit({
@@ -864,12 +871,14 @@ describe('combatLogic', () => {
       shieldBroken: true,
       isVulnerable: true,
       fpGain: LAG_SCAR_SHIELD_BREAK_FP_GAIN,
+      bonusEnemyDamage: 0,
     });
 
     const alreadyBroken = resolveShieldBreakHit({ shieldLayers: 0, neuralScars: [] });
     expect(alreadyBroken.newShieldLayers).toBe(0);
     expect(alreadyBroken.shieldBroken).toBe(false);
     expect(alreadyBroken.isVulnerable).toBe(false);
+    expect(alreadyBroken.bonusEnemyDamage).toBe(0);
   });
 
   it('defeats a Vulnerable Apex Boss in 1 full Combo Chain or 1 Direct Strike across all 12 tiers', () => {
@@ -956,5 +965,241 @@ describe('combatLogic', () => {
       expect(wrong.keepSameProblem).toBe(false);
       expect(wrong.fellBackToCombo).toBe(false);
     }
+  });
+
+  it('applies OVERCLOCK_CHIP (+50% extra Direct Strike Shards & +50% procedural FP gain)', () => {
+    // Procedural FP gain: QUICK 10->15, STEP 5->8, DIRECT 15->23
+    expect(calculateFpGain([], 'QUICK', ['OVERCLOCK_CHIP'])).toBe(15);
+    expect(calculateFpGain([], 'STEP', ['OVERCLOCK_CHIP'])).toBe(8);
+    expect(calculateFpGain([], 'DIRECT', ['OVERCLOCK_CHIP'])).toBe(23);
+
+    // Direct Strike Shard reward: Tier 1 base 18; +50% base +50% Overclock = 2.0x => 36
+    expect(
+      calculateCombatReward({
+        tier: 1,
+        directStrikeBonus: true,
+        equippedChips: ['OVERCLOCK_CHIP'],
+      })
+    ).toBe(36);
+
+    // Non-Direct Strike kill does not get the Overclock Direct Strike Shard bonus
+    expect(
+      calculateCombatReward({
+        tier: 1,
+        directStrikeBonus: false,
+        equippedChips: ['OVERCLOCK_CHIP'],
+      })
+    ).toBe(18);
+  });
+
+  it('applies NEURAL_DAMPENER softened CALCULATION_LAG FP gains across all FP actions', () => {
+    expect(calculateFpGain(['CALCULATION_LAG'], 'QUICK', ['NEURAL_DAMPENER'])).toBe(8);
+    expect(calculateFpGain(['CALCULATION_LAG'], 'STEP', ['NEURAL_DAMPENER'])).toBe(4);
+    expect(calculateFpGain(['CALCULATION_LAG'], 'DIRECT', ['NEURAL_DAMPENER'])).toBe(12);
+
+    // Stacks cleanly with OVERCLOCK_CHIP: Math.round(8 * 1.5) = 12
+    expect(
+      calculateFpGain(['CALCULATION_LAG'], 'QUICK', ['NEURAL_DAMPENER', 'OVERCLOCK_CHIP'])
+    ).toBe(12);
+
+    const dampenedLagStats = {
+      ...INITIAL_STATS,
+      fp: 20,
+      neuralScars: ['CALCULATION_LAG'],
+      equippedChips: ['NEURAL_DAMPENER' as const],
+    };
+    const scanRes = applyFocusScanSuccess(dampenedLagStats, 0);
+    expect(scanRes.fpGain).toBe(DAMPENED_LAG_FOCUS_SCAN_FP_GAIN);
+    expect(scanRes.nextStats.fp).toBe(32);
+
+    const shieldRes = resolveShieldBreakHit({
+      shieldLayers: 2,
+      neuralScars: ['CALCULATION_LAG'],
+      equippedChips: ['NEURAL_DAMPENER'],
+    });
+    expect(shieldRes.fpGain).toBe(DAMPENED_LAG_SHIELD_BREAK_FP_GAIN);
+  });
+
+  it('applies PATTERN_LENS Shield Break bonus enemy damage and Counter-Hack Parry halving', () => {
+    const shieldHit = resolveShieldBreakHit({
+      shieldLayers: 2,
+      neuralScars: [],
+      equippedChips: ['PATTERN_LENS'],
+      patrolBaseHp: 40,
+    });
+    expect(shieldHit.bonusEnemyDamage).toBe(18); // Math.round(40 * 0.45)
+
+    // No bonus damage when shieldLayers === 0
+    const noShieldHit = resolveShieldBreakHit({
+      shieldLayers: 0,
+      neuralScars: [],
+      equippedChips: ['PATTERN_LENS'],
+      patrolBaseHp: 40,
+    });
+    expect(noShieldHit.bonusEnemyDamage).toBe(0);
+
+    const lensStats = {
+      ...INITIAL_STATS,
+      equippedChips: ['PATTERN_LENS' as const],
+    };
+    expect(applyFocusScanSuccess(lensStats, 1, 50).bonusEnemyDamage).toBe(23); // Math.round(50 * 0.45)
+    expect(applyFocusScanSuccess(lensStats, 0, 50).bonusEnemyDamage).toBe(0);
+
+    // Counter-Hack Parry halves damage on success and preserves full damage on miss
+    expect(calculateParryDamage(15, true)).toBe(7);
+    expect(calculateParryDamage(15, false)).toBe(15);
+    expect(calculateParryDamage(10, true)).toBe(5);
+    expect(calculateParryDamage(-5, true)).toBe(0);
+    expect(calculateParryDamage(Number.NaN, true)).toBe(0);
+  });
+
+  it('tracks SYNC_MATRIX alternating chain up to level 3 and boosts damage & Shards', () => {
+    // No-op when SYNC_MATRIX is not equipped
+    expect(advanceSyncOnConceptual(INITIAL_SYNC_MATRIX_STATE, ['OVERCLOCK_CHIP'])).toEqual(
+      INITIAL_SYNC_MATRIX_STATE
+    );
+
+    const chips = ['SYNC_MATRIX'];
+    const c1 = advanceSyncOnConceptual(INITIAL_SYNC_MATRIX_STATE, chips);
+    expect(c1).toEqual({ chainLevel: 1, armed: true });
+
+    // Consecutive conceptual does not farm chainLevel while already armed
+    expect(advanceSyncOnConceptual(c1, chips)).toEqual({ chainLevel: 1, armed: true });
+
+    const p1 = consumeSyncOnProcedural(c1, chips);
+    expect(p1).toEqual({
+      triggered: true,
+      damageMultiplier: 1.25,
+      shardBonus: 0.2,
+      nextState: { chainLevel: 1, armed: false },
+    });
+
+    const c2 = advanceSyncOnConceptual(p1.nextState, chips);
+    expect(c2).toEqual({ chainLevel: 2, armed: true });
+    const p2 = consumeSyncOnProcedural(c2, chips);
+    expect(p2.damageMultiplier).toBe(1.5);
+    expect(p2.shardBonus).toBe(0.4);
+
+    const c3 = advanceSyncOnConceptual(p2.nextState, chips);
+    expect(c3).toEqual({ chainLevel: 3, armed: true });
+    const p3 = consumeSyncOnProcedural(c3, chips);
+    expect(p3.damageMultiplier).toBe(1.75);
+    expect(p3.shardBonus).toBe(0.6);
+
+    // Capped at level 3
+    const c4 = advanceSyncOnConceptual(p3.nextState, chips);
+    expect(c4).toEqual({ chainLevel: 3, armed: true });
+
+    // Breaking alternation resets chain
+    const broken = consumeSyncOnProcedural(p3.nextState, chips);
+    expect(broken).toEqual({
+      triggered: false,
+      damageMultiplier: 1,
+      shardBonus: 0,
+      nextState: INITIAL_SYNC_MATRIX_STATE,
+    });
+
+    // Wired into resolveCorrectAttack & calculateCombatReward
+    const quickTurn = createCombatTurnState({
+      problem: SAMPLE_QUICK_PROBLEM,
+      mode: 'ATTACK',
+      isApex: false,
+      runBuffs: [],
+    });
+    const syncedAttack = resolveCorrectAttack({
+      problem: SAMPLE_QUICK_PROBLEM,
+      turn: quickTurn,
+      currentEnemyHp: 50,
+      patrolBaseHp: 50,
+      neuralScars: [],
+      isApex: false,
+      runBuffs: [],
+      equippedChips: chips,
+      syncDamageMultiplier: 1.5,
+    });
+    // Base QUICK damage on 50 HP = ceil(50 * 0.6) = 30; * 1.5 = 45
+    expect(syncedAttack.damage).toBe(45);
+    expect(syncedAttack.newEnemyHp).toBe(5);
+
+    // Tier 1 base 18 with +0.4 syncShardBonus => Math.round(18 * 1.4) = 25
+    expect(calculateCombatReward({ tier: 1, syncShardBonus: 0.4 })).toBe(25);
+  });
+
+  it('preserves SYNC_MATRIX Step-0 bonus damage across full 2-step and 3-step COMBO chains against Apex Bosses', () => {
+    const chips = ['SYNC_MATRIX'];
+
+    // 3-step COMBO against Tier 2 Apex Boss (patrolBaseHp = 40, apexHp = 60)
+    const tier2PatrolHp = getPatrolBaseHpForTier(2); // 40
+    const tier2ApexHp = getApexHpForTier(2); // 60
+    const base3Step0 = Math.floor(tier2PatrolHp * 0.25); // 10
+    const synced3Step0 = Math.round(base3Step0 * 1.75); // 18 (+8 Sync bonus)
+
+    let turn3 = createCombatTurnState({
+      problem: SAMPLE_COMBO_PROBLEM,
+      mode: 'ATTACK',
+      isApex: true,
+      runBuffs: [],
+    });
+    let hp3 = tier2ApexHp;
+    let totalDamage3 = 0;
+
+    for (let step = 0; step < 3; step++) {
+      const res = resolveCorrectAttack({
+        problem: SAMPLE_COMBO_PROBLEM,
+        turn: turn3,
+        currentEnemyHp: hp3,
+        patrolBaseHp: tier2PatrolHp,
+        neuralScars: [],
+        isApex: true,
+        runBuffs: [],
+        equippedChips: chips,
+        syncDamageMultiplier: step === 0 ? 1.75 : 1,
+      });
+      totalDamage3 += res.damage;
+      hp3 = res.newEnemyHp;
+      turn3 = res.nextTurn;
+    }
+
+    expect(totalDamage3).toBe(tier2PatrolHp + (synced3Step0 - base3Step0)); // 48, not 40
+    expect(hp3).toBe(tier2ApexHp - totalDamage3); // 12
+
+    // 2-step COMBO against Tier 12 Apex Boss (patrolBaseHp = 140, apexHp = 210)
+    const twoStepCombo: MathProblem = {
+      ...SAMPLE_COMBO_PROBLEM,
+      steps: SAMPLE_COMBO_PROBLEM.steps!.slice(0, 2),
+    };
+    const tier12PatrolHp = getPatrolBaseHpForTier(12); // 140
+    const tier12ApexHp = getApexHpForTier(12); // 210
+    const base2Step0 = Math.floor(tier12PatrolHp * 0.4); // 56
+    const synced2Step0 = Math.round(base2Step0 * 1.75); // 98 (+42 Sync bonus)
+
+    let turn2 = createCombatTurnState({
+      problem: twoStepCombo,
+      mode: 'ATTACK',
+      isApex: true,
+      runBuffs: [],
+    });
+    let hp2 = tier12ApexHp;
+    let totalDamage2 = 0;
+
+    for (let step = 0; step < 2; step++) {
+      const res = resolveCorrectAttack({
+        problem: twoStepCombo,
+        turn: turn2,
+        currentEnemyHp: hp2,
+        patrolBaseHp: tier12PatrolHp,
+        neuralScars: [],
+        isApex: true,
+        runBuffs: [],
+        equippedChips: chips,
+        syncDamageMultiplier: step === 0 ? 1.75 : 1,
+      });
+      totalDamage2 += res.damage;
+      hp2 = res.newEnemyHp;
+      turn2 = res.nextTurn;
+    }
+
+    expect(totalDamage2).toBe(tier12PatrolHp + (synced2Step0 - base2Step0)); // 182, not 140
+    expect(hp2).toBe(tier12ApexHp - totalDamage2); // 28
   });
 });

@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   APEX_HP_MULTIPLIER,
   canDescendFromFloor,
+  canUpgrade,
   clampFloor,
   clampTier,
   computeBfsField,
+  DIVE_COST_PER_FLOOR,
   FLOORS_PER_SECTOR,
   getApexHpForTier,
   getApexShieldLayersForTier,
@@ -16,23 +18,64 @@ import {
   getReachablePositions,
   getShortestPathKeys,
   getTierForFloor,
+  getUpgradeCost,
+  HINT_PACK_COST,
   isFloorExitLocked,
+  MAX_DIVE_COST,
   MAX_ENEMIES_PER_FLOOR,
   MAX_FLOOR,
   MAX_TIER,
+  MAX_UPGRADE_LEVELS,
   posKey,
   SAFE_SPAWN_MIN_DISTANCE,
   stepEnemies,
+  UPGRADE_COST_TABLES,
 } from '../dungeonLogic';
 import { getRandomScar, POSSIBLE_SCARS } from '../scarData';
 import { Enemy } from '../../types';
 
 describe('dungeonLogic', () => {
-  it('computes dive costs accurately with Floor 1 free', () => {
+  it('computes rebalanced dive costs with Floor 1 free and a 450 Shard cap', () => {
+    expect(DIVE_COST_PER_FLOOR).toBe(15);
+    expect(MAX_DIVE_COST).toBe(450);
     expect(getDiveCost(1)).toBe(0);
     expect(getDiveCost(0)).toBe(0);
-    expect(getDiveCost(2)).toBe(50);
-    expect(getDiveCost(6)).toBe(250);
+    expect(getDiveCost(-5)).toBe(0);
+    expect(getDiveCost(Number.NaN)).toBe(0);
+    expect(getDiveCost(2)).toBe(15);
+    expect(getDiveCost(6)).toBe(75);
+    expect(getDiveCost(11)).toBe(150);
+    expect(getDiveCost(26)).toBe(375);
+    expect(getDiveCost(31)).toBe(450);
+    expect(getDiveCost(60)).toBe(450);
+  });
+
+  it('centralizes Workbench upgrade caps, cost tables, and Hint Pack pricing', () => {
+    expect(HINT_PACK_COST).toBe(40);
+    expect(MAX_UPGRADE_LEVELS).toEqual({ hp: 5, fp: 5, hints: 3 });
+    expect(UPGRADE_COST_TABLES.hp).toEqual([75, 150, 225, 300, 375]);
+    expect(UPGRADE_COST_TABLES.fp).toEqual([75, 150, 225, 300, 375]);
+    expect(UPGRADE_COST_TABLES.hints).toEqual([120, 240, 400]);
+
+    expect(canUpgrade('hp', 0)).toBe(true);
+    expect(canUpgrade('hp', 4)).toBe(true);
+    expect(canUpgrade('hp', 5)).toBe(false);
+    expect(canUpgrade('hp', 9)).toBe(false);
+    expect(canUpgrade('hp', Number.NaN)).toBe(false);
+
+    expect(getUpgradeCost('hp', 0)).toBe(75);
+    expect(getUpgradeCost('hp', 4)).toBe(375);
+    expect(getUpgradeCost('hp', 5)).toBeNull();
+
+    expect(getUpgradeCost('fp', 2)).toBe(225);
+    expect(getUpgradeCost('fp', 5)).toBeNull();
+
+    expect(canUpgrade('hints', 2)).toBe(true);
+    expect(canUpgrade('hints', 3)).toBe(false);
+    expect(getUpgradeCost('hints', 0)).toBe(120);
+    expect(getUpgradeCost('hints', 1)).toBe(240);
+    expect(getUpgradeCost('hints', 2)).toBe(400);
+    expect(getUpgradeCost('hints', 3)).toBeNull();
   });
 
   it('clamps floors and tiers cleanly to 1..MAX_FLOOR and 1..MAX_TIER', () => {

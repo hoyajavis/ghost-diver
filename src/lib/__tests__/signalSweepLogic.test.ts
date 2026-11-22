@@ -4,6 +4,7 @@ import { getConceptualArchetypesForTier } from '../generators/conceptual';
 import {
   ARCHETYPE_LABELS,
   calculateExtractedKnowledge,
+  calculateExtractionBreakdown,
   evaluateSignalSweepRun,
   generateSignalSweepDeck,
   getReachedTiers,
@@ -474,6 +475,48 @@ describe('signalSweepLogic', () => {
 
       const afterSingleAtk = removeRunBuff(original, 'ATK_UP');
       expect(afterSingleAtk).toEqual([RECON_BUFF_RUN_TOKENS.FREE_SHIELD, 'ATK_UP']);
+    });
+
+    it('adds SYNC_MATRIX leftover FP bonus in calculateExtractedKnowledge and calculateExtractionBreakdown', () => {
+      // Without SYNC_MATRIX, leftover FP adds 0
+      expect(calculateExtractionBreakdown(100, [], 80, ['OVERCLOCK_CHIP'])).toEqual({
+        baseKnowledge: 100,
+        reconBonus: 0,
+        syncFpBonus: 0,
+        total: 100,
+      });
+
+      // With SYNC_MATRIX alone
+      expect(calculateExtractionBreakdown(100, [], 80, ['SYNC_MATRIX'])).toEqual({
+        baseKnowledge: 100,
+        reconBonus: 0,
+        syncFpBonus: 40,
+        total: 140,
+      });
+      expect(calculateExtractedKnowledge(100, [], 80, ['SYNC_MATRIX'])).toBe(140);
+
+      // Combined with +15% Recon Bonus
+      expect(
+        calculateExtractionBreakdown(
+          100,
+          [RECON_BUFF_RUN_TOKENS.SHARD_BONUS_15],
+          65,
+          ['SYNC_MATRIX', 'PATTERN_LENS']
+        )
+      ).toEqual({
+        baseKnowledge: 100,
+        reconBonus: 15,
+        syncFpBonus: 32,
+        total: 147,
+      });
+      expect(
+        calculateExtractedKnowledge(
+          100,
+          [RECON_BUFF_RUN_TOKENS.SHARD_BONUS_15],
+          65,
+          ['SYNC_MATRIX', 'PATTERN_LENS']
+        )
+      ).toBe(147);
     });
   });
 });

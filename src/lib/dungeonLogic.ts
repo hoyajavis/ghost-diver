@@ -1,7 +1,21 @@
 import { Chest, DataLog, DungeonState, Enemy, Position } from '../types';
 import { ENEMY_TIERS } from './enemyData';
 
-export const DIVE_COST_PER_FLOOR = 50;
+export const DIVE_COST_PER_FLOOR = 15;
+export const MAX_DIVE_COST = 450;
+export const HINT_PACK_COST = 40;
+export const MAX_UPGRADE_LEVELS = {
+  hp: 5,
+  fp: 5,
+  hints: 3,
+} as const;
+export const UPGRADE_COST_TABLES = {
+  hp: [75, 150, 225, 300, 375],
+  fp: [75, 150, 225, 300, 375],
+  hints: [120, 240, 400],
+} as const;
+export type UpgradeType = keyof typeof MAX_UPGRADE_LEVELS;
+
 export const MAX_ENEMIES_PER_FLOOR = 5;
 export const APEX_HP_MULTIPLIER = 1.5;
 export const MAX_TIER = 12;
@@ -45,7 +59,20 @@ export function posKey(pos: Position): string {
 }
 
 export function getDiveCost(startFloor: number): number {
-  return Math.max(0, startFloor - 1) * DIVE_COST_PER_FLOOR;
+  if (!Number.isFinite(startFloor)) return 0;
+  return Math.min(MAX_DIVE_COST, Math.max(0, Math.floor(startFloor) - 1) * DIVE_COST_PER_FLOOR);
+}
+
+export function canUpgrade(type: UpgradeType, currentLevel: number): boolean {
+  if (!Number.isFinite(currentLevel)) return false;
+  const safeLevel = Math.max(0, Math.floor(currentLevel));
+  return safeLevel < MAX_UPGRADE_LEVELS[type];
+}
+
+export function getUpgradeCost(type: UpgradeType, currentLevel: number): number | null {
+  if (!canUpgrade(type, currentLevel)) return null;
+  const safeLevel = Math.max(0, Math.floor(currentLevel));
+  return UPGRADE_COST_TABLES[type][safeLevel] ?? null;
 }
 
 export function getBankableHintPacks(runHintPacks: number, preloadedHints: number): number {

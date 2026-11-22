@@ -106,15 +106,15 @@ describe('storage schema hydration', () => {
     expect(hydrated?.unlockedDemos).toEqual(['3-1', '3-2']);
   });
 
-  it('serializes persisted save data with schemaVersion 5, anonymousId, coarse UTC day, and v5 defaults', () => {
-    expect(SAVE_SCHEMA_VERSION).toBe(5);
+  it('serializes persisted save data with schemaVersion 6, anonymousId, coarse UTC day, and v6 defaults', () => {
+    expect(SAVE_SCHEMA_VERSION).toBe(6);
     const persisted = toPersistedSaveData({
       ...INITIAL_STATS,
       knowledge: 500,
       maxExtractedFloor: 15,
     });
 
-    expect(persisted.schemaVersion).toBe(5);
+    expect(persisted.schemaVersion).toBe(6);
     expect(persisted.anonymousId).toMatch(/^gd-[a-f0-9]{8}-[a-f0-9]{4}$/);
     expect(persisted.updatedAtDay).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(persisted.knowledge).toBe(500);
@@ -124,9 +124,13 @@ describe('storage schema hydration', () => {
     expect(persisted.archetypeStats).toEqual({});
     expect(persisted.conceptSchedule).toEqual({});
     expect(persisted.conceptStepCounter).toBe(0);
+    expect(persisted.unlockedChips).toEqual([]);
+    expect(persisted.equippedChips).toEqual([]);
+    expect(persisted.sectorMastery).toEqual({});
+    expect(persisted.lifetimeShardsExtracted).toBe(0);
   });
 
-  it('migrates schema v3 and v4 payloads to v5 defaults cleanly', () => {
+  it('migrates schema v3, v4, and v5 payloads to v6 defaults cleanly with lifetimeShardsExtracted backfill', () => {
     const hydratedV3 = hydrateSaveData({
       schemaVersion: 3,
       knowledge: 180,
@@ -143,6 +147,11 @@ describe('storage schema hydration', () => {
     expect(hydratedV3?.archetypeStats).toEqual({});
     expect(hydratedV3?.conceptSchedule).toEqual({});
     expect(hydratedV3?.conceptStepCounter).toBe(0);
+    expect(hydratedV3?.unlockedChips).toEqual([]);
+    expect(hydratedV3?.equippedChips).toEqual([]);
+    expect(hydratedV3?.sectorMastery).toEqual({});
+    // Backfill: 180 knowledge + 100 (hp lv1) + 100 (hints lv1) + 100 (1 demo) = 480
+    expect(hydratedV3?.lifetimeShardsExtracted).toBe(480);
 
     // Schema v4 payload without conceptSchedule / conceptStepCounter hydrates seamlessly
     const hydratedV4 = hydrateSaveData({
@@ -162,6 +171,16 @@ describe('storage schema hydration', () => {
     });
     expect(hydratedV4?.conceptSchedule).toEqual({});
     expect(hydratedV4?.conceptStepCounter).toBe(0);
+    expect(hydratedV4?.lifetimeShardsExtracted).toBe(240);
+
+    // Schema v5 payload with upgrades backfills lifetimeShardsExtracted safely
+    const hydratedV5 = hydrateSaveData({
+      schemaVersion: 5,
+      knowledge: 50,
+      upgrades: { hp: 2, fp: 1, hints: 0 }, // (1+2)*100 + 1*100 = 400
+      unlockedDemos: ['1-1', '2-1'], // 200
+    });
+    expect(hydratedV5?.lifetimeShardsExtracted).toBe(650);
 
     // Non-boolean reconRewardAvailable also defaults to true
     const malformedFlag = hydrateSaveData({
@@ -171,7 +190,7 @@ describe('storage schema hydration', () => {
     expect(malformedFlag?.reconRewardAvailable).toBe(true);
   });
 
-  it('round-trips activeReconBuff, reconRewardAvailable, archetypeStats (including EFFECT_OF_CHANGE), conceptSchedule, and conceptStepCounter', () => {
+  it('round-trips v6 fields (chips, sectorMastery, lifetimeShardsExtracted) alongside v5 fields', () => {
     saveSlot(1, {
       ...INITIAL_STATS,
       knowledge: 300,
@@ -187,6 +206,13 @@ describe('storage schema hydration', () => {
         '0:BENCHMARK_COMPARE': { box: 0, nextDueStep: 6, lastResult: 'MISS' },
       },
       conceptStepCounter: 5,
+      unlockedChips: ['STRUCTURAL_SIGHT', 'OVERCLOCK_CHIP', 'SYNC_MATRIX'],
+      equippedChips: ['OVERCLOCK_CHIP', 'SYNC_MATRIX'],
+      sectorMastery: {
+        1: { proceduralCorrect: 12, conceptualCorrect: 8 },
+        2: { proceduralCorrect: 5, conceptualCorrect: 4 },
+      },
+      lifetimeShardsExtracted: 1250,
     });
 
     const slots = loadSlots();
@@ -202,6 +228,17 @@ describe('storage schema hydration', () => {
       '0:BENCHMARK_COMPARE': { box: 0, nextDueStep: 6, lastResult: 'MISS' },
     });
     expect(slots[0].stats?.conceptStepCounter).toBe(5);
+    expect(slots[0].stats?.unlockedChips).toEqual([
+      'STRUCTURAL_SIGHT',
+      'OVERCLOCK_CHIP',
+      'SYNC_MATRIX',
+    ]);
+    expect(slots[0].stats?.equippedChips).toEqual(['OVERCLOCK_CHIP', 'SYNC_MATRIX']);
+    expect(slots[0].stats?.sectorMastery).toEqual({
+      1: { proceduralCorrect: 12, conceptualCorrect: 8 },
+      2: { proceduralCorrect: 5, conceptualCorrect: 4 },
+    });
+    expect(slots[0].stats?.lifetimeShardsExtracted).toBe(1250);
 
     const exported = exportAnonymizedCacheData();
     expect(exported.conceptMasteryDistribution).toEqual({
@@ -212,9 +249,9 @@ describe('storage schema hydration', () => {
     });
   });
 
-  it('sanitizes invalid recon buffs, strips unknown/PII archetype & conceptSchedule keys, clamps values, and omits malformed entries', () => {
+  it('sanitizes invalid recon buffs, chips, sectorMastery keys (1..12), archetype & conceptSchedule keys, and strips PII', () => {
     const dirtyPayload = {
-      schemaVersion: 5,
+      schemaVersion: 6,
       activeReconBuff: 'UNLIMITED_GOD_MODE',
       reconRewardAvailable: false,
       archetypeStats: {
@@ -232,6 +269,30 @@ describe('storage schema hydration', () => {
         '2:SPOT_THE_GLITCH': { box: 1, nextDueStep: 5, lastResult: 'HACKED' },
       },
       conceptStepCounter: -42,
+      unlockedChips: [
+        'OVERCLOCK_CHIP',
+        'OVERCLOCK_CHIP',
+        'PATTERN_LENS',
+        'SYNC_MATRIX',
+        'GOD_MODE_CHIP',
+        'jane@example.com',
+      ],
+      equippedChips: [
+        'NEURAL_DAMPENER', // locked -> stripped
+        'OVERCLOCK_CHIP',
+        'OVERCLOCK_CHIP', // duplicate -> deduped
+        'PATTERN_LENS',
+        'SYNC_MATRIX', // 3rd slot -> truncated to max 2
+      ],
+      sectorMastery: {
+        '0': { proceduralCorrect: 5, conceptualCorrect: 5 },
+        '1': { proceduralCorrect: 4.9, conceptualCorrect: -2 },
+        '12': { proceduralCorrect: 0, conceptualCorrect: 3 },
+        '13': { proceduralCorrect: 1, conceptualCorrect: 1 },
+        '2': { proceduralCorrect: 0, conceptualCorrect: 0 }, // omitted
+        'jane@example.com': { proceduralCorrect: 9, conceptualCorrect: 9 },
+      },
+      lifetimeShardsExtracted: -999,
     };
 
     const hydrated = hydrateSaveData(dirtyPayload);
@@ -244,6 +305,13 @@ describe('storage schema hydration', () => {
       '3:EFFECT_OF_CHANGE': { box: 4, nextDueStep: 15, lastResult: 'PASS' },
     });
     expect(hydrated?.conceptStepCounter).toBe(0);
+    expect(hydrated?.unlockedChips).toEqual(['OVERCLOCK_CHIP', 'PATTERN_LENS', 'SYNC_MATRIX']);
+    expect(hydrated?.equippedChips).toEqual(['OVERCLOCK_CHIP', 'PATTERN_LENS']);
+    expect(hydrated?.sectorMastery).toEqual({
+      1: { proceduralCorrect: 4, conceptualCorrect: 0 },
+      12: { proceduralCorrect: 0, conceptualCorrect: 3 },
+    });
+    expect(hydrated?.lifetimeShardsExtracted).toBe(0);
 
     const dirtyStats = {
       ...INITIAL_STATS,
@@ -259,6 +327,14 @@ describe('storage schema hydration', () => {
         'student-secret-pii': { box: 1, nextDueStep: 3, lastResult: 'MISS' },
       },
       conceptStepCounter: 9,
+      unlockedChips: ['STRUCTURAL_SIGHT', 'FAKE_CHIP_PII', 'PATTERN_LENS', 'SYNC_MATRIX'],
+      equippedChips: ['NEURAL_DAMPENER', 'STRUCTURAL_SIGHT', 'PATTERN_LENS', 'SYNC_MATRIX'],
+      sectorMastery: {
+        1: { proceduralCorrect: 2, conceptualCorrect: 1 },
+        99: { proceduralCorrect: 5, conceptualCorrect: 5 },
+        'student-mastery-pii': { proceduralCorrect: 3, conceptualCorrect: 3 },
+      },
+      lifetimeShardsExtracted: 420.8,
     };
 
     const persisted = toPersistedSaveData(dirtyStats as unknown as typeof INITIAL_STATS);
@@ -274,11 +350,17 @@ describe('storage schema hydration', () => {
     });
     expect(persisted.conceptSchedule).not.toHaveProperty('student-secret-pii');
     expect(persisted.conceptStepCounter).toBe(9);
+    expect(persisted.unlockedChips).toEqual(['STRUCTURAL_SIGHT', 'PATTERN_LENS', 'SYNC_MATRIX']);
+    expect(persisted.equippedChips).toEqual(['STRUCTURAL_SIGHT', 'PATTERN_LENS']);
+    expect(persisted.sectorMastery).toEqual({
+      1: { proceduralCorrect: 2, conceptualCorrect: 1 },
+    });
+    expect(persisted.lifetimeShardsExtracted).toBe(420);
 
     saveSlot(2, dirtyStats as unknown as typeof INITIAL_STATS);
     const exported = exportAnonymizedCacheData();
     const serialized = JSON.stringify(exported);
-    expect(exported.schemaVersion).toBe(5);
+    expect(exported.schemaVersion).toBe(6);
     expect(exported.conceptMasteryDistribution).toEqual({
       totalTracked: 1,
       byBox: { '0': 0, '1': 0, '2': 1, '3': 0, '4': 0 },
@@ -287,6 +369,8 @@ describe('storage schema hydration', () => {
     });
     expect(serialized).not.toContain('student-name-pii');
     expect(serialized).not.toContain('student-secret-pii');
+    expect(serialized).not.toContain('student-mastery-pii');
+    expect(serialized).not.toContain('FAKE_CHIP_PII');
     expect(serialized).not.toContain('INVALID_BUFF');
   });
 

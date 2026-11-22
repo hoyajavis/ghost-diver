@@ -13,6 +13,7 @@ import {
   selectWeightedConceptSlot,
 } from './conceptSpacedRep';
 import { clampFloor, clampTier, getTierForFloor } from './dungeonLogic';
+import { calculateSyncMatrixFpBonus } from './loadoutChips';
 import {
   getFoundationalConceptualGenerators,
   getTaggedConceptualGeneratorsForTier,
@@ -448,19 +449,44 @@ export function mergeArchetypeStats(
   return next;
 }
 
-export function calculateExtractedKnowledge(
+export interface ExtractionBreakdown {
+  baseKnowledge: number;
+  reconBonus: number;
+  syncFpBonus: number;
+  total: number;
+}
+
+export function calculateExtractionBreakdown(
   runKnowledge: number,
-  runBuffs: readonly string[]
-): number {
-  const safe =
+  runBuffs: readonly string[],
+  fp: number = 0,
+  equippedChips?: readonly string[]
+): ExtractionBreakdown {
+  const baseKnowledge =
     typeof runKnowledge === 'number' && Number.isFinite(runKnowledge)
       ? Math.max(0, Math.floor(runKnowledge))
       : 0;
-  if (runBuffs.includes(RECON_BUFF_RUN_TOKENS.SHARD_BONUS_15)) {
-    const bonusPercent = Math.round((1 + RECON_SHARD_EXTRACTION_BONUS) * 100);
-    return Math.round((safe * bonusPercent) / 100);
-  }
-  return safe;
+  const withRecon = runBuffs.includes(RECON_BUFF_RUN_TOKENS.SHARD_BONUS_15)
+    ? Math.round((baseKnowledge * Math.round((1 + RECON_SHARD_EXTRACTION_BONUS) * 100)) / 100)
+    : baseKnowledge;
+  const reconBonus = withRecon - baseKnowledge;
+  const syncFpBonus = calculateSyncMatrixFpBonus(fp, equippedChips);
+
+  return {
+    baseKnowledge,
+    reconBonus,
+    syncFpBonus,
+    total: withRecon + syncFpBonus,
+  };
+}
+
+export function calculateExtractedKnowledge(
+  runKnowledge: number,
+  runBuffs: readonly string[],
+  fp: number = 0,
+  equippedChips?: readonly string[]
+): number {
+  return calculateExtractionBreakdown(runKnowledge, runBuffs, fp, equippedChips).total;
 }
 
 export function removeRunBuff(runBuffs: readonly string[], buff: string): string[] {

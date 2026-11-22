@@ -9,6 +9,7 @@ import {
 } from '../types';
 import { clampTier } from './dungeonLogic';
 import { hasProblemSteps } from './inputUtils';
+import { hasEquippedChip } from './loadoutChips';
 
 // Core Recovery & Legacy Attack Constants
 export const MEDITATION_FP_COST = 50;
@@ -27,6 +28,19 @@ export const LAG_SCAR_SHIELD_BREAK_FP_GAIN = 5;
 export const APEX_SHIELD_LAYERS_DEFAULT = 2;
 export const APEX_VULNERABLE_MULTIPLIER = 2;
 export const BLUE_CACHE_FAIL_DAMAGE = 5;
+
+// Phase 5 Neural Loadout Chip Constants
+export const OVERCLOCK_DIRECT_SHARD_BONUS = 0.5;
+export const OVERCLOCK_FP_MULTIPLIER = 1.5;
+export const DAMPENED_LAG_FP_GAIN = 8;
+export const DAMPENED_LAG_STEP_FP_GAIN = 4;
+export const DAMPENED_LAG_DIRECT_FP_GAIN = 12;
+export const DAMPENED_LAG_FOCUS_SCAN_FP_GAIN = 12;
+export const DAMPENED_LAG_SHIELD_BREAK_FP_GAIN = 8;
+export const PATTERN_LENS_SHIELD_BREAK_HP_RATIO = 0.45;
+export const MAX_SYNC_MATRIX_CHAIN = 3;
+export const SYNC_MATRIX_DAMAGE_BONUS_PER_LEVEL = 0.25;
+export const SYNC_MATRIX_SHARD_BONUS_PER_LEVEL = 0.2;
 
 // Combat Timing Constants
 export const PATROL_INTRO_MS = 500;
@@ -57,6 +71,84 @@ const COMBO_WEIGHT_TABLES: Record<number, readonly number[]> = {
   3: [0.25, 0.35, 0.4],
   4: [0.2, 0.2, 0.25, 0.35],
 };
+
+export interface SyncMatrixState {
+  chainLevel: number;
+  armed: boolean;
+}
+
+export const INITIAL_SYNC_MATRIX_STATE: SyncMatrixState = {
+  chainLevel: 0,
+  armed: false,
+};
+
+export interface SyncConsumeResult {
+  triggered: boolean;
+  damageMultiplier: number;
+  shardBonus: number;
+  nextState: SyncMatrixState;
+}
+
+export function advanceSyncOnConceptual(
+  state: SyncMatrixState,
+  equippedChips?: readonly string[]
+): SyncMatrixState {
+  if (!hasEquippedChip(equippedChips, 'SYNC_MATRIX')) {
+    return INITIAL_SYNC_MATRIX_STATE;
+  }
+  const safeChain = Number.isFinite(state.chainLevel) ? Math.max(0, Math.floor(state.chainLevel)) : 0;
+  if (state.armed) {
+    return {
+      chainLevel: Math.min(MAX_SYNC_MATRIX_CHAIN, Math.max(1, safeChain)),
+      armed: true,
+    };
+  }
+  return {
+    chainLevel: Math.min(MAX_SYNC_MATRIX_CHAIN, safeChain + 1),
+    armed: true,
+  };
+}
+
+export function consumeSyncOnProcedural(
+  state: SyncMatrixState,
+  equippedChips?: readonly string[]
+): SyncConsumeResult {
+  if (!hasEquippedChip(equippedChips, 'SYNC_MATRIX') || !state.armed) {
+    return {
+      triggered: false,
+      damageMultiplier: 1,
+      shardBonus: 0,
+      nextState: INITIAL_SYNC_MATRIX_STATE,
+    };
+  }
+  const safeChain = Number.isFinite(state.chainLevel) ? Math.floor(state.chainLevel) : 0;
+  if (safeChain <= 0) {
+    return {
+      triggered: false,
+      damageMultiplier: 1,
+      shardBonus: 0,
+      nextState: INITIAL_SYNC_MATRIX_STATE,
+    };
+  }
+  const clampedLevel = Math.min(MAX_SYNC_MATRIX_CHAIN, safeChain);
+  return {
+    triggered: true,
+    damageMultiplier: 1 + clampedLevel * SYNC_MATRIX_DAMAGE_BONUS_PER_LEVEL,
+    shardBonus: Number((clampedLevel * SYNC_MATRIX_SHARD_BONUS_PER_LEVEL).toFixed(4)),
+    nextState: {
+      chainLevel: clampedLevel,
+      armed: false,
+    },
+  };
+}
+
+export function calculateParryDamage(rawDamage: number, parrySucceeded: boolean): number {
+  const safeDamage =
+    typeof rawDamage === 'number' && Number.isFinite(rawDamage)
+      ? Math.max(0, Math.floor(rawDamage))
+      : 0;
+  return parrySucceeded ? Math.floor(safeDamage / 2) : safeDamage;
+}
 
 export interface CombatTurnState {
   strikeMode: StrikeMode;
@@ -107,6 +199,7 @@ export interface FocusScanResolution {
   fpGain: number;
   newShieldLayers: number;
   shieldBroken: boolean;
+  bonusEnemyDamage: number;
 }
 
 export interface ShieldBreakResolution {
@@ -114,6 +207,7 @@ export interface ShieldBreakResolution {
   shieldBroken: boolean;
   isVulnerable: boolean;
   fpGain: number;
+  bonusEnemyDamage: number;
 }
 
 export function isApexEnemy(enemy: Pick<Enemy, 'type' | 'isApex'>): boolean {
@@ -139,14 +233,27 @@ export function canUseFocusScan(params: {
 
 export function applyFocusScanSuccess(
   stats: PlayerStats,
-  shieldLayers: number
+  shieldLayers: number,
+  patrolBaseHp?: number
 ): FocusScanResolution {
   const safeLayers = Number.isFinite(shieldLayers) ? Math.max(0, Math.floor(shieldLayers)) : 0;
-  const fpGain = stats.neuralScars.includes('CALCULATION_LAG')
-    ? LAG_SCAR_FOCUS_SCAN_FP_GAIN
+  const hasLag = stats.neuralScars.includes('CALCULATION_LAG');
+  const hasDampener = hasEquippedChip(stats.equippedChips, 'NEURAL_DAMPENER');
+  const fpGain = hasLag
+    ? hasDampener
+      ? DAMPENED_LAG_FOCUS_SCAN_FP_GAIN
+      : LAG_SCAR_FOCUS_SCAN_FP_GAIN
     : FOCUS_SCAN_FP_GAIN;
   const newShieldLayers = Math.max(0, safeLayers - 1);
   const shieldBroken = safeLayers > 0 && newShieldLayers === 0;
+  const bonusEnemyDamage =
+    safeLayers > 0 &&
+    hasEquippedChip(stats.equippedChips, 'PATTERN_LENS') &&
+    typeof patrolBaseHp === 'number' &&
+    Number.isFinite(patrolBaseHp) &&
+    patrolBaseHp > 0
+      ? Math.round(patrolBaseHp * PATTERN_LENS_SHIELD_BREAK_HP_RATIO)
+      : 0;
 
   return {
     nextStats: {
@@ -156,26 +263,42 @@ export function applyFocusScanSuccess(
     fpGain,
     newShieldLayers,
     shieldBroken,
+    bonusEnemyDamage,
   };
 }
 
 export function resolveShieldBreakHit(params: {
   shieldLayers: number;
   neuralScars: string[];
+  equippedChips?: readonly string[];
+  patrolBaseHp?: number;
 }): ShieldBreakResolution {
-  const { shieldLayers, neuralScars } = params;
+  const { shieldLayers, neuralScars, equippedChips, patrolBaseHp } = params;
   const safeLayers = Number.isFinite(shieldLayers) ? Math.max(0, Math.floor(shieldLayers)) : 0;
   const newShieldLayers = Math.max(0, safeLayers - 1);
   const shieldBroken = safeLayers > 0 && newShieldLayers === 0;
-  const fpGain = neuralScars.includes('CALCULATION_LAG')
-    ? LAG_SCAR_SHIELD_BREAK_FP_GAIN
+  const hasLag = neuralScars.includes('CALCULATION_LAG');
+  const hasDampener = hasEquippedChip(equippedChips, 'NEURAL_DAMPENER');
+  const fpGain = hasLag
+    ? hasDampener
+      ? DAMPENED_LAG_SHIELD_BREAK_FP_GAIN
+      : LAG_SCAR_SHIELD_BREAK_FP_GAIN
     : SHIELD_BREAK_FP_GAIN;
+  const bonusEnemyDamage =
+    safeLayers > 0 &&
+    hasEquippedChip(equippedChips, 'PATTERN_LENS') &&
+    typeof patrolBaseHp === 'number' &&
+    Number.isFinite(patrolBaseHp) &&
+    patrolBaseHp > 0
+      ? Math.round(patrolBaseHp * PATTERN_LENS_SHIELD_BREAK_HP_RATIO)
+      : 0;
 
   return {
     newShieldLayers,
     shieldBroken,
     isVulnerable: shieldBroken,
     fpGain,
+    bonusEnemyDamage,
   };
 }
 
@@ -380,16 +503,35 @@ export function calculateEnemyCounterDamage(tier: number, isApex: boolean = fals
 
 export function calculateFpGain(
   neuralScars: string[],
-  kind: 'STEP' | 'QUICK' | 'DIRECT' = 'QUICK'
+  kind: 'STEP' | 'QUICK' | 'DIRECT' = 'QUICK',
+  equippedChips?: readonly string[]
 ): number {
   const hasLag = neuralScars.includes('CALCULATION_LAG');
+  const hasDampener = hasEquippedChip(equippedChips, 'NEURAL_DAMPENER');
+  let base: number;
   if (kind === 'STEP') {
-    return hasLag ? LAG_SCAR_STEP_FP_GAIN : BASE_STEP_FP_GAIN;
+    base = hasLag
+      ? hasDampener
+        ? DAMPENED_LAG_STEP_FP_GAIN
+        : LAG_SCAR_STEP_FP_GAIN
+      : BASE_STEP_FP_GAIN;
+  } else if (kind === 'DIRECT') {
+    base = hasLag
+      ? hasDampener
+        ? DAMPENED_LAG_DIRECT_FP_GAIN
+        : LAG_SCAR_DIRECT_FP_GAIN
+      : DIRECT_STRIKE_FP_GAIN;
+  } else {
+    base = hasLag
+      ? hasDampener
+        ? DAMPENED_LAG_FP_GAIN
+        : LAG_SCAR_FP_GAIN
+      : BASE_FP_GAIN;
   }
-  if (kind === 'DIRECT') {
-    return hasLag ? LAG_SCAR_DIRECT_FP_GAIN : DIRECT_STRIKE_FP_GAIN;
-  }
-  return hasLag ? LAG_SCAR_FP_GAIN : BASE_FP_GAIN;
+
+  return hasEquippedChip(equippedChips, 'OVERCLOCK_CHIP')
+    ? Math.round(base * OVERCLOCK_FP_MULTIPLIER)
+    : base;
 }
 
 export function calculateCombatReward(
@@ -400,6 +542,8 @@ export function calculateCombatReward(
         directStrikeBonus?: boolean;
         runBuffs?: string[];
         isApex?: boolean;
+        equippedChips?: readonly string[];
+        syncShardBonus?: number;
       }
 ): number {
   const {
@@ -407,15 +551,27 @@ export function calculateCombatReward(
     directStrikeBonus = false,
     runBuffs = [],
     isApex = false,
+    equippedChips,
+    syncShardBonus = 0,
   } = typeof tierOrParams === 'number' ? { tier: tierOrParams } : tierOrParams;
 
   const safeTier = clampTier(tier);
   const base = SHARD_BASE_OFFSET + safeTier * SHARD_PER_TIER;
   const apexMultiplier = 1 + (isApex ? APEX_SHARD_BONUS : 0);
+  const overclockDirectBonus =
+    directStrikeBonus && hasEquippedChip(equippedChips, 'OVERCLOCK_CHIP')
+      ? OVERCLOCK_DIRECT_SHARD_BONUS
+      : 0;
+  const safeSyncBonus =
+    typeof syncShardBonus === 'number' && Number.isFinite(syncShardBonus)
+      ? Math.max(0, syncShardBonus)
+      : 0;
   const bonusMultiplier =
     1 +
     (directStrikeBonus ? DIRECT_STRIKE_SHARD_BONUS : 0) +
-    getAtkUpStacks(runBuffs) * ATK_UP_SHARD_BONUS_PER_STACK;
+    overclockDirectBonus +
+    getAtkUpStacks(runBuffs) * ATK_UP_SHARD_BONUS_PER_STACK +
+    safeSyncBonus;
 
   return Math.round(base * apexMultiplier * bonusMultiplier);
 }
@@ -429,6 +585,8 @@ export function resolveCorrectAttack(params: {
   isApex: boolean;
   runBuffs: string[];
   isVulnerable?: boolean;
+  equippedChips?: readonly string[];
+  syncDamageMultiplier?: number;
 }): CorrectResolution {
   const {
     problem,
@@ -439,6 +597,8 @@ export function resolveCorrectAttack(params: {
     isApex,
     runBuffs,
     isVulnerable = false,
+    equippedChips,
+    syncDamageMultiplier = 1,
   } = params;
   const isComboStep =
     problem.complexity === 'COMBO' &&
@@ -451,7 +611,7 @@ export function resolveCorrectAttack(params: {
     ? Math.max(1, turn.effectiveStepCount || getEffectiveStepCount(totalRawSteps, isApex, runBuffs))
     : 0;
 
-  const damage = calculateStrikeDamage({
+  const baseDamage = calculateStrikeDamage({
     strikeMode: turn.strikeMode,
     complexity: problem.complexity,
     stepIndex: turn.stepIndex,
@@ -461,6 +621,14 @@ export function resolveCorrectAttack(params: {
     isVulnerable,
   });
 
+  const safeSyncMult =
+    typeof syncDamageMultiplier === 'number' &&
+    Number.isFinite(syncDamageMultiplier) &&
+    syncDamageMultiplier > 1
+      ? syncDamageMultiplier
+      : 1;
+  const damage = safeSyncMult > 1 ? Math.round(baseDamage * safeSyncMult) : baseDamage;
+
   const newEnemyHp = Math.max(0, currentEnemyHp - damage);
   const isVictory = newEnemyHp <= 0;
 
@@ -469,7 +637,7 @@ export function resolveCorrectAttack(params: {
     : problem.complexity === 'COMBO' && turn.strikeMode === 'DIRECT'
       ? 'DIRECT'
       : 'QUICK';
-  const fpGain = calculateFpGain(neuralScars, fpKind);
+  const fpGain = calculateFpGain(neuralScars, fpKind, equippedChips);
 
   const directStrikeUsedOnKill =
     isVictory && problem.complexity === 'COMBO' && turn.strikeMode === 'DIRECT';
@@ -507,7 +675,7 @@ export function resolveCorrectAttack(params: {
         effectiveStepCount: effectiveSteps,
         comboStreak: turn.comboStreak + 1,
         stepMissCount: 0,
-        damageDealtThisProblem: turn.damageDealtThisProblem + damage,
+        damageDealtThisProblem: turn.damageDealtThisProblem + baseDamage,
         solvedBreadcrumbs: [...turn.solvedBreadcrumbs, breadcrumb],
         directStrikeUsedOnKill,
       },
@@ -688,6 +856,7 @@ export function applyTacticalHint(params: {
       isApex,
       runBuffs: stats.runBuffs,
       isVulnerable,
+      equippedChips: stats.equippedChips,
     });
 
     return {

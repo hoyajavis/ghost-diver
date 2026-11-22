@@ -41,6 +41,20 @@ export interface ConceptBoxDistribution {
   missCount: number;
 }
 
+export type NeuralChipId =
+  | 'OVERCLOCK_CHIP'
+  | 'PATTERN_LENS'
+  | 'SYNC_MATRIX'
+  | 'STRUCTURAL_SIGHT'
+  | 'NEURAL_DAMPENER';
+
+export interface SectorMasteryEntry {
+  proceduralCorrect: number;
+  conceptualCorrect: number;
+}
+
+export type SectorMasteryMap = Record<number, SectorMasteryEntry>;
+
 export interface PlayerStats {
   hp: number;
   maxHp: number;
@@ -62,6 +76,10 @@ export interface PlayerStats {
   archetypeStats: ArchetypeAccuracyMap;
   conceptSchedule: ConceptScheduleMap;
   conceptStepCounter: number;
+  unlockedChips: NeuralChipId[];
+  equippedChips: NeuralChipId[];
+  sectorMastery: SectorMasteryMap;
+  lifetimeShardsExtracted: number;
 }
 
 export interface Position {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { PlayerStats, Position, ReconBuffType } from '../types';
+import { NeuralChipId, PlayerStats, Position, ReconBuffType } from '../types';
 import { SignalSweepNodeOutcome } from '../lib/signalSweepLogic';
 import { ConceptOutcome } from '../lib/conceptSpacedRep';
 import { TrainingSim } from './TrainingSim';
@@ -26,6 +26,7 @@ import {
   User,
   Info,
   Settings,
+  BarChart3,
   X,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -36,6 +37,7 @@ interface Props {
   onHealScar: (scar: string) => void;
   onCalibrateScar: (scar: string) => void;
   onUpgrade: (type: 'hp' | 'fp' | 'hints' | 'buy_hint') => void;
+  onToggleEquipChip: (chipId: NeuralChipId) => void;
   onUnlockDemo: (variantId: string) => void;
   onRecordConceptOutcome: (outcome: ConceptOutcome) => void;
   onRecordArchetypeStats: (outcomes: readonly SignalSweepNodeOutcome[]) => void;
@@ -63,7 +65,7 @@ const STATIONS: Record<Exclude<BaseStation, 'NONE'>, StationConfig> = {
     icon: <Activity className="w-5 h-5 text-neon-cyan" />,
     shortLabel: 'Dive',
     label: 'Neural Chair',
-    summary: 'Launch a dive or repair Neural Scars',
+    summary: 'Launch a dive, equip Chips, or repair Scars',
   },
   UPGRADES: {
     x: 0,
@@ -79,7 +81,7 @@ const STATIONS: Record<Exclude<BaseStation, 'NONE'>, StationConfig> = {
     icon: <Terminal className="w-5 h-5 text-gb-3" />,
     shortLabel: 'Logs',
     label: 'Archivist Logs',
-    summary: 'Read decrypted archive data logs',
+    summary: 'Sector Mastery readout & decrypted logs',
   },
   GARDEN: {
     x: 2,
@@ -113,6 +115,7 @@ export const HomeBase: React.FC<Props> = ({
   onHealScar,
   onCalibrateScar,
   onUpgrade,
+  onToggleEquipChip,
   onUnlockDemo,
   onRecordConceptOutcome,
   onRecordArchetypeStats,
@@ -121,6 +124,7 @@ export const HomeBase: React.FC<Props> = ({
 }) => {
   const [playerPos, setPlayerPos] = useState<Position>({ x: 2, y: 3 });
   const [activeStation, setActiveStation] = useState<BaseStation>('NONE');
+  const [archivistTab, setArchivistTab] = useState<'MASTERY' | 'LOGS'>('LOGS');
   const [selectedFloor, setSelectedFloor] = useState(1);
   const [activeSimTier, setActiveSimTier] = useState<string | null>(null);
   const [calibratingScar, setCalibratingScar] = useState<string | null>(null);
@@ -393,6 +397,9 @@ export const HomeBase: React.FC<Props> = ({
                     key={key}
                     type="button"
                     onClick={() => {
+                      if (key === 'LORE') {
+                        setArchivistTab('LOGS');
+                      }
                       setPlayerPos({ x: station.x, y: station.y });
                       setActiveStation(key);
                     }}
@@ -412,6 +419,47 @@ export const HomeBase: React.FC<Props> = ({
               }
             )}
           </div>
+
+          {/* Sector Mastery Mini-Card */}
+          {(() => {
+            const masteryEntries = Object.values(stats.sectorMastery);
+            const totalProcedural = masteryEntries.reduce(
+              (sum, e) => sum + (e?.proceduralCorrect ?? 0),
+              0
+            );
+            const totalConceptual = masteryEntries.reduce(
+              (sum, e) => sum + (e?.conceptualCorrect ?? 0),
+              0
+            );
+            return (
+              <div className="mt-1 bg-gb-0 border border-gb-3/70 p-3 gb-border-sm space-y-2 tabular-nums">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black uppercase tracking-wider text-purple-300 flex items-center gap-1.5">
+                    <BarChart3 className="w-3.5 h-3.5 shrink-0" />
+                    Sector Mastery
+                  </span>
+                  <span className="text-[11px] font-mono text-gb-2">
+                    {totalProcedural + totalConceptual} total
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs font-mono">
+                  <span className="text-neon-cyan">Proc: {totalProcedural}</span>
+                  <span className="text-purple-300">Conc: {totalConceptual}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setArchivistTab('MASTERY');
+                    setPlayerPos({ x: STATIONS.LORE.x, y: STATIONS.LORE.y });
+                    setActiveStation('LORE');
+                  }}
+                  className="w-full min-h-9 py-1.5 px-2.5 border border-neon-cyan/70 text-neon-cyan hover:bg-neon-cyan hover:text-gb-0 text-[11px] font-black uppercase tracking-wider transition-colors"
+                >
+                  Open Mastery Readout
+                </button>
+              </div>
+            );
+          })()}
         </aside>
       </div>
 
@@ -444,14 +492,27 @@ export const HomeBase: React.FC<Props> = ({
                   onStartDive={onStartDive}
                   onHealScar={onHealScar}
                   onCalibrateScar={(scar) => setCalibratingScar(scar)}
+                  onToggleEquipChip={onToggleEquipChip}
                 />
               )}
 
               {activeStation === 'UPGRADES' && <WorkbenchStation stats={stats} onUpgrade={onUpgrade} />}
 
-              {activeStation === 'LORE' && <ArchivistStation unlockedLore={stats.unlockedLore} />}
+              {activeStation === 'LORE' && (
+                <ArchivistStation
+                  unlockedLore={stats.unlockedLore}
+                  sectorMastery={stats.sectorMastery}
+                  maxExtractedFloor={stats.maxExtractedFloor}
+                  initialTab={archivistTab}
+                />
+              )}
 
-              {activeStation === 'GARDEN' && <GardenStation knowledge={stats.knowledge} />}
+              {activeStation === 'GARDEN' && (
+                <GardenStation
+                  lifetimeShardsExtracted={stats.lifetimeShardsExtracted}
+                  sectorMastery={stats.sectorMastery}
+                />
+              )}
 
               {activeStation === 'GUIDE' && <ManualStation />}
 

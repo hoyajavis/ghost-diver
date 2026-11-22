@@ -65,7 +65,14 @@ export const ManualStation: React.FC = () => {
         </section>
 
         <section>
-          <h4 className="text-xs font-mono text-neon-cyan font-bold uppercase mb-1">8. Controls &amp; Shortcuts</h4>
+          <h4 className="text-xs font-mono text-purple-300 font-bold uppercase mb-1">8. Neural Loadout Chips &amp; Mastery</h4>
+          <p className="text-gb-2">
+            Equip up to <strong>2 Neural Loadout Chips</strong> at the <strong>Neural Chair</strong> before each dive. Chips unlock permanently via gameplay milestones—opening Blue Caches, defeating Sector Apex Bosses, clearing Neural Scars, and scoring ≥ 70% in Signal Sweep—with no extra currency required. Track your Procedural vs. Conceptual balance per sector inside the <strong>Archivist</strong> station&apos;s <strong>Sector Mastery</strong> tab; your <strong>Green-Print</strong> garden grows permanently with lifetime extracted Shards and mastery.
+          </p>
+        </section>
+
+        <section>
+          <h4 className="text-xs font-mono text-neon-cyan font-bold uppercase mb-1">9. Controls &amp; Shortcuts</h4>
           <ul className="text-gb-2 space-y-1 text-xs font-mono">
             <li><span className="text-gb-3 font-bold">Shift + D</span> — Toggle Direct Strike (before Step 1)</li>
             <li><span className="text-gb-3 font-bold">Shift + H</span> — Use Tactical Hint Pack (Clue + Shield)</li>

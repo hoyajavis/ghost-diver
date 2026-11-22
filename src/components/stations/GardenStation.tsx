@@ -1,12 +1,15 @@
 import React from 'react';
 import { TreePine } from 'lucide-react';
+import { SectorMasteryMap } from '../../types';
+import { calculateGardenRestoration } from '../../lib/loadoutChips';
 
 interface Props {
-  knowledge: number;
+  lifetimeShardsExtracted: number;
+  sectorMastery: SectorMasteryMap;
 }
 
-export const GardenStation: React.FC<Props> = ({ knowledge }) => {
-  const restorationPercent = Math.min(100, Math.floor(knowledge / 5));
+export const GardenStation: React.FC<Props> = ({ lifetimeShardsExtracted, sectorMastery }) => {
+  const restorationPercent = calculateGardenRestoration(lifetimeShardsExtracted, sectorMastery);
 
   return (
     <div className="space-y-4">
@@ -15,11 +18,11 @@ export const GardenStation: React.FC<Props> = ({ knowledge }) => {
         The Green-Print
       </h3>
       <p className="text-sm text-gb-2 leading-relaxed font-sans">
-        A digital-organic hybrid garden. It grows as you recover lost Knowledge Shards from the archives—a world learning to breathe again.
+        A digital-organic hybrid garden. It grows permanently with your lifetime extracted Shards and Sector Mastery—spending Shards at the Workbench never regresses restoration.
       </p>
       <div className="grid grid-cols-5 gap-2 bg-gb-0 p-4 gb-border-sm">
         {Array.from({ length: 10 }).map((_, i) => {
-          const isActive = knowledge / 10 >= (i + 1) * 5;
+          const isActive = restorationPercent >= (i + 1) * 10;
           return (
             <div
               key={i}
@@ -32,8 +35,13 @@ export const GardenStation: React.FC<Props> = ({ knowledge }) => {
           );
         })}
       </div>
-      <div className="text-center text-xs text-neon-green font-bold uppercase tracking-wider tabular-nums">
-        Restoration Level: {restorationPercent}%
+      <div className="text-center space-y-1 tabular-nums">
+        <div className="text-xs text-neon-green font-bold uppercase tracking-wider">
+          Restoration Level: {restorationPercent}%
+        </div>
+        <div className="text-[11px] text-gb-2 font-mono">
+          Lifetime Extracted: {lifetimeShardsExtracted} Shards
+        </div>
       </div>
     </div>
   );

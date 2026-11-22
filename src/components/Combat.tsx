@@ -12,19 +12,23 @@ import { applyConceptOutcomeToStats } from '../lib/conceptSpacedRep';
 import { ConceptualGenerationOptions } from '../lib/generators/conceptual';
 import { ENEMY_TIERS } from '../lib/enemyData';
 import {
+  advanceSyncOnConceptual,
   APEX_INTRO_MS,
   applyFocusScanSuccess,
   applyMeditationRecovery,
   applyTacticalHint,
   calculateCombatReward,
+  calculateParryDamage,
   canToggleDirectStrike,
   canUseFocusScan,
   CombatTurnState,
+  consumeSyncOnProcedural,
   createCombatTurnState,
   formatMultiSelectAnswer,
   getAtkUpStacks,
   getInitialEnemyShieldLayers,
   getTotalHints,
+  INITIAL_SYNC_MATRIX_STATE,
   isApexEnemy,
   MEDITATION_FP_COST,
   MEDITATION_HEAL_AMOUNT,
@@ -33,9 +37,13 @@ import {
   resolveCorrectAttack,
   resolveShieldBreakHit,
   resolveWrongAttack,
+  SYNC_MATRIX_DAMAGE_BONUS_PER_LEVEL,
+  SyncMatrixState,
   toggleStrikeMode,
+  WrongResolution,
 } from '../lib/combatLogic';
 import { getPatrolBaseHpForTier } from '../lib/dungeonLogic';
+import { hasEquippedChip, NEURAL_CHIP_MAP, recordSectorMastery } from '../lib/loadoutChips';
 import { RECON_BUFF_RUN_TOKENS, removeRunBuff } from '../lib/signalSweepLogic';
 import {
   getActiveChoices,
@@ -48,7 +56,7 @@ import {
 import { validateAnswer } from '../lib/answerValidator';
 import { getScarName } from '../lib/scarData';
 import { recordProblemTelemetry } from '../lib/storage';
-import { Crown, Shield, ShieldAlert, Skull, Zap, User, Settings, X, LogOut } from 'lucide-react';
+import { Cpu, Crown, Shield, ShieldAlert, Skull, Zap, User, Settings, X, LogOut } from 'lucide-react';
 import { ProblemInputRouter } from './inputs/ProblemInputRouter';
 import { ProblemPromptCard } from './ProblemPromptCard';
 import { motion, AnimatePresence } from 'motion/react';
@@ -64,6 +72,14 @@ interface Props {
   onWin: (knowledgeGained: number) => void;
   onLose: () => void;
   onUpdateStats: (newStats: PlayerStats) => void;
+}
+
+interface PendingParryState {
+  parryProblem: MathProblem;
+  originalMode: CombatMode;
+  originalProblem: MathProblem;
+  wrongRes: WrongResolution;
+  rawDamage: number;
 }
 
 function getProblemTypeForMode(combatMode: CombatMode): ProblemType {
@@ -88,6 +104,12 @@ export const Combat: React.FC<Props> = ({
   const atkUpStacks = getAtkUpStacks(stats.runBuffs);
   const hasReconShield = stats.runBuffs.includes(RECON_BUFF_RUN_TOKENS.FREE_SHIELD);
   const hasReconShard = stats.runBuffs.includes(RECON_BUFF_RUN_TOKENS.SHARD_BONUS_15);
+  const hasOverclock = hasEquippedChip(stats.equippedChips, 'OVERCLOCK_CHIP');
+  const hasPatternLens = hasEquippedChip(stats.equippedChips, 'PATTERN_LENS');
+  const hasSyncMatrix = hasEquippedChip(stats.equippedChips, 'SYNC_MATRIX');
+  const hasStructuralSight = hasEquippedChip(stats.equippedChips, 'STRUCTURAL_SIGHT');
+  const hasNeuralDampener = hasEquippedChip(stats.equippedChips, 'NEURAL_DAMPENER');
+  const directStrikeBonusPercent = hasOverclock ? 100 : 50;
   const initialShieldLayers = getInitialEnemyShieldLayers(enemy);
   const maxShieldLayers = enemy.maxShieldLayers ?? initialShieldLayers;
   const initialMode: CombatMode = initialShieldLayers > 0 ? 'SHIELD_BREAK' : 'ATTACK';
@@ -114,6 +136,9 @@ export const Combat: React.FC<Props> = ({
       runBuffs: stats.runBuffs,
     })
   );
+  const [syncState, setSyncState] = useState<SyncMatrixState>(INITIAL_SYNC_MATRIX_STATE);
+  const bestSyncShardBonusRef = useRef<number>(0);
+  const [pendingParry, setPendingParry] = useState<PendingParryState | null>(null);
   const [hintShieldActive, setHintShieldActive] = useState(false);
   const effectiveShieldActive = hintShieldActive || hasReconShield;
   const [activeClue, setActiveClue] = useState<string | null>(null);
@@ -188,11 +213,18 @@ export const Combat: React.FC<Props> = ({
     if (activeMode === 'ATTACK' || !activeProblem.archetype) {
       return nextStats;
     }
-    return applyConceptOutcomeToStats(nextStats, {
+    const updated = applyConceptOutcomeToStats(nextStats, {
       tier,
       archetype: activeProblem.archetype,
       correct,
     });
+    if (!correct) {
+      return updated;
+    }
+    return {
+      ...updated,
+      sectorMastery: recordSectorMastery(updated.sectorMastery, tier, 'CONCEPTUAL'),
+    };
   };
 
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
@@ -240,20 +272,26 @@ export const Combat: React.FC<Props> = ({
     });
   };
 
-  const activeStepIndex = turn.strikeMode === 'COMBO' ? turn.stepIndex : null;
-  const currentStep = getCurrentStep(problem, activeStepIndex);
-  const expectedAnswer = getExpectedAnswer(problem, activeStepIndex);
-  const currentInputType = inferInputType(problem, currentStep);
-  const activeChoices = getActiveChoices(problem, currentStep);
-  const activeMultiSelectOptions = getActiveMultiSelectOptions(problem, currentStep);
-  const requireSimplified = getRequireSimplified(problem, currentStep);
-  const directStrikeAvailable = canToggleDirectStrike({ problem, mode, turn });
-  const focusScanAvailable = canUseFocusScan({ focusScanUsed, mode, shieldLayers });
+  const displayProblem = pendingParry ? pendingParry.parryProblem : problem;
+  const displayStrikeMode = pendingParry ? 'DIRECT' : turn.strikeMode;
+  const displayStepIndex = pendingParry
+    ? null
+    : turn.strikeMode === 'COMBO'
+      ? turn.stepIndex
+      : null;
+  const currentStep = getCurrentStep(displayProblem, displayStepIndex);
+  const expectedAnswer = getExpectedAnswer(displayProblem, displayStepIndex);
+  const currentInputType = inferInputType(displayProblem, currentStep);
+  const activeChoices = getActiveChoices(displayProblem, currentStep);
+  const activeMultiSelectOptions = getActiveMultiSelectOptions(displayProblem, currentStep);
+  const requireSimplified = getRequireSimplified(displayProblem, currentStep);
+  const directStrikeAvailable = !pendingParry && canToggleDirectStrike({ problem, mode, turn });
+  const focusScanAvailable = !pendingParry && canUseFocusScan({ focusScanUsed, mode, shieldLayers });
   const includeInclusiveRelationship =
     expectedAnswer === '≤' ||
     expectedAnswer === '≥' ||
-    problem.question.includes('≤') ||
-    problem.question.includes('≥');
+    displayProblem.question.includes('≤') ||
+    displayProblem.question.includes('≥');
 
   const diverLabel = `Diver 0${slotId ?? 1}`;
   const enemyDisplayName =
@@ -332,11 +370,93 @@ export const Combat: React.FC<Props> = ({
       isChoice: Boolean(activeChoices),
     });
 
+    if (pendingParry) {
+      const activeParry = pendingParry;
+      const finalDamage = calculateParryDamage(activeParry.rawDamage, isCorrect);
+      const newPlayerHp = Math.max(0, stats.hp - finalDamage);
+      const isDefeat = newPlayerHp <= 0;
+
+      emitProblemTelemetry(isCorrect, 'SHIELD_BREAK', activeParry.parryProblem);
+      if (isCorrect) {
+        setSyncState((prev) => advanceSyncOnConceptual(prev, stats.equippedChips));
+      }
+
+      onUpdateStats(
+        withConceptOutcome(
+          {
+            ...stats,
+            hp: newPlayerHp,
+          },
+          'SHIELD_BREAK',
+          activeParry.parryProblem,
+          isCorrect
+        )
+      );
+
+      setTurn(activeParry.wrongRes.nextTurn);
+      setPendingParry(null);
+      setFeedback(isCorrect ? 'CORRECT' : 'WRONG');
+      setIsAttacking(isCorrect ? null : 'ENEMY');
+
+      const originalExpectedAnswer = getExpectedAnswer(
+        activeParry.originalProblem,
+        turn.strikeMode === 'COMBO' ? turn.stepIndex : null
+      );
+      const parryPrefix = isCorrect
+        ? `Counter-Hack Parry! Damage halved: -${finalDamage} HP`
+        : `Parry Failed: -${finalDamage} HP`;
+      const parrySuffix = activeParry.wrongRes.fellBackToCombo
+        ? ' · Falling back to Combo Step 1'
+        : activeParry.wrongRes.revealAnswer
+          ? turn.strikeMode === 'COMBO'
+            ? ` · Step Answer: ${originalExpectedAnswer}`
+            : ` · Answer: ${originalExpectedAnswer}`
+          : activeParry.wrongRes.keepSameProblem
+            ? ' · Retry Step'
+            : '';
+      setFeedbackMessage(`${parryPrefix}${parrySuffix}`);
+
+      if (isDefeat) {
+        emitProblemTelemetry(false, activeParry.originalMode, activeParry.originalProblem);
+        scheduleTimeout(onLose, activeParry.wrongRes.delayMs);
+        return;
+      }
+
+      if (activeParry.wrongRes.keepSameProblem) {
+        scheduleTimeout(() => {
+          setFeedback('IDLE');
+          setFeedbackMessage(null);
+          setIsAttacking(null);
+          if (activeParry.wrongRes.fellBackToCombo) {
+            setActiveClue(null);
+          }
+          resetInputs();
+        }, activeParry.wrongRes.delayMs);
+        return;
+      }
+
+      emitProblemTelemetry(false, activeParry.originalMode, activeParry.originalProblem);
+      const nextModeAfterMiss: CombatMode =
+        activeParry.originalMode === 'FOCUS_SCAN'
+          ? shieldLayers > 0
+            ? 'SHIELD_BREAK'
+            : 'ATTACK'
+          : activeParry.originalMode;
+      scheduleNextProblem(nextModeAfterMiss, activeParry.wrongRes.delayMs, stats.runBuffs);
+      return;
+    }
+
     if (isCorrect) {
       setFeedback('CORRECT');
 
       if (mode === 'ATTACK') {
         setIsAttacking('PLAYER');
+        const syncConsume = consumeSyncOnProcedural(syncState, stats.equippedChips);
+        setSyncState(syncConsume.nextState);
+        if (syncConsume.shardBonus > bestSyncShardBonusRef.current) {
+          bestSyncShardBonusRef.current = syncConsume.shardBonus;
+        }
+
         const res = resolveCorrectAttack({
           problem,
           turn,
@@ -346,29 +466,42 @@ export const Combat: React.FC<Props> = ({
           isApex,
           runBuffs: stats.runBuffs,
           isVulnerable,
+          equippedChips: stats.equippedChips,
+          syncDamageMultiplier: syncConsume.damageMultiplier,
         });
 
         setCurrentEnemyHp(res.newEnemyHp);
         setTurn(res.nextTurn);
+        const syncSuffix = syncConsume.triggered
+          ? ` · SYNC ×${syncConsume.damageMultiplier}`
+          : '';
         setFeedbackMessage(
           res.skippedFinalStepWithOverclock
-            ? `Overclock Surge: -${res.damage} INT · Apex Step Skipped`
+            ? `Overclock Surge: -${res.damage} INT · Apex Step Skipped${syncSuffix}`
             : res.nextTurn.directStrikeUsedOnKill
-              ? `Direct Strike Kill: -${res.damage} INT (+50% Shards)`
+              ? `Direct Strike Kill: -${res.damage} INT (+${directStrikeBonusPercent}% Shards)${syncSuffix}`
               : res.nextTurn.comboStreak >= 2
-                ? `${res.nextTurn.comboStreak}× Combo Hit: -${res.damage} INT`
+                ? `${res.nextTurn.comboStreak}× Combo Hit: -${res.damage} INT${syncSuffix}`
                 : isVulnerable
-                  ? `2× Vulnerable Hit: -${res.damage} INT`
-                  : `Critical Hit: -${res.damage} INT`
+                  ? `2× Vulnerable Hit: -${res.damage} INT${syncSuffix}`
+                  : `Critical Hit: -${res.damage} INT${syncSuffix}`
         );
 
+        const completedProblem = res.isVictory || !res.advanceToNextStep;
         onUpdateStats({
           ...stats,
           fp: Math.min(stats.maxFp, stats.fp + res.fpGain),
+          sectorMastery: completedProblem
+            ? recordSectorMastery(stats.sectorMastery, tier, 'PROCEDURAL')
+            : stats.sectorMastery,
         });
 
         if (res.isVictory) {
           emitProblemTelemetry(!hadWrongAttemptRef.current, 'ATTACK', problem);
+          const victorySyncBonus = Math.max(
+            bestSyncShardBonusRef.current,
+            syncConsume.shardBonus
+          );
           scheduleTimeout(() => {
             onWin(
               calculateCombatReward({
@@ -376,6 +509,8 @@ export const Combat: React.FC<Props> = ({
                 directStrikeBonus: res.nextTurn.directStrikeUsedOnKill,
                 runBuffs: stats.runBuffs,
                 isApex,
+                equippedChips: stats.equippedChips,
+                syncShardBonus: victorySyncBonus,
               })
             );
           }, res.delayMs);
@@ -404,8 +539,15 @@ export const Combat: React.FC<Props> = ({
         const res = resolveShieldBreakHit({
           shieldLayers,
           neuralScars: stats.neuralScars,
+          equippedChips: stats.equippedChips,
+          patrolBaseHp,
         });
         setShieldLayers(res.newShieldLayers);
+        setSyncState((prev) => advanceSyncOnConceptual(prev, stats.equippedChips));
+        if (res.bonusEnemyDamage > 0) {
+          setCurrentEnemyHp((prevHp) => Math.max(1, prevHp - res.bonusEnemyDamage));
+        }
+        const lensDamageTag = res.bonusEnemyDamage > 0 ? ` · -${res.bonusEnemyDamage} INT` : '';
         onUpdateStats(
           withConceptOutcome(
             {
@@ -421,11 +563,13 @@ export const Combat: React.FC<Props> = ({
         if (res.shieldBroken) {
           setIsVulnerable(true);
           setPhaseBanner('SHIELD BROKEN — 2× VULNERABLE');
-          setFeedbackMessage(`Logic Shield Shattered! +${res.fpGain} FP · 2× Vulnerable`);
+          setFeedbackMessage(
+            `Logic Shield Shattered! +${res.fpGain} FP${lensDamageTag} · 2× Vulnerable`
+          );
           scheduleNextProblem('ATTACK', 1200, stats.runBuffs, true);
         } else {
           setFeedbackMessage(
-            `Logic Shield Cracked (${res.newShieldLayers}/${maxShieldLayers}) · +${res.fpGain} FP`
+            `Logic Shield Cracked (${res.newShieldLayers}/${maxShieldLayers}) · +${res.fpGain} FP${lensDamageTag}`
           );
           scheduleNextProblem('SHIELD_BREAK', PROBLEM_ADVANCE_MS, stats.runBuffs);
         }
@@ -434,19 +578,26 @@ export const Combat: React.FC<Props> = ({
 
       if (mode === 'FOCUS_SCAN') {
         emitProblemTelemetry(!hadWrongAttemptRef.current, 'FOCUS_SCAN', problem);
-        const res = applyFocusScanSuccess(stats, shieldLayers);
+        const res = applyFocusScanSuccess(stats, shieldLayers, patrolBaseHp);
+        setSyncState((prev) => advanceSyncOnConceptual(prev, stats.equippedChips));
+        if (res.bonusEnemyDamage > 0) {
+          setCurrentEnemyHp((prevHp) => Math.max(1, prevHp - res.bonusEnemyDamage));
+        }
+        const lensDamageTag = res.bonusEnemyDamage > 0 ? ` · -${res.bonusEnemyDamage} INT` : '';
         onUpdateStats(withConceptOutcome(res.nextStats, 'FOCUS_SCAN', problem, true));
         setShieldLayers(res.newShieldLayers);
 
         if (res.shieldBroken) {
           setIsVulnerable(true);
           setPhaseBanner('SHIELD BROKEN — 2× VULNERABLE');
-          setFeedbackMessage(`Focus Scan Shattered Shield! +${res.fpGain} FP · 2× Vulnerable`);
+          setFeedbackMessage(
+            `Focus Scan Shattered Shield! +${res.fpGain} FP${lensDamageTag} · 2× Vulnerable`
+          );
           scheduleNextProblem('ATTACK', 1200, res.nextStats.runBuffs, true);
         } else {
           setFeedbackMessage(
             shieldLayers > 0
-              ? `Focus Scan: +${res.fpGain} FP · Shield Cracked`
+              ? `Focus Scan: +${res.fpGain} FP · Shield Cracked${lensDamageTag}`
               : `Focus Scan Complete: +${res.fpGain} FP`
           );
           const nextMode: CombatMode = res.newShieldLayers > 0 ? 'SHIELD_BREAK' : 'ATTACK';
@@ -456,6 +607,7 @@ export const Combat: React.FC<Props> = ({
       }
 
       emitProblemTelemetry(!hadWrongAttemptRef.current, 'MEDITATION', problem);
+      setSyncState((prev) => advanceSyncOnConceptual(prev, stats.equippedChips));
       onUpdateStats(withConceptOutcome(applyMeditationRecovery(stats), 'MEDITATION', problem, true));
       setFeedbackMessage(`Emergency Heal Complete: +${MEDITATION_HEAL_AMOUNT} HP`);
       const nextModeAfterHeal: CombatMode = shieldLayers > 0 ? 'SHIELD_BREAK' : 'ATTACK';
@@ -464,8 +616,6 @@ export const Combat: React.FC<Props> = ({
     }
 
     hadWrongAttemptRef.current = true;
-    setFeedback('WRONG');
-    setIsAttacking('ENEMY');
 
     const res = resolveWrongAttack({
       problem,
@@ -476,6 +626,30 @@ export const Combat: React.FC<Props> = ({
       currentPlayerHp: stats.hp,
       shieldActive: effectiveShieldActive,
     });
+
+    const canParry = hasPatternLens && !effectiveShieldActive && !pendingParry && res.damage > 0;
+    if (canParry) {
+      if (mode !== 'ATTACK') {
+        onUpdateStats(withConceptOutcome(stats, mode, problem, false));
+      }
+      const parryProblem = generateCombatProblem('SHIELD_BREAK');
+      setPendingParry({
+        parryProblem,
+        originalMode: mode,
+        originalProblem: problem,
+        wrongRes: res,
+        rawDamage: res.damage,
+      });
+      setFeedback('IDLE');
+      setIsAttacking(null);
+      setFeedbackMessage('COUNTER-HACK PARRY! Solve to halve incoming damage.');
+      resetInputs();
+      problemStartTimeRef.current = Date.now();
+      return;
+    }
+
+    setFeedback('WRONG');
+    setIsAttacking('ENEMY');
 
     let nextRunBuffs = stats.runBuffs;
     if (res.shieldAbsorbed) {
@@ -544,7 +718,7 @@ export const Combat: React.FC<Props> = ({
   };
 
   const handleFocusScanClick = () => {
-    if (!focusScanAvailable || feedback !== 'IDLE' || isIntro) return;
+    if (pendingParry || !focusScanAvailable || feedback !== 'IDLE' || isIntro) return;
     clearAllTimeouts();
     const nextProblem = generateCombatProblem('FOCUS_SCAN');
     setFocusScanUsed(true);
@@ -567,7 +741,13 @@ export const Combat: React.FC<Props> = ({
   };
 
   const handleMeditationClick = () => {
-    if (stats.fp >= MEDITATION_FP_COST && mode !== 'MEDITATION' && feedback === 'IDLE' && !isIntro) {
+    if (
+      !pendingParry &&
+      stats.fp >= MEDITATION_FP_COST &&
+      mode !== 'MEDITATION' &&
+      feedback === 'IDLE' &&
+      !isIntro
+    ) {
       clearAllTimeouts();
       const nextProblem = generateCombatProblem('MEDITATION');
       setMode('MEDITATION');
@@ -590,7 +770,9 @@ export const Combat: React.FC<Props> = ({
   };
 
   const handleHintClick = () => {
-    if (totalHints <= 0 || mode !== 'ATTACK' || feedback !== 'IDLE' || isIntro) return;
+    if (pendingParry || totalHints <= 0 || mode !== 'ATTACK' || feedback !== 'IDLE' || isIntro) {
+      return;
+    }
 
     const hintResult = applyTacticalHint({
       stats,
@@ -621,9 +803,13 @@ export const Combat: React.FC<Props> = ({
           : `Tactical Breach: -${res.damage} INT · Shield Armed`
       );
 
+      const completedProblem = res.isVictory || !res.advanceToNextStep;
       onUpdateStats({
         ...statsAfterHint,
         fp: Math.min(statsAfterHint.maxFp, statsAfterHint.fp + res.fpGain),
+        sectorMastery: completedProblem
+          ? recordSectorMastery(statsAfterHint.sectorMastery, tier, 'PROCEDURAL')
+          : statsAfterHint.sectorMastery,
       });
 
       if (res.isVictory) {
@@ -635,6 +821,8 @@ export const Combat: React.FC<Props> = ({
               directStrikeBonus: res.nextTurn.directStrikeUsedOnKill,
               runBuffs: statsAfterHint.runBuffs,
               isApex,
+              equippedChips: statsAfterHint.equippedChips,
+              syncShardBonus: bestSyncShardBonusRef.current,
             })
           );
         }, res.delayMs);
@@ -689,16 +877,22 @@ export const Combat: React.FC<Props> = ({
     onFocusScanClick: handleFocusScanClick,
     onMeditationClick: handleMeditationClick,
     totalHints,
-    hintDisabled: totalHints <= 0 || mode !== 'ATTACK' || feedback !== 'IDLE' || isIntro,
-    focusScanDisabled: !focusScanAvailable || feedback !== 'IDLE' || isIntro,
+    hintDisabled:
+      Boolean(pendingParry) || totalHints <= 0 || mode !== 'ATTACK' || feedback !== 'IDLE' || isIntro,
+    focusScanDisabled: Boolean(pendingParry) || !focusScanAvailable || feedback !== 'IDLE' || isIntro,
     focusScanUsed,
     meditationDisabled:
-      stats.fp < MEDITATION_FP_COST || mode === 'MEDITATION' || feedback !== 'IDLE' || isIntro,
+      Boolean(pendingParry) ||
+      stats.fp < MEDITATION_FP_COST ||
+      mode === 'MEDITATION' ||
+      feedback !== 'IDLE' ||
+      isIntro,
     shieldActive: effectiveShieldActive,
   };
 
-  const modeLabel =
-    mode === 'SHIELD_BREAK'
+  const modeLabel = pendingParry
+    ? 'Counter-Hack Parry'
+    : mode === 'SHIELD_BREAK'
       ? 'Logic Shield Breach'
       : mode === 'FOCUS_SCAN'
         ? 'Focus Scan'
@@ -706,7 +900,21 @@ export const Combat: React.FC<Props> = ({
           ? 'Emergency Heal'
           : 'Cipher Attack';
   const promptAccent: 'cyan' | 'purple' =
-    mode === 'SHIELD_BREAK' || mode === 'FOCUS_SCAN' ? 'purple' : 'cyan';
+    pendingParry || mode === 'SHIELD_BREAK' || mode === 'FOCUS_SCAN' ? 'purple' : 'cyan';
+
+  const autoStructuralClue =
+    !pendingParry &&
+    hasStructuralSight &&
+    mode === 'ATTACK' &&
+    turn.strikeMode === 'COMBO' &&
+    turn.stepIndex === 0
+      ? (problem.steps?.[0]?.clue ?? null)
+      : null;
+  const displayedClue = pendingParry ? null : (activeClue ?? autoStructuralClue);
+  const syncMultiplierDisplay =
+    hasSyncMatrix && syncState.armed && syncState.chainLevel > 0
+      ? Number((1 + syncState.chainLevel * SYNC_MATRIX_DAMAGE_BONUS_PER_LEVEL).toFixed(2))
+      : null;
 
   return (
     <div className="flex flex-col h-full bg-gb-0 text-gb-3 scanlines overflow-hidden terminal-text">
@@ -841,6 +1049,27 @@ export const Combat: React.FC<Props> = ({
                           Recon: 1 Free Shield Charge
                         </div>
                       )}
+                    </div>
+                  ) : (
+                    <div className="text-xs text-gb-2">None</div>
+                  )}
+                </div>
+
+                <div className="bg-gb-0 border border-gb-3 p-3 gb-border-sm">
+                  <div className="text-xs text-gb-2 uppercase font-bold mb-2 flex items-center gap-1.5">
+                    <Cpu className="w-4 h-4 text-purple-300" />
+                    Neural Loadout Chips
+                  </div>
+                  {stats.equippedChips.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {stats.equippedChips.map((chipId) => (
+                        <span
+                          key={chipId}
+                          className="px-2 py-0.5 text-xs font-bold border border-purple-400/70 bg-purple-400/10 text-purple-200"
+                        >
+                          {NEURAL_CHIP_MAP[chipId]?.name ?? chipId}
+                        </span>
+                      ))}
                     </div>
                   ) : (
                     <div className="text-xs text-gb-2">None</div>
@@ -1097,16 +1326,30 @@ export const Combat: React.FC<Props> = ({
         {/* Right / Bottom: Problem & Input Terminal */}
         <div className="lg:col-span-6 flex-1 min-h-0 overflow-y-auto custom-scrollbar p-2 lg:p-6 bg-gb-1 border-t-2 lg:border-t-0 border-gb-3 dither flex flex-col justify-start lg:justify-center">
           <div className="w-full max-w-md mx-auto flex flex-col gap-1.5 lg:gap-3">
+            {syncMultiplierDisplay !== null && (
+              <div className="flex justify-end">
+                <span
+                  role="status"
+                  className="inline-flex items-center gap-1 px-2 py-0.5 border border-purple-400 bg-purple-400/15 text-purple-200 text-[11px] font-black uppercase tracking-wider tabular-nums"
+                >
+                  <Zap className="w-3 h-3 text-purple-300" />
+                  SYNC ×{syncMultiplierDisplay}
+                </span>
+              </div>
+            )}
+
             <ProblemPromptCard
-              problem={problem}
+              problem={displayProblem}
               modeLabel={modeLabel}
-              strikeMode={turn.strikeMode}
-              stepIndex={activeStepIndex}
-              effectiveStepCount={turn.effectiveStepCount}
-              comboStreak={turn.comboStreak}
-              solvedBreadcrumbs={turn.solvedBreadcrumbs}
-              activeClue={activeClue}
+              strikeMode={displayStrikeMode}
+              stepIndex={displayStepIndex}
+              effectiveStepCount={pendingParry ? 0 : turn.effectiveStepCount}
+              comboStreak={pendingParry ? 0 : turn.comboStreak}
+              solvedBreadcrumbs={pendingParry ? [] : turn.solvedBreadcrumbs}
+              activeClue={displayedClue}
               isBlurred={stats.neuralScars.includes('THE_BLUR')}
+              blurSoftened={hasNeuralDampener}
+              directStrikeBonusPercent={directStrikeBonusPercent}
               feedback={feedback}
               accent={promptAccent}
             />
@@ -1126,8 +1369,8 @@ export const Combat: React.FC<Props> = ({
                 <Zap className="w-3.5 h-3.5 shrink-0" />
                 <span>
                   {turn.strikeMode === 'DIRECT'
-                    ? 'Direct Strike ARMED · 1-Shot · +50% Shards · Click for Combo'
-                    : 'Direct Strike · 1-Shot · +50% Shards'}
+                    ? `Direct Strike ARMED · 1-Shot · +${directStrikeBonusPercent}% Shards · Click for Combo`
+                    : `Direct Strike · 1-Shot · +${directStrikeBonusPercent}% Shards`}
                 </span>
                 <kbd className="hidden sm:inline-block px-1 py-0.5 text-[10px] font-mono border border-current/40 opacity-80 leading-none">
                   ⇧D

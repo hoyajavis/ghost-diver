@@ -3,6 +3,7 @@ import { DungeonState, PlayerStats } from '../types';
 import { getScarName } from '../lib/scarData';
 import { getAtkUpStacks, isApexEnemy } from '../lib/combatLogic';
 import { isFloorExitLocked } from '../lib/dungeonLogic';
+import { NEURAL_CHIP_MAP } from '../lib/loadoutChips';
 import { RECON_BUFF_RUN_TOKENS } from '../lib/signalSweepLogic';
 import {
   Cpu,
@@ -476,6 +477,23 @@ export const Dungeon: React.FC<Props> = ({
                     .join(' · ') || 'None'}
                 </span>
               </div>
+              <div className="flex justify-between items-start gap-2">
+                <span className="text-gb-2 shrink-0">Loadout Chips</span>
+                {stats.equippedChips.length > 0 ? (
+                  <div className="flex flex-wrap justify-end gap-1">
+                    {stats.equippedChips.map((chipId) => (
+                      <span
+                        key={chipId}
+                        className="px-1.5 py-0.5 text-[10px] font-bold uppercase border border-purple-400/70 bg-purple-400/10 text-purple-200"
+                      >
+                        {NEURAL_CHIP_MAP[chipId]?.shortLabel ?? chipId}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="font-bold text-gb-2">None</span>
+                )}
+              </div>
               <div className="flex justify-between">
                 <span className="text-gb-2">Neural Scars</span>
                 <span className={`font-bold ${stats.neuralScars.length > 0 ? 'text-neon-magenta' : 'text-neon-green'}`}>
@@ -573,6 +591,27 @@ export const Dungeon: React.FC<Props> = ({
                     </div>
                   ) : (
                     <div className="text-xs text-gb-2">No active buffs</div>
+                  )}
+                </div>
+
+                <div className="bg-gb-0 border border-gb-3 p-3 gb-border-sm">
+                  <div className="text-xs text-gb-2 uppercase font-bold mb-2 flex items-center gap-1.5">
+                    <Cpu className="w-4 h-4 text-purple-300" />
+                    Neural Loadout Chips
+                  </div>
+                  {stats.equippedChips.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {stats.equippedChips.map((chipId) => (
+                        <span
+                          key={chipId}
+                          className="px-2 py-0.5 text-xs font-bold border border-purple-400/70 bg-purple-400/10 text-purple-200"
+                        >
+                          {NEURAL_CHIP_MAP[chipId]?.name ?? chipId}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-xs text-gb-2">No chips equipped</div>
                   )}
                 </div>
 

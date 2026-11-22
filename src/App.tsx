@@ -8,6 +8,7 @@ import { ChestLoot } from './components/ChestLoot';
 import { LockModal } from './components/LockModal';
 import { motion, MotionConfig } from 'motion/react';
 import { useGameEngine } from './hooks/useGameEngine';
+import { hasEquippedChip } from './lib/loadoutChips';
 
 export default function App() {
   const {
@@ -20,6 +21,7 @@ export default function App() {
     activeLockedChest,
     dungeonAlert,
     lootMessage,
+    lastDefeatInflictedScar,
     currentSlot,
     slots,
     cacheProfile,
@@ -41,11 +43,15 @@ export default function App() {
     handleCalibrateScar,
     handleEmergencyEject,
     handleUpgrade,
+    handleToggleEquipChip,
     handleUnlockDemo,
     handleRecordConceptOutcome,
     handleRecordArchetypeStats,
     handleClaimReconBuff,
   } = useGameEngine();
+
+  const dampenerBlockedScar =
+    !lastDefeatInflictedScar && hasEquippedChip(stats.equippedChips, 'NEURAL_DAMPENER');
 
   return (
     <MotionConfig reducedMotion="user">
@@ -69,6 +75,7 @@ export default function App() {
             onHealScar={handleHealScar}
             onCalibrateScar={handleCalibrateScar}
             onUpgrade={handleUpgrade}
+            onToggleEquipChip={handleToggleEquipChip}
             onUnlockDemo={handleUnlockDemo}
             onRecordConceptOutcome={handleRecordConceptOutcome}
             onRecordArchetypeStats={handleRecordArchetypeStats}
@@ -147,9 +154,15 @@ export default function App() {
               <p className="text-sm text-gb-3 mb-2 font-semibold">
                 All unextracted data was lost to the static.
               </p>
-              <p className="text-xs text-neon-magenta mb-6 font-bold uppercase tracking-wider">
-                Warning: Neural scar sustained
-              </p>
+              {dampenerBlockedScar ? (
+                <p className="text-xs text-neon-cyan mb-6 font-bold uppercase tracking-wider">
+                  Neural Dampener blocked scar corruption
+                </p>
+              ) : (
+                <p className="text-xs text-neon-magenta mb-6 font-bold uppercase tracking-wider">
+                  Warning: Neural scar sustained
+                </p>
+              )}
 
               <button
                 type="button"

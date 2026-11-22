@@ -13,6 +13,8 @@ export interface ProblemPromptCardProps {
   solvedBreadcrumbs: SolvedBreadcrumb[];
   activeClue?: string | null;
   isBlurred?: boolean;
+  blurSoftened?: boolean;
+  directStrikeBonusPercent?: number;
   feedback?: 'IDLE' | 'CORRECT' | 'WRONG';
   accent?: 'cyan' | 'purple';
 }
@@ -27,12 +29,15 @@ export const ProblemPromptCard: React.FC<ProblemPromptCardProps> = ({
   solvedBreadcrumbs,
   activeClue = null,
   isBlurred = false,
+  blurSoftened = false,
+  directStrikeBonusPercent = 50,
   feedback = 'IDLE',
   accent = 'cyan',
 }) => {
   const problemHasSteps = hasProblemSteps(problem);
   const hasPromptLines = Array.isArray(problem.promptLines) && problem.promptLines.length > 0;
   const applyTextBlur = isBlurred && !hasPromptLines && problem.category !== 'CONCEPTUAL';
+  const blurOverlayClass = blurSoftened ? 'backdrop-blur-[0.5px]' : 'backdrop-blur-[1.5px]';
   const activeStepIndex = strikeMode === 'COMBO' ? stepIndex : null;
   const currentStep = getCurrentStep(problem, activeStepIndex);
   const totalSteps =
@@ -102,7 +107,7 @@ export const ProblemPromptCard: React.FC<ProblemPromptCardProps> = ({
         {isDirectOnCombo && (
           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 border border-amber-400/70 bg-amber-400/10 text-amber-300 text-[11px] font-bold uppercase tracking-wide">
             <Zap className="w-3 h-3" />
-            DIRECT · 1-SHOT · +50% SHARDS
+            DIRECT · 1-SHOT · +{directStrikeBonusPercent}% SHARDS
           </span>
         )}
       </div>
@@ -116,7 +121,7 @@ export const ProblemPromptCard: React.FC<ProblemPromptCardProps> = ({
               {problem.question}
             </div>
             {applyTextBlur && (
-              <div className="absolute inset-0 backdrop-blur-[1.5px] pointer-events-none" />
+              <div className={`absolute inset-0 ${blurOverlayClass} pointer-events-none`} />
             )}
           </div>
         ) : hasPromptLines ? (
@@ -152,7 +157,7 @@ export const ProblemPromptCard: React.FC<ProblemPromptCardProps> = ({
               {problem.question}
             </div>
             {applyTextBlur && (
-              <div className="absolute inset-0 backdrop-blur-[1.5px] pointer-events-none" />
+              <div className={`absolute inset-0 ${blurOverlayClass} pointer-events-none`} />
             )}
           </div>
         )}
@@ -185,7 +190,7 @@ export const ProblemPromptCard: React.FC<ProblemPromptCardProps> = ({
               {currentStep.prompt}
             </div>
             {applyTextBlur && (
-              <div className="absolute inset-0 backdrop-blur-[1.5px] pointer-events-none" />
+              <div className={`absolute inset-0 ${blurOverlayClass} pointer-events-none`} />
             )}
           </div>
         )}

@@ -1,9 +1,10 @@
 import React from 'react';
-import { PlayerStats } from '../../types';
+import { NeuralChipId, PlayerStats } from '../../types';
 import { clampFloor, getDiveCost, MAX_FLOOR, MAX_TIER } from '../../lib/dungeonLogic';
+import { MAX_EQUIPPED_CHIPS, NEURAL_CHIP_MAP, NEURAL_CHIPS } from '../../lib/loadoutChips';
 import { getScarName } from '../../lib/scarData';
 import { getReconBuffOption } from '../../lib/signalSweepLogic';
-import { Activity, ChevronLeft, ChevronRight, Database, Sparkles } from 'lucide-react';
+import { Activity, ChevronLeft, ChevronRight, Cpu, Database, Lock, Sparkles } from 'lucide-react';
 
 interface Props {
   stats: PlayerStats;
@@ -12,6 +13,7 @@ interface Props {
   onStartDive: (startFloor?: number) => void;
   onHealScar: (scar: string) => void;
   onCalibrateScar: (scar: string) => void;
+  onToggleEquipChip: (chipId: NeuralChipId) => void;
 }
 
 export const DiveStation: React.FC<Props> = ({
@@ -21,21 +23,23 @@ export const DiveStation: React.FC<Props> = ({
   onStartDive,
   onHealScar,
   onCalibrateScar,
+  onToggleEquipChip,
 }) => {
   const maxUnlocked = clampFloor(stats.maxExtractedFloor);
   const clampedFloor = Math.max(1, Math.min(maxUnlocked, selectedFloor));
   const diveCost = getDiveCost(clampedFloor);
   const canAffordDive = stats.knowledge >= diveCost;
   const armedReconBuff = getReconBuffOption(stats.activeReconBuff);
+  const slotsFull = stats.equippedChips.length >= MAX_EQUIPPED_CHIPS;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3 sm:space-y-4">
       <h3 className="text-xl font-black italic text-neon-cyan tracking-tight uppercase flex items-center gap-2 pr-10">
         <Activity className="w-5 h-5 shrink-0" />
         Neural Chair
       </h3>
 
-      <div className="bg-gb-0 border border-gb-3 p-4 flex flex-col items-center gap-4 gb-border-sm tabular-nums">
+      <div className="bg-gb-0 border border-gb-3 p-3 sm:p-4 flex flex-col items-center gap-2.5 sm:gap-3.5 gb-border-sm tabular-nums">
         <div className="flex items-center gap-6">
           <button
             type="button"
@@ -47,7 +51,7 @@ export const DiveStation: React.FC<Props> = ({
             <ChevronLeft className="w-5 h-5" />
           </button>
           <div className="text-center min-w-[110px]">
-            <div className="text-3xl font-black italic">Floor {clampedFloor}</div>
+            <div className="text-2xl sm:text-3xl font-black italic">Floor {clampedFloor}</div>
             <div className="text-xs text-gb-2">
               Max unlocked: F{maxUnlocked}
             </div>
@@ -78,7 +82,7 @@ export const DiveStation: React.FC<Props> = ({
         </div>
 
         {armedReconBuff ? (
-          <div className="w-full border border-neon-cyan bg-neon-cyan/10 p-2.5 flex items-start gap-2 text-left">
+          <div className="w-full border border-neon-cyan bg-neon-cyan/10 p-2 flex items-start gap-2 text-left">
             <Sparkles className="w-4 h-4 text-neon-cyan shrink-0 mt-0.5" />
             <div className="min-w-0">
               <div className="text-xs font-black uppercase text-neon-cyan">
@@ -99,10 +103,93 @@ export const DiveStation: React.FC<Props> = ({
           type="button"
           onClick={() => onStartDive(clampedFloor)}
           disabled={!canAffordDive}
-          className="w-full min-h-11 py-3 px-4 bg-gb-3 text-gb-0 font-black italic uppercase tracking-wider hover:bg-neon-cyan transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-gb-3 text-sm"
+          className="w-full min-h-11 py-2.5 sm:py-3 px-4 bg-gb-3 text-gb-0 font-black italic uppercase tracking-wider hover:bg-neon-cyan transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-gb-3 text-sm"
         >
           {canAffordDive ? 'Start Dive' : `Need ${diveCost} Shards`}
         </button>
+      </div>
+
+      {/* Neural Loadout Chip Picker (2 Slots) */}
+      <div className="bg-gb-0 border border-gb-3 p-3 gb-border-sm space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-xs font-black uppercase tracking-wider text-purple-300 flex items-center gap-1.5">
+            <Cpu className="w-3.5 h-3.5 shrink-0" />
+            Neural Loadout ({stats.equippedChips.length}/{MAX_EQUIPPED_CHIPS})
+          </div>
+          <div className="flex items-center gap-1 text-[10px] font-mono">
+            {Array.from({ length: MAX_EQUIPPED_CHIPS }).map((_, idx) => {
+              const chipId = stats.equippedChips[idx];
+              return (
+                <span
+                  key={idx}
+                  className={`px-1.5 py-0.5 border uppercase font-bold ${
+                    chipId
+                      ? 'border-neon-cyan bg-neon-cyan/15 text-neon-cyan'
+                      : 'border-gb-3/30 text-gb-2/60'
+                  }`}
+                >
+                  {chipId ? NEURAL_CHIP_MAP[chipId].shortLabel : `Slot ${idx + 1}`}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          {NEURAL_CHIPS.map((chip) => {
+            const isUnlocked = stats.unlockedChips.includes(chip.id);
+            const isEquipped = stats.equippedChips.includes(chip.id);
+            const isDisabled = !isUnlocked || (!isEquipped && slotsFull);
+
+            if (!isUnlocked) {
+              return (
+                <div
+                  key={chip.id}
+                  className="p-2 border border-gb-3/25 bg-gb-1/40 opacity-60 flex items-start gap-2"
+                >
+                  <Lock className="w-3.5 h-3.5 text-gb-2 shrink-0 mt-0.5" />
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold text-gb-2">{chip.name}</div>
+                    <div className="text-[11px] text-gb-2/80 font-sans leading-snug">
+                      Unlock: {chip.unlockHint}
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            return (
+              <button
+                key={chip.id}
+                type="button"
+                onClick={() => onToggleEquipChip(chip.id)}
+                disabled={isDisabled}
+                aria-pressed={isEquipped}
+                className={`w-full p-2 border text-left transition-colors flex items-start justify-between gap-2 ${
+                  isEquipped
+                    ? 'border-neon-cyan bg-neon-cyan/10 hover:bg-neon-cyan/15'
+                    : slotsFull
+                      ? 'border-gb-3/30 bg-gb-1/40 opacity-50 cursor-not-allowed'
+                      : 'border-gb-3/60 bg-gb-1/60 hover:border-neon-cyan'
+                }`}
+              >
+                <div className="min-w-0">
+                  <div className="text-xs font-bold text-gb-3">{chip.name}</div>
+                  <div className="text-[11px] text-gb-2 font-sans leading-snug">{chip.summary}</div>
+                </div>
+                <span
+                  className={`shrink-0 px-1.5 py-0.5 text-[10px] font-black uppercase border ${
+                    isEquipped
+                      ? 'border-neon-cyan text-neon-cyan bg-gb-0'
+                      : 'border-gb-3/40 text-gb-2'
+                  }`}
+                >
+                  {isEquipped ? 'Equipped' : 'Equip'}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {stats.neuralScars.length > 0 && (

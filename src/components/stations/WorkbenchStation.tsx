@@ -1,5 +1,11 @@
 import React from 'react';
 import { PlayerStats } from '../../types';
+import {
+  canUpgrade,
+  getUpgradeCost,
+  HINT_PACK_COST,
+  MAX_UPGRADE_LEVELS,
+} from '../../lib/dungeonLogic';
 import { BrainCircuit, Cpu, Heart, Settings } from 'lucide-react';
 
 interface Props {
@@ -8,6 +14,13 @@ interface Props {
 }
 
 export const WorkbenchStation: React.FC<Props> = ({ stats, onUpgrade }) => {
+  const hpCost = getUpgradeCost('hp', stats.upgrades.hp);
+  const fpCost = getUpgradeCost('fp', stats.upgrades.fp);
+  const hintsCost = getUpgradeCost('hints', stats.upgrades.hints);
+  const hpCanUpgrade = canUpgrade('hp', stats.upgrades.hp);
+  const fpCanUpgrade = canUpgrade('fp', stats.upgrades.fp);
+  const hintsCanUpgrade = canUpgrade('hints', stats.upgrades.hints);
+
   return (
     <div className="space-y-3 tabular-nums">
       <h3 className="text-xl font-black italic text-neon-magenta tracking-tight uppercase flex items-center gap-2 pr-10">
@@ -18,28 +31,34 @@ export const WorkbenchStation: React.FC<Props> = ({ stats, onUpgrade }) => {
         title="Neural Integrity"
         desc="Increases Max HP (+20)"
         level={stats.upgrades.hp}
-        cost={(stats.upgrades.hp + 1) * 100}
+        maxLevel={MAX_UPGRADE_LEVELS.hp}
+        cost={hpCost}
+        isMaxed={!hpCanUpgrade}
         icon={<Heart className="w-4 h-4 text-neon-green" />}
         onUpgrade={() => onUpgrade('hp')}
-        canAfford={stats.knowledge >= (stats.upgrades.hp + 1) * 100}
+        canAfford={hpCanUpgrade && hpCost !== null && stats.knowledge >= hpCost}
       />
       <UpgradeItem
         title="Focus Capacity"
         desc="Increases Max FP (+20)"
         level={stats.upgrades.fp}
-        cost={(stats.upgrades.fp + 1) * 100}
+        maxLevel={MAX_UPGRADE_LEVELS.fp}
+        cost={fpCost}
+        isMaxed={!fpCanUpgrade}
         icon={<BrainCircuit className="w-4 h-4 text-neon-cyan" />}
         onUpgrade={() => onUpgrade('fp')}
-        canAfford={stats.knowledge >= (stats.upgrades.fp + 1) * 100}
+        canAfford={fpCanUpgrade && fpCost !== null && stats.knowledge >= fpCost}
       />
       <UpgradeItem
         title="AI Preload"
         desc="Free Tactical Hint Packs each dive"
         level={stats.upgrades.hints}
-        cost={(stats.upgrades.hints + 1) * 100}
+        maxLevel={MAX_UPGRADE_LEVELS.hints}
+        cost={hintsCost}
+        isMaxed={!hintsCanUpgrade}
         icon={<Cpu className="w-4 h-4 text-neon-magenta" />}
         onUpgrade={() => onUpgrade('hints')}
-        canAfford={stats.knowledge >= (stats.upgrades.hints + 1) * 100}
+        canAfford={hintsCanUpgrade && hintsCost !== null && stats.knowledge >= hintsCost}
       />
 
       <div className="pt-3 border-t border-gb-3 border-dashed space-y-2">
@@ -59,12 +78,14 @@ export const WorkbenchStation: React.FC<Props> = ({ stats, onUpgrade }) => {
           <button
             type="button"
             onClick={() => onUpgrade('buy_hint')}
-            disabled={stats.knowledge < 50}
+            disabled={stats.knowledge < HINT_PACK_COST}
             className={`min-h-10 px-3 py-2 text-xs font-bold gb-border-sm whitespace-nowrap transition-colors ${
-              stats.knowledge >= 50 ? 'bg-gb-3 text-gb-0 hover:bg-neon-cyan' : 'bg-gb-1 text-gb-2 opacity-40'
+              stats.knowledge >= HINT_PACK_COST
+                ? 'bg-gb-3 text-gb-0 hover:bg-neon-cyan'
+                : 'bg-gb-1 text-gb-2 opacity-40'
             }`}
           >
-            50 Shards
+            {HINT_PACK_COST} Shards
           </button>
         </div>
       </div>
@@ -76,7 +97,9 @@ interface UpgradeItemProps {
   title: string;
   desc: string;
   level: number;
-  cost: number;
+  maxLevel: number;
+  cost: number | null;
+  isMaxed: boolean;
   icon: React.ReactNode;
   onUpgrade: () => void;
   canAfford: boolean;
@@ -86,7 +109,9 @@ const UpgradeItem: React.FC<UpgradeItemProps> = ({
   title,
   desc,
   level,
+  maxLevel,
   cost,
+  isMaxed,
   icon,
   onUpgrade,
   canAfford,
@@ -98,7 +123,11 @@ const UpgradeItem: React.FC<UpgradeItemProps> = ({
       </div>
       <div className="min-w-0">
         <div className="text-xs font-bold text-gb-3">
-          {title} <span className="text-gb-2 font-normal">· Lv {level}</span>
+          {title}{' '}
+          <span className="text-gb-2 font-normal">
+            · Lv {level}
+            {level <= maxLevel ? `/${maxLevel}` : ' (MAX)'}
+          </span>
         </div>
         <div className="text-xs text-gb-2 font-sans">{desc}</div>
       </div>
@@ -106,12 +135,16 @@ const UpgradeItem: React.FC<UpgradeItemProps> = ({
     <button
       type="button"
       onClick={onUpgrade}
-      disabled={!canAfford}
+      disabled={isMaxed || !canAfford}
       className={`min-h-10 px-3 py-2 text-xs font-bold gb-border-sm whitespace-nowrap transition-colors ${
-        canAfford ? 'bg-gb-3 text-gb-0 hover:bg-neon-cyan' : 'bg-gb-1 text-gb-2 opacity-40'
+        isMaxed
+          ? 'bg-gb-1 text-neon-green border border-neon-green/50 opacity-75 cursor-default'
+          : canAfford
+            ? 'bg-gb-3 text-gb-0 hover:bg-neon-cyan'
+            : 'bg-gb-1 text-gb-2 opacity-40'
       }`}
     >
-      {cost} Shards
+      {isMaxed || cost === null ? 'MAX' : `${cost} Shards`}
     </button>
   </div>
 );

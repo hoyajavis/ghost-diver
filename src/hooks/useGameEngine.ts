@@ -9,21 +9,26 @@ import {
   DataLog,
   SaveSlot,
   ReconBuffType,
+  NeuralChipId,
 } from '../types';
 import { generateFloor } from '../lib/mapGen';
 import {
   canDescendFromFloor,
+  canUpgrade,
   clampFloor,
   getBankableHintPacks,
   getDiveCost,
   getNextUnlockedFloor,
   getTierForFloor,
+  getUpgradeCost,
+  HINT_PACK_COST,
   isFloorExitLocked,
   stepEnemies,
 } from '../lib/dungeonLogic';
-import { BLUE_CACHE_FAIL_DAMAGE } from '../lib/combatLogic';
+import { BLUE_CACHE_FAIL_DAMAGE, isApexEnemy } from '../lib/combatLogic';
 import {
-  calculateExtractedKnowledge,
+  calculateExtractionBreakdown,
+  evaluateSignalSweepRun,
   mergeArchetypeStats,
   RECON_BUFF_RUN_TOKENS,
   RECON_START_FP_BONUS,
@@ -34,6 +39,13 @@ import {
   ConceptOutcome,
   recordConceptOutcomesBatch,
 } from '../lib/conceptSpacedRep';
+import {
+  NEURAL_CHIP_MAP,
+  recordSectorMastery,
+  shouldInflictScar,
+  toggleEquipChip,
+  unlockChipIfNeeded,
+} from '../lib/loadoutChips';
 import { LORE_ENTRIES } from '../lib/lore';
 import { getRandomScar } from '../lib/scarData';
 import {
@@ -58,6 +70,7 @@ export function useGameEngine() {
   const [activeLockedChest, setActiveLockedChest] = useState<Chest | null>(null);
   const [dungeonAlert, setDungeonAlert] = useState<string | null>(null);
   const [lootMessage, setLootMessage] = useState<{ text: string; type: 'CHEST' | 'LOG' } | null>(null);
+  const [lastDefeatInflictedScar, setLastDefeatInflictedScar] = useState<boolean>(false);
   const [currentSlot, setCurrentSlot] = useState<number | null>(null);
   const [slots, setSlots] = useState<SaveSlot[]>([]);
   const [cacheProfile, setCacheProfile] = useState<AnonymizedCacheProfile>(() =>
@@ -77,6 +90,7 @@ export function useGameEngine() {
     } else {
       setStats(INITIAL_STATS);
     }
+    setLastDefeatInflictedScar(false);
     setCurrentSlot(id);
     setGameState('HOME');
   };
@@ -125,6 +139,10 @@ export function useGameEngine() {
     stats.archetypeStats,
     stats.conceptSchedule,
     stats.conceptStepCounter,
+    stats.unlockedChips,
+    stats.equippedChips,
+    stats.sectorMastery,
+    stats.lifetimeShardsExtracted,
     currentSlot,
     gameState,
   ]);
@@ -134,6 +152,7 @@ export function useGameEngine() {
     const cost = getDiveCost(safeFloor);
     if (stats.knowledge < cost) return;
 
+    setLastDefeatInflictedScar(false);
     setStats((prev) => {
       const startFp =
         prev.activeReconBuff === 'START_FP_20' ? Math.min(prev.maxFp, RECON_START_FP_BONUS) : 0;
@@ -296,6 +315,20 @@ export function useGameEngine() {
       return;
     }
     const unlockedChestId = activeLockedChest.id;
+    const currentTier = dungeon?.tier ?? 1;
+
+    const newlyUnlockedNames: string[] = [];
+    const previewFirst = unlockChipIfNeeded(stats.unlockedChips, 'STRUCTURAL_SIGHT');
+    if (previewFirst.newlyUnlocked) {
+      newlyUnlockedNames.push(NEURAL_CHIP_MAP[previewFirst.newlyUnlocked].name);
+    }
+    if (currentTier >= 2) {
+      const previewSecond = unlockChipIfNeeded(previewFirst.unlockedChips, 'NEURAL_DAMPENER');
+      if (previewSecond.newlyUnlocked) {
+        newlyUnlockedNames.push(NEURAL_CHIP_MAP[previewSecond.newlyUnlocked].name);
+      }
+    }
+
     setDungeon((prev) => {
       if (!prev) return prev;
       return {
@@ -305,14 +338,23 @@ export function useGameEngine() {
         ),
       };
     });
-    setStats((prev) => ({
-      ...prev,
-      runHintPacks: prev.runHintPacks + 1,
-      runBuffs: [...prev.runBuffs, 'ATK_UP'],
-    }));
+    setStats((prev) => {
+      let nextUnlocked = unlockChipIfNeeded(prev.unlockedChips, 'STRUCTURAL_SIGHT').unlockedChips;
+      if (currentTier >= 2) {
+        nextUnlocked = unlockChipIfNeeded(nextUnlocked, 'NEURAL_DAMPENER').unlockedChips;
+      }
+      return {
+        ...prev,
+        runHintPacks: prev.runHintPacks + 1,
+        runBuffs: [...prev.runBuffs, 'ATK_UP'],
+        unlockedChips: nextUnlocked,
+      };
+    });
     setActiveLockedChest(null);
+    const chipUnlockSuffix =
+      newlyUnlockedNames.length > 0 ? ` · Chip Unlocked: ${newlyUnlockedNames.join(' & ')}` : '';
     setLootMessage({
-      text: 'Blue Cache Unlocked: +1 Hint Pack & Neural Overclock (+15% Shards)',
+      text: `Blue Cache Unlocked: +1 Hint Pack & Neural Overclock (+15% Shards)${chipUnlockSuffix}`,
       type: 'CHEST',
     });
     setGameState('CHEST_LOOT');
@@ -332,11 +374,23 @@ export function useGameEngine() {
 
   const handleCombatWin = (knowledgeGained: number) => {
     if (!dungeon || !currentEnemy) return;
+    const defeatedApex = isApexEnemy(currentEnemy);
+    const currentTier = dungeon.tier;
 
-    setStats((prev) => ({
-      ...prev,
-      runKnowledge: prev.runKnowledge + knowledgeGained,
-    }));
+    setStats((prev) => {
+      let nextUnlocked = prev.unlockedChips;
+      if (defeatedApex) {
+        nextUnlocked = unlockChipIfNeeded(nextUnlocked, 'OVERCLOCK_CHIP').unlockedChips;
+        if (currentTier >= 2) {
+          nextUnlocked = unlockChipIfNeeded(nextUnlocked, 'SYNC_MATRIX').unlockedChips;
+        }
+      }
+      return {
+        ...prev,
+        runKnowledge: prev.runKnowledge + knowledgeGained,
+        unlockedChips: nextUnlocked,
+      };
+    });
 
     setDungeon((prev) => {
       if (!prev) return prev;
@@ -355,14 +409,21 @@ export function useGameEngine() {
   };
 
   const handleCombatLose = () => {
+    const candidateScar = shouldInflictScar(stats.equippedChips)
+      ? getRandomScar(stats.neuralScars)
+      : null;
+    setLastDefeatInflictedScar(Boolean(candidateScar));
     setStats((prev) => {
-      const newScar = getRandomScar(prev.neuralScars);
+      const nextScars =
+        candidateScar && !prev.neuralScars.includes(candidateScar)
+          ? [...prev.neuralScars, candidateScar]
+          : prev.neuralScars;
       return {
         ...prev,
         runKnowledge: 0,
         runHintPacks: 0,
         runBuffs: [],
-        neuralScars: newScar ? [...prev.neuralScars, newScar] : prev.neuralScars,
+        neuralScars: nextScars,
       };
     });
     recordTelemetryEvent('DEFEAT');
@@ -373,12 +434,24 @@ export function useGameEngine() {
   };
 
   const handleBankAndExit = () => {
-    const extractedKnowledge = calculateExtractedKnowledge(stats.runKnowledge, stats.runBuffs);
+    const extraction = calculateExtractionBreakdown(
+      stats.runKnowledge,
+      stats.runBuffs,
+      stats.fp,
+      stats.equippedChips
+    );
+    setLastDefeatInflictedScar(false);
     setStats((prev) => {
-      const bankedKnowledge = calculateExtractedKnowledge(prev.runKnowledge, prev.runBuffs);
+      const banked = calculateExtractionBreakdown(
+        prev.runKnowledge,
+        prev.runBuffs,
+        prev.fp,
+        prev.equippedChips
+      );
       return {
         ...prev,
-        knowledge: prev.knowledge + bankedKnowledge,
+        knowledge: prev.knowledge + banked.total,
+        lifetimeShardsExtracted: prev.lifetimeShardsExtracted + banked.total,
         hintPacks: prev.hintPacks + getBankableHintPacks(prev.runHintPacks, prev.upgrades.hints),
         runKnowledge: 0,
         runHintPacks: 0,
@@ -387,7 +460,7 @@ export function useGameEngine() {
         reconRewardAvailable: true,
       };
     });
-    recordTelemetryEvent('EXTRACTION', extractedKnowledge);
+    recordTelemetryEvent('EXTRACTION', extraction.total);
     setCacheProfile(getAnonymizedCacheProfile());
     setActiveLockedChest(null);
     setDungeonAlert(null);
@@ -408,13 +481,16 @@ export function useGameEngine() {
       setStats((prev) => {
         const newScars = [...prev.neuralScars];
         const index = newScars.indexOf(scarToHeal);
-        if (index > -1) {
-          newScars.splice(index, 1);
+        if (index === -1) {
+          return prev;
         }
+        newScars.splice(index, 1);
+        const nextUnlocked = unlockChipIfNeeded(prev.unlockedChips, 'NEURAL_DAMPENER').unlockedChips;
         return {
           ...prev,
           knowledge: prev.knowledge - 50,
           neuralScars: newScars,
+          unlockedChips: nextUnlocked,
         };
       });
     }
@@ -424,17 +500,21 @@ export function useGameEngine() {
     setStats((prev) => {
       const newScars = [...prev.neuralScars];
       const index = newScars.indexOf(scarToClear);
-      if (index > -1) {
-        newScars.splice(index, 1);
+      if (index === -1) {
+        return prev;
       }
+      newScars.splice(index, 1);
+      const nextUnlocked = unlockChipIfNeeded(prev.unlockedChips, 'NEURAL_DAMPENER').unlockedChips;
       return {
         ...prev,
         neuralScars: newScars,
+        unlockedChips: nextUnlocked,
       };
     });
   };
 
   const handleEmergencyEject = () => {
+    setLastDefeatInflictedScar(false);
     setStats((prev) => ({
       ...prev,
       runKnowledge: 0,
@@ -448,7 +528,7 @@ export function useGameEngine() {
 
   const handleUpgrade = (type: 'hp' | 'fp' | 'hints' | 'buy_hint') => {
     if (type === 'buy_hint') {
-      const cost = 50;
+      const cost = HINT_PACK_COST;
       if (stats.knowledge >= cost) {
         setStats((prev) => ({
           ...prev,
@@ -460,20 +540,33 @@ export function useGameEngine() {
     }
 
     const currentLevel = stats.upgrades[type];
-    const cost = (currentLevel + 1) * 100;
+    if (!canUpgrade(type, currentLevel)) return;
+    const cost = getUpgradeCost(type, currentLevel);
+    if (cost === null) return;
 
     if (stats.knowledge >= cost) {
       setStats((prev) => {
-        const newUpgrades = { ...prev.upgrades, [type]: currentLevel + 1 };
+        const latestLevel = prev.upgrades[type];
+        if (!canUpgrade(type, latestLevel)) return prev;
+        const latestCost = getUpgradeCost(type, latestLevel);
+        if (latestCost === null || prev.knowledge < latestCost) return prev;
+        const newUpgrades = { ...prev.upgrades, [type]: latestLevel + 1 };
         return {
           ...prev,
-          knowledge: prev.knowledge - cost,
+          knowledge: prev.knowledge - latestCost,
           upgrades: newUpgrades,
-          maxHp: type === 'hp' ? 100 + (currentLevel + 1) * 20 : prev.maxHp,
-          maxFp: type === 'fp' ? 100 + (currentLevel + 1) * 20 : prev.maxFp,
+          maxHp: type === 'hp' ? 100 + (latestLevel + 1) * 20 : prev.maxHp,
+          maxFp: type === 'fp' ? 100 + (latestLevel + 1) * 20 : prev.maxFp,
         };
       });
     }
+  };
+
+  const handleToggleEquipChip = (chipId: NeuralChipId) => {
+    setStats((prev) => ({
+      ...prev,
+      equippedChips: toggleEquipChip(prev.unlockedChips, prev.equippedChips, chipId),
+    }));
   };
 
   const handleUnlockDemo = (variantId: string) => {
@@ -494,22 +587,41 @@ export function useGameEngine() {
   };
 
   const handleRecordConceptOutcome = (outcome: ConceptOutcome) => {
-    setStats((prev) => applyConceptOutcomeToStats(prev, outcome));
+    setStats((prev) => {
+      const next = applyConceptOutcomeToStats(prev, outcome);
+      if (!outcome.correct) return next;
+      return {
+        ...next,
+        sectorMastery: recordSectorMastery(next.sectorMastery, outcome.tier, 'CONCEPTUAL'),
+      };
+    });
   };
 
   const handleRecordArchetypeStats = (outcomes: readonly SignalSweepNodeOutcome[]) => {
     if (outcomes.length === 0) return;
+    const summary = evaluateSignalSweepRun(outcomes);
     setStats((prev) => {
       const spacedRep = recordConceptOutcomesBatch(
         prev.conceptSchedule,
         prev.conceptStepCounter,
         outcomes
       );
+      let nextMastery = prev.sectorMastery;
+      for (const outcome of outcomes) {
+        if (outcome.correct) {
+          nextMastery = recordSectorMastery(nextMastery, outcome.tier, 'CONCEPTUAL');
+        }
+      }
+      const nextUnlocked = summary.rewardEligible
+        ? unlockChipIfNeeded(prev.unlockedChips, 'PATTERN_LENS').unlockedChips
+        : prev.unlockedChips;
       return {
         ...prev,
         archetypeStats: mergeArchetypeStats(prev.archetypeStats, outcomes),
         conceptSchedule: spacedRep.conceptSchedule,
         conceptStepCounter: spacedRep.conceptStepCounter,
+        sectorMastery: nextMastery,
+        unlockedChips: nextUnlocked,
       };
     });
   };
@@ -536,6 +648,7 @@ export function useGameEngine() {
     dungeonAlert,
     lootMessage,
     setLootMessage,
+    lastDefeatInflictedScar,
     currentSlot,
     slots,
     cacheProfile,
@@ -557,6 +670,7 @@ export function useGameEngine() {
     handleCalibrateScar,
     handleEmergencyEject,
     handleUpgrade,
+    handleToggleEquipChip,
     handleUnlockDemo,
     handleRecordConceptOutcome,
     handleRecordArchetypeStats,

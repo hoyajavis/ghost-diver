@@ -2,7 +2,7 @@ import React from 'react';
 import { PlayerStats } from '../types';
 import { canDescendFromFloor, getBankableHintPacks, MAX_FLOOR, MAX_TIER } from '../lib/dungeonLogic';
 import { getScarName } from '../lib/scarData';
-import { calculateExtractedKnowledge, RECON_BUFF_RUN_TOKENS } from '../lib/signalSweepLogic';
+import { calculateExtractionBreakdown, RECON_BUFF_RUN_TOKENS } from '../lib/signalSweepLogic';
 import { Home, ArrowDownToLine, Activity, Database, ShieldAlert, Cpu, Lock } from 'lucide-react';
 
 interface Props {
@@ -16,7 +16,12 @@ export const Sanctuary: React.FC<Props> = ({ stats, floor, onBankAndExit, onDive
   const bankableHints = getBankableHintPacks(stats.runHintPacks, stats.upgrades.hints);
   const canDescend = canDescendFromFloor(floor);
   const hasReconShardBonus = stats.runBuffs.includes(RECON_BUFF_RUN_TOKENS.SHARD_BONUS_15);
-  const extractedKnowledge = calculateExtractedKnowledge(stats.runKnowledge, stats.runBuffs);
+  const extraction = calculateExtractionBreakdown(
+    stats.runKnowledge,
+    stats.runBuffs,
+    stats.fp,
+    stats.equippedChips
+  );
 
   return (
     <div className="flex flex-col items-center justify-center h-full bg-gb-0 text-gb-3 p-4 scanlines relative overflow-y-auto custom-scrollbar terminal-text wireframe-bg">
@@ -40,10 +45,15 @@ export const Sanctuary: React.FC<Props> = ({ stats, floor, onBankAndExit, onDive
           <div className="bg-gb-0 border border-gb-3 p-3 gb-border-sm flex flex-col items-center">
             <Database className="w-4 h-4 text-neon-green mb-1" />
             <span className="text-xs text-gb-2 font-bold">Unbanked Shards</span>
-            <span className="text-xl font-bold text-gb-3">+{extractedKnowledge}</span>
+            <span className="text-xl font-bold text-gb-3">+{extraction.total}</span>
             {hasReconShardBonus && (
               <span className="text-[10px] font-bold text-neon-cyan uppercase mt-0.5 text-center">
                 +15% Recon Bonus
+              </span>
+            )}
+            {extraction.syncFpBonus > 0 && (
+              <span className="text-[10px] font-bold text-purple-300 uppercase mt-0.5 text-center px-1.5 py-0.5 border border-purple-400/50 bg-purple-400/10">
+                +{extraction.syncFpBonus} Sync FP Bonus
               </span>
             )}
           </div>

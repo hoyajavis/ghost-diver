@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { ConceptualArchetype, InputType, MathProblem } from '../../types';
+import { ConceptScheduleMap, ConceptualArchetype, InputType, MathProblem } from '../../types';
 import { gcd, validateAnswer } from '../answerValidator';
 import { ENEMY_TIERS } from '../enemyData';
-import { CONCEPTUAL_GENERATORS, generateConceptualProblem } from '../generators/conceptual';
+import {
+  CONCEPTUAL_GENERATORS,
+  FOUNDATIONAL_CONCEPTUAL_GENERATORS,
+  generateConceptualProblem,
+  getFoundationalConceptualGenerators,
+  getTaggedConceptualGeneratorsForTier,
+} from '../generators/conceptual';
 import {
   getActiveChoices,
   getActiveMultiSelectOptions,
@@ -465,7 +471,7 @@ describe('Phase 2 self-contained prompts, clues, and breadcrumbs', () => {
   });
 });
 
-describe('Phase 3 conceptual generators (Tiers 1-12, 36 generators across 7 archetypes)', () => {
+describe('Phase 3 & 4.5 conceptual generators (Tiers 1-12: 72 tier + 8 foundational = 80 generators across 8 archetypes)', () => {
   const ARCHETYPE_KEY_REGEX = /^[A-Z0-9_-]{1,32}$/;
   const ALL_ARCHETYPES: ReadonlySet<ConceptualArchetype> = new Set([
     'MAGNITUDE_ESTIMATION',
@@ -475,101 +481,160 @@ describe('Phase 3 conceptual generators (Tiers 1-12, 36 generators across 7 arch
     'SIGN_PREDICTION',
     'EQUIVALENCE_STRUCTURE',
     'VISUAL_QUADRANT',
+    'EFFECT_OF_CHANGE',
   ]);
 
-  it('fuzz-tests all 36 conceptual generators across Tiers 1-12 for invariants, unique choices, promptLines, and validator accuracy', () => {
+  function assertConceptualInvariants(
+    problem: Omit<MathProblem, 'type'>,
+    label: string,
+    seenArchetypes: Set<ConceptualArchetype>
+  ) {
+    const answerStr = problem.answer.toString().trim();
+
+    expect(problem.question.trim().length, label).toBeGreaterThan(0);
+    expect(answerStr.length, label).toBeGreaterThan(0);
+    expect(problem.complexity, label).toBe('QUICK');
+    expect(problem.category, label).toBe('CONCEPTUAL');
+    expect(problem.steps, label).toEqual([]);
+    expect(problem.archetype, label).toBeDefined();
+    expect(ALL_ARCHETYPES.has(problem.archetype!), `Unknown archetype ${problem.archetype} in ${label}`).toBe(true);
+    expect(problem.archetype!, `Archetype fails storage regex in ${label}`).toMatch(ARCHETYPE_KEY_REGEX);
+    seenArchetypes.add(problem.archetype!);
+
+    if (problem.archetype === 'SPOT_THE_GLITCH') {
+      expect(problem.promptLines, `SPOT_THE_GLITCH missing promptLines in ${label}`).toBeDefined();
+      expect(problem.promptLines!.length, `SPOT_THE_GLITCH needs >= 2 promptLines in ${label}`).toBeGreaterThanOrEqual(2);
+      for (const line of problem.promptLines!) {
+        expect(line.trim().length, `Empty promptLine in ${label}`).toBeGreaterThan(0);
+      }
+    }
+
+    const allTextFields = [
+      problem.question,
+      answerStr,
+      ...(problem.choices ?? []),
+      ...(problem.promptLines ?? []),
+    ];
+    for (const text of allTextFields) {
+      expect(text, `Malformed double-negative in ${label}: "${text}"`).not.toMatch(/--\d/);
+      expect(text, `Malformed negative-zero in ${label}: "${text}"`).not.toMatch(/(?<!\d)-0(?!\.\d|\d)/);
+    }
+
+    const isChoice = Boolean(problem.choices);
+    if (problem.archetype === 'BENCHMARK_COMPARE') {
+      expect(problem.inputType, label).toBe('RELATIONSHIP');
+      expect(problem.choices, label).toBeUndefined();
+      expect(['<', '=', '>'], label).toContain(answerStr);
+
+      expect(
+        validateAnswer(answerStr, problem.answer, {
+          inputType: problem.inputType,
+          isChoice: false,
+        }),
+        `Benchmark answer failed validateAnswer in ${label}`
+      ).toBe(true);
+
+      for (const wrongOp of ['<', '=', '>'].filter((op) => op !== answerStr)) {
+        expect(
+          validateAnswer(wrongOp, problem.answer, {
+            inputType: problem.inputType,
+            isChoice: false,
+          }),
+          `Benchmark distractor "${wrongOp}" unexpectedly accepted in ${label}`
+        ).toBe(false);
+      }
+    } else {
+      const expectedChoiceCount =
+        problem.archetype === 'SPOT_THE_GLITCH' || problem.archetype === 'SIGN_PREDICTION' ? 3 : 4;
+      expect(problem.choices, `Missing choices in ${label}`).toBeDefined();
+      expect(
+        problem.choices!.length,
+        `Need exactly ${expectedChoiceCount} choices in ${label}`
+      ).toBe(expectedChoiceCount);
+      expect(new Set(problem.choices!).size, `Duplicate choices in ${label}`).toBe(problem.choices!.length);
+      expect(problem.choices, `Answer "${answerStr}" missing from choices in ${label}`).toContain(answerStr);
+
+      expect(
+        validateAnswer(answerStr, problem.answer, {
+          inputType: problem.inputType,
+          isChoice,
+        }),
+        `Answer "${answerStr}" failed validateAnswer in ${label}`
+      ).toBe(true);
+
+      for (const distractor of problem.choices!.filter((c) => c !== answerStr)) {
+        expect(
+          validateAnswer(distractor, problem.answer, {
+            inputType: problem.inputType,
+            isChoice,
+          }),
+          `Distractor "${distractor}" unexpectedly accepted for answer "${answerStr}" in ${label}`
+        ).toBe(false);
+      }
+    }
+  }
+
+  it('fuzz-tests all 72 tier + 8 foundational conceptual generators (80 total) for invariants, unique templateIds, choices, promptLines, and validator accuracy', () => {
     const seenArchetypes = new Set<ConceptualArchetype>();
-    let totalGenerators = 0;
+    const seenTemplateIds = new Set<string>();
+    let totalTierGenerators = 0;
 
     for (let tier = 1; tier <= 12; tier++) {
       const tierGens = CONCEPTUAL_GENERATORS[tier];
+      const taggedTierGens = getTaggedConceptualGeneratorsForTier(tier);
       expect(tierGens, `Missing CONCEPTUAL_GENERATORS for tier ${tier}`).toBeDefined();
-      expect(tierGens.length, `Tier ${tier} must have exactly 3 conceptual generators`).toBe(3);
+      expect(tierGens.length, `Tier ${tier} must have 6 conceptual generators`).toBe(6);
+      expect(taggedTierGens.length).toBe(6);
+      expect(
+        taggedTierGens.some((g) => g.archetype === 'EFFECT_OF_CHANGE'),
+        `Tier ${tier} must include an EFFECT_OF_CHANGE template`
+      ).toBe(true);
 
       for (let genIdx = 0; genIdx < tierGens.length; genIdx++) {
-        totalGenerators += 1;
-        const generator = tierGens[genIdx];
+        totalTierGenerators += 1;
+        const tagged = taggedTierGens[genIdx];
+        expect(seenTemplateIds.has(tagged.id), `Duplicate templateId: ${tagged.id}`).toBe(false);
+        seenTemplateIds.add(tagged.id);
 
+        const generator = tierGens[genIdx];
         for (let sample = 0; sample < FUZZ_SAMPLES; sample++) {
           const problem = generator();
-          const answerStr = problem.answer.toString().trim();
-          const label = `Conceptual T${tier}#${genIdx + 1} (${problem.question})`;
-
-          expect(problem.question.trim().length, label).toBeGreaterThan(0);
-          expect(answerStr.length, label).toBeGreaterThan(0);
-          expect(problem.complexity, label).toBe('QUICK');
-          expect(problem.category, label).toBe('CONCEPTUAL');
-          expect(problem.steps, label).toEqual([]);
-          expect(problem.archetype, label).toBeDefined();
-          expect(ALL_ARCHETYPES.has(problem.archetype!), `Unknown archetype ${problem.archetype} in ${label}`).toBe(true);
-          expect(problem.archetype!, `Archetype fails storage regex in ${label}`).toMatch(ARCHETYPE_KEY_REGEX);
-          seenArchetypes.add(problem.archetype!);
-
-          if (problem.archetype === 'SPOT_THE_GLITCH') {
-            expect(problem.promptLines, `SPOT_THE_GLITCH missing promptLines in ${label}`).toBeDefined();
-            expect(problem.promptLines!.length, `SPOT_THE_GLITCH needs >= 2 promptLines in ${label}`).toBeGreaterThanOrEqual(2);
-            for (const line of problem.promptLines!) {
-              expect(line.trim().length, `Empty promptLine in ${label}`).toBeGreaterThan(0);
-            }
-          }
-
-          const isChoice = Boolean(problem.choices);
-          if (problem.archetype === 'BENCHMARK_COMPARE') {
-            expect(problem.inputType, label).toBe('RELATIONSHIP');
-            expect(problem.choices, label).toBeUndefined();
-            expect(['<', '=', '>'], label).toContain(answerStr);
-
-            expect(
-              validateAnswer(answerStr, problem.answer, {
-                inputType: problem.inputType,
-                isChoice: false,
-              }),
-              `Benchmark answer failed validateAnswer in ${label}`
-            ).toBe(true);
-
-            for (const wrongOp of ['<', '=', '>'].filter((op) => op !== answerStr)) {
-              expect(
-                validateAnswer(wrongOp, problem.answer, {
-                  inputType: problem.inputType,
-                  isChoice: false,
-                }),
-                `Benchmark distractor "${wrongOp}" unexpectedly accepted in ${label}`
-              ).toBe(false);
-            }
-          } else {
-            expect(problem.choices, `Missing choices in ${label}`).toBeDefined();
-            expect(problem.choices!.length, `Need 3-4 choices in ${label}`).toBeGreaterThanOrEqual(3);
-            expect(problem.choices!.length, `Need 3-4 choices in ${label}`).toBeLessThanOrEqual(4);
-            expect(new Set(problem.choices!).size, `Duplicate choices in ${label}`).toBe(problem.choices!.length);
-            expect(problem.choices, `Answer "${answerStr}" missing from choices in ${label}`).toContain(answerStr);
-
-            expect(
-              validateAnswer(answerStr, problem.answer, {
-                inputType: problem.inputType,
-                isChoice,
-              }),
-              `Answer "${answerStr}" failed validateAnswer in ${label}`
-            ).toBe(true);
-
-            for (const distractor of problem.choices!.filter((c) => c !== answerStr)) {
-              expect(
-                validateAnswer(distractor, problem.answer, {
-                  inputType: problem.inputType,
-                  isChoice,
-                }),
-                `Distractor "${distractor}" unexpectedly accepted for answer "${answerStr}" in ${label}`
-              ).toBe(false);
-            }
-          }
+          expect(problem.archetype).toBe(tagged.archetype);
+          assertConceptualInvariants(
+            problem,
+            `Conceptual T${tier}#${genIdx + 1} [${tagged.id}] (${problem.question})`,
+            seenArchetypes
+          );
         }
       }
     }
 
-    expect(totalGenerators).toBe(36);
-    expect(seenArchetypes.size).toBe(7);
+    const foundationalTagged = getFoundationalConceptualGenerators();
+    expect(FOUNDATIONAL_CONCEPTUAL_GENERATORS).toHaveLength(8);
+    expect(foundationalTagged).toHaveLength(8);
+
+    for (let i = 0; i < foundationalTagged.length; i++) {
+      const tagged = foundationalTagged[i];
+      expect(seenTemplateIds.has(tagged.id), `Duplicate foundational templateId: ${tagged.id}`).toBe(false);
+      seenTemplateIds.add(tagged.id);
+
+      for (let sample = 0; sample < FUZZ_SAMPLES; sample++) {
+        const problem = tagged.generate();
+        expect(problem.archetype).toBe(tagged.archetype);
+        assertConceptualInvariants(
+          problem,
+          `Foundational #${i + 1} [${tagged.id}] (${problem.question})`,
+          seenArchetypes
+        );
+      }
+    }
+
+    expect(totalTierGenerators).toBe(72);
+    expect(seenTemplateIds.size).toBe(80);
+    expect(seenArchetypes.size).toBe(8);
   });
 
-  it('routes generateProblem across ATTACK, MEDITATION, LOCK, and SHIELD_BREAK and honors archetype/rng options', () => {
+  it('routes generateProblem across ATTACK, MEDITATION, LOCK, and SHIELD_BREAK and honors archetype/rng/anti-repeat/spaced-rep options', () => {
     for (let tier = 1; tier <= 12; tier++) {
       const attack = generateProblem(tier, 'ATTACK', 1);
       expect(attack.type).toBe('ATTACK');
@@ -580,6 +645,7 @@ describe('Phase 3 conceptual generators (Tiers 1-12, 36 generators across 7 arch
         expect(problem.type).toBe(conceptualType);
         expect(problem.category).toBe('CONCEPTUAL');
         expect(problem.complexity).toBe('QUICK');
+        expect(problem.templateId).toBeTruthy();
         expect(problem.archetype).toMatch(ARCHETYPE_KEY_REGEX);
         expect(
           validateAnswer(problem.answer.toString(), problem.answer, {
@@ -591,8 +657,8 @@ describe('Phase 3 conceptual generators (Tiers 1-12, 36 generators across 7 arch
     }
 
     // Deterministic rng & archetype filtering
-    const makeDetRng = () => {
-      let state = 42;
+    const makeDetRng = (seed = 42) => {
+      let state = seed;
       return () => {
         state = (state * 1664525 + 1013904223) % 4294967296;
         return state / 4294967296;
@@ -601,15 +667,64 @@ describe('Phase 3 conceptual generators (Tiers 1-12, 36 generators across 7 arch
 
     const glitchA = generateConceptualProblem(1, 'LOCK', {
       archetype: 'SPOT_THE_GLITCH',
-      rng: makeDetRng(),
+      rng: makeDetRng(42),
     });
     const glitchB = generateConceptualProblem(1, 'LOCK', {
       archetype: 'SPOT_THE_GLITCH',
-      rng: makeDetRng(),
+      rng: makeDetRng(42),
     });
     expect(glitchA).toEqual(glitchB);
     expect(glitchA.archetype).toBe('SPOT_THE_GLITCH');
+    expect(glitchA.templateId).toBe('t1-glitch');
     expect(glitchA.promptLines?.length).toBeGreaterThanOrEqual(2);
+
+    // Anti-repeat: excludeTemplateIds, excludeArchetypes, excludeQuestions via generateProblem
+    const first = generateProblem(1, 'LOCK', 1, {
+      archetype: 'EFFECT_OF_CHANGE',
+      rng: makeDetRng(99),
+    });
+    expect(first.templateId).toBe('t1-effect');
+
+    const next = generateProblem(1, 'LOCK', 1, {
+      excludeArchetypes: new Set<ConceptualArchetype>(['EFFECT_OF_CHANGE']),
+      excludeTemplateIds: new Set<string>(['t1-effect', 't1-mag-est']),
+      excludeQuestions: new Set<string>([first.question]),
+      rng: makeDetRng(100),
+    });
+    expect(next.archetype).not.toBe('EFFECT_OF_CHANGE');
+    expect(next.templateId).not.toBe('t1-effect');
+    expect(next.templateId).not.toBe('t1-mag-est');
+    expect(next.question).not.toBe(first.question);
+
+    // Foundational pool opt-in can emit foundational templateIds
+    const drawnTemplateIds = new Set<string>();
+    const rngFound = makeDetRng(555);
+    for (let i = 0; i < 60; i++) {
+      const p = generateConceptualProblem(1, 'LOCK', {
+        includeFoundational: true,
+        rng: rngFound,
+      });
+      if (p.templateId) drawnTemplateIds.add(p.templateId);
+    }
+    expect(Array.from(drawnTemplateIds).some((id) => id.startsWith('f-'))).toBe(true);
+
+    // Spaced-rep weighted selection favors due concepts (~65%) while respecting excludeArchetypes
+    const schedule: ConceptScheduleMap = {
+      '1:EFFECT_OF_CHANGE': { box: 0, nextDueStep: 2, lastResult: 'MISS' },
+    };
+    const srRng = makeDetRng(2026);
+    let dueHits = 0;
+    const srTrials = 400;
+    for (let i = 0; i < srTrials; i++) {
+      const p = generateProblem(1, 'MEDITATION', 1, {
+        conceptSchedule: schedule,
+        conceptStepCounter: 10,
+        rng: srRng,
+      });
+      if (p.archetype === 'EFFECT_OF_CHANGE') dueHits += 1;
+    }
+    expect(dueHits / srTrials).toBeGreaterThan(0.55);
+    expect(dueHits / srTrials).toBeLessThan(0.75);
   });
 
   it('guarantees Tier 6 SPOT_THE_GLITCH decimal parts never carry into the ones digit across 250 samples', () => {

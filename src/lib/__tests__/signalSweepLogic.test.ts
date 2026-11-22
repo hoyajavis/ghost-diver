@@ -27,7 +27,7 @@ function createSeededRng(seed: number): () => number {
 
 describe('signalSweepLogic', () => {
   describe('constants & metadata helpers', () => {
-    it('defines all 7 conceptual archetype labels and 3 ordered Recon Buff options', () => {
+    it('defines all 8 conceptual archetype labels and 3 ordered Recon Buff options', () => {
       const allArchetypes: ConceptualArchetype[] = [
         'MAGNITUDE_ESTIMATION',
         'BENCHMARK_COMPARE',
@@ -36,11 +36,13 @@ describe('signalSweepLogic', () => {
         'SIGN_PREDICTION',
         'EQUIVALENCE_STRUCTURE',
         'VISUAL_QUADRANT',
+        'EFFECT_OF_CHANGE',
       ];
 
       for (const archetype of allArchetypes) {
         expect(ARCHETYPE_LABELS[archetype]).toBeTruthy();
       }
+      expect(ARCHETYPE_LABELS.EFFECT_OF_CHANGE).toBe('Scaling & Change');
 
       expect(SIGNAL_SWEEP_NODE_COUNT).toBe(10);
       expect(SIGNAL_SWEEP_REWARD_THRESHOLD).toBe(0.7);
@@ -61,11 +63,17 @@ describe('signalSweepLogic', () => {
         'MAGNITUDE_ESTIMATION',
         'BENCHMARK_COMPARE',
         'SPOT_THE_GLITCH',
+        'EFFECT_OF_CHANGE',
+        'EQUIVALENCE_STRUCTURE',
+        'FIRST_STEP_STRATEGY',
       ]);
       expect(getConceptualArchetypesForTier(8)).toEqual([
         'SIGN_PREDICTION',
         'VISUAL_QUADRANT',
         'BENCHMARK_COMPARE',
+        'EFFECT_OF_CHANGE',
+        'SPOT_THE_GLITCH',
+        'EQUIVALENCE_STRUCTURE',
       ]);
       expect(getConceptualArchetypesForTier(0)).toEqual(getConceptualArchetypesForTier(1));
       expect(getConceptualArchetypesForTier(99)).toEqual(getConceptualArchetypesForTier(12));
@@ -136,12 +144,12 @@ describe('signalSweepLogic', () => {
         }
       }
 
-      // 10 slots across 3 archetypes => 4, 3, 3
+      // 10 slots across 6 Tier-1 archetypes => four 2s and two 1s
       const sortedCounts = Array.from(counts.values()).sort((a, b) => a - b);
-      expect(sortedCounts).toEqual([3, 3, 4]);
+      expect(sortedCounts).toEqual([1, 1, 2, 2, 2, 2]);
     });
 
-    it('balances all 5 archetypes across Tiers 1-5 (2 each) without consecutive repeats', () => {
+    it('balances all 6 archetypes across Tiers 1-5 without consecutive repeats', () => {
       const deck = generateSignalSweepDeck([1, 2, 3, 4, 5], 10, createSeededRng(202));
       expect(deck).toHaveLength(10);
 
@@ -157,11 +165,12 @@ describe('signalSweepLogic', () => {
         }
       }
 
-      expect(counts.size).toBe(5);
-      expect(Array.from(counts.values()).every((c) => c === 2)).toBe(true);
+      expect(counts.size).toBe(6);
+      const sortedCounts = Array.from(counts.values()).sort((a, b) => a - b);
+      expect(sortedCounts).toEqual([1, 1, 2, 2, 2, 2]);
     });
 
-    it('covers all 7 archetypes across Tiers 1-12 without consecutive repeats', () => {
+    it('covers all 8 archetypes across Tiers 1-12 without consecutive repeats', () => {
       const tiers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
       const deck = generateSignalSweepDeck(tiers, 10, createSeededRng(303));
       expect(deck).toHaveLength(10);
@@ -177,8 +186,8 @@ describe('signalSweepLogic', () => {
         }
       }
 
-      expect(archetypes.size).toBe(7);
-      // All 10 nodes draw from distinct (tier, archetype) pairs when 36 pairs are available
+      expect(archetypes.size).toBe(8);
+      // All 10 nodes draw from distinct (tier, archetype) pairs when 72 pairs are available
       expect(tierArchetypePairs.size).toBe(10);
     });
 

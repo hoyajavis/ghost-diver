@@ -1,9 +1,16 @@
-import { ConceptualArchetype, MathProblem, ProblemType } from '../../types';
+import {
+  ConceptScheduleMap,
+  ConceptualArchetype,
+  MathProblem,
+  ProblemType,
+} from '../../types';
+import { ConceptSlot, selectWeightedConceptSlot } from '../conceptSpacedRep';
 import { clampTier } from '../dungeonLogic';
 
 export type ConceptualGenerator = (rng?: () => number) => Omit<MathProblem, 'type'>;
 
-interface TaggedConceptualGenerator {
+export interface TaggedConceptualGenerator {
+  id: string;
   archetype: ConceptualArchetype;
   generate: ConceptualGenerator;
 }
@@ -1094,71 +1101,1341 @@ const t12BenchmarkCompare: ConceptualGenerator = (rng = Math.random) => {
 };
 
 // ============================================================================
-// REGISTRY (Tiers 1-12, 3 Parameterized Generators per Tier = 36 Generators)
+// PHASE 4.5 POOL EXPANSION: 3 NEW TEMPLATES PER TIER (36 -> 72 TIER TEMPLATES)
+// ============================================================================
+
+// --- TIER 1 NEW TEMPLATES ---
+
+const t1EffectOfChange: ConceptualGenerator = (rng = Math.random) => {
+  if (rng() < 0.5) {
+    const a = randInt(120, 480, rng);
+    const b = randInt(110, 390, rng);
+    const delta = pick([10, 20, 100, 200], rng);
+    return buildChoiceProblem({
+      question: `IN ${a} + ${b}, IF YOU ADD ${delta} TO ${a}, THE SUM...`,
+      answer: `Increases by ${delta}`,
+      distractors: [
+        `Decreases by ${delta}`,
+        `Stays the same`,
+        `Increases by ${delta * 2}`,
+      ],
+      archetype: 'EFFECT_OF_CHANGE',
+      rng,
+    });
+  }
+
+  const base = randInt(12, 89, rng);
+  const mult = pick([10, 100], rng);
+  const shift = mult === 10 ? '1 place left' : '2 places left';
+  return buildChoiceProblem({
+    question: `WHEN YOU MULTIPLY ${base} BY ${mult}, ITS DIGITS SHIFT...`,
+    answer: shift,
+    distractors: [
+      mult === 10 ? '2 places left' : '1 place left',
+      '1 place right',
+      'Do not move',
+    ],
+    archetype: 'EFFECT_OF_CHANGE',
+    rng,
+  });
+};
+
+const t1EquivalenceStructure: ConceptualGenerator = (rng = Math.random) => {
+  const a = randInt(145, 585, rng);
+  const offset = pick([1, 2], rng);
+  const nearHundred = 100 - offset;
+  if (rng() < 0.5) {
+    return buildChoiceProblem({
+      question: `WHICH EXPRESSION EQUALS ${a} + ${nearHundred}?`,
+      answer: `${a} + 100 - ${offset}`,
+      distractors: [
+        `${a} + 100 + ${offset}`,
+        `${a} - 100 + ${offset}`,
+        `${a} + 90 - ${offset}`,
+      ],
+      archetype: 'EQUIVALENCE_STRUCTURE',
+      rng,
+    });
+  }
+
+  return buildChoiceProblem({
+    question: `WHICH EXPRESSION EQUALS ${a} - ${nearHundred}?`,
+    answer: `${a} - 100 + ${offset}`,
+    distractors: [
+      `${a} - 100 - ${offset}`,
+      `${a} + 100 - ${offset}`,
+      `${a} - 90 + ${offset}`,
+    ],
+    archetype: 'EQUIVALENCE_STRUCTURE',
+    rng,
+  });
+};
+
+const t1FirstStepStrategy: ConceptualGenerator = (rng = Math.random) => {
+  if (rng() < 0.5) {
+    const hundreds = pick([200, 300, 400], rng);
+    const diff = pick([1, 2, 3], rng);
+    const near = hundreds - diff;
+    const other = randInt(135, 465, rng);
+    return buildChoiceProblem({
+      question: `FASTEST MENTAL STRATEGY FOR ${near} + ${other}:`,
+      answer: `Add ${hundreds}, then subtract ${diff}`,
+      distractors: [
+        `Add ${hundreds}, then add ${diff}`,
+        `Subtract ${hundreds}, then add ${diff}`,
+        `Multiply by ${diff}`,
+      ],
+      archetype: 'FIRST_STEP_STRATEGY',
+      rng,
+    });
+  }
+
+  const start = pick([500, 600, 700, 800], rng);
+  const hundreds = pick([200, 300], rng);
+  const diff = pick([1, 2, 3], rng);
+  const sub = hundreds - diff;
+  return buildChoiceProblem({
+    question: `FASTEST MENTAL STRATEGY FOR ${start} - ${sub}:`,
+    answer: `Subtract ${hundreds}, then add ${diff}`,
+    distractors: [
+      `Subtract ${hundreds}, then subtract ${diff}`,
+      `Add ${hundreds}, then subtract ${diff}`,
+      `Divide by ${diff}`,
+    ],
+    archetype: 'FIRST_STEP_STRATEGY',
+    rng,
+  });
+};
+
+// --- TIER 2 NEW TEMPLATES ---
+
+const t2EffectOfChange: ConceptualGenerator = (rng = Math.random) => {
+  const a = randInt(4, 12, rng) * 2;
+  const b = randInt(3, 9, rng);
+  if (rng() < 0.5) {
+    return buildChoiceProblem({
+      question: `IN ${a} × ${b}, IF YOU DOUBLE ${b}, THE PRODUCT...`,
+      answer: 'Doubles',
+      distractors: ['Stays the same', 'Halves', 'Triples'],
+      archetype: 'EFFECT_OF_CHANGE',
+      rng,
+    });
+  }
+
+  return buildChoiceProblem({
+    question: `IN ${a} × ${b}, IF YOU HALVE ${a} AND DOUBLE ${b}, THE PRODUCT...`,
+    answer: 'Stays the same',
+    distractors: ['Doubles', 'Halves', 'Becomes 4× as large'],
+    archetype: 'EFFECT_OF_CHANGE',
+    rng,
+  });
+};
+
+const t2BenchmarkCompare: ConceptualGenerator = (rng = Math.random) => {
+  const cases: Array<{ a: number; b: number; c: number; d: number }> = [
+    { a: 18, b: 5, c: 20, d: 5 },
+    { a: 24, b: 4, c: 12, d: 8 },
+    { a: 31, b: 6, c: 30, d: 6 },
+    { a: 15, b: 6, c: 30, d: 3 },
+    { a: 29, b: 4, c: 30, d: 4 },
+    { a: 42, b: 5, c: 40, d: 5 },
+    { a: 16, b: 3, c: 8, d: 6 },
+    { a: 25, b: 7, c: 25, d: 8 },
+  ];
+  const { a, b, c, d } = pick(cases, rng);
+  return buildBenchmarkProblem({
+    question: `COMPARE: ${a} × ${b}  _  ${c} × ${d}`,
+    answer: compareNumbers(a * b, c * d),
+  });
+};
+
+const t2FirstStepStrategy: ConceptualGenerator = (rng = Math.random) => {
+  const cases = [
+    {
+      divisor: 2,
+      n: pick([146, 238, 412, 574], rng),
+      answer: 'Check if the last digit is even',
+      distractors: [
+        'Add all the digits together',
+        'Check if it ends in 0 only',
+        'Check if the first digit is even',
+      ],
+    },
+    {
+      divisor: 5,
+      n: pick([135, 240, 385, 610], rng),
+      answer: 'Check if the last digit is 0 or 5',
+      distractors: [
+        'Add all the digits together',
+        'Check if the last digit is even',
+        'Check if the first digit is 5',
+      ],
+    },
+    {
+      divisor: 10,
+      n: pick([190, 340, 520, 870], rng),
+      answer: 'Check if the last digit is 0',
+      distractors: [
+        'Check if the last digit is 5',
+        'Add all the digits together',
+        'Check if the first digit is 1',
+      ],
+    },
+    {
+      divisor: 3,
+      n: pick([126, 234, 351, 417], rng),
+      answer: 'Check if the sum of digits divides by 3',
+      distractors: [
+        'Check if the last digit is 3',
+        'Check if the number is odd',
+        'Check if the last digit is 0 or 5',
+      ],
+    },
+  ];
+  const chosen = pick(cases, rng);
+  return buildChoiceProblem({
+    question: `FASTEST WAY TO CHECK IF ${chosen.n} IS DIVISIBLE BY ${chosen.divisor}:`,
+    answer: chosen.answer,
+    distractors: chosen.distractors,
+    archetype: 'FIRST_STEP_STRATEGY',
+    rng,
+  });
+};
+
+// --- TIER 3 NEW TEMPLATES ---
+
+const t3EffectOfChange: ConceptualGenerator = (rng = Math.random) => {
+  const divisor = pick([4, 6, 8], rng);
+  const dividend = divisor * randInt(6, 14, rng);
+  if (rng() < 0.5) {
+    return buildChoiceProblem({
+      question: `IN ${dividend} ÷ ${divisor}, IF YOU DOUBLE ${dividend}, THE QUOTIENT...`,
+      answer: 'Doubles',
+      distractors: ['Halves', 'Stays the same', 'Becomes 4× as large'],
+      archetype: 'EFFECT_OF_CHANGE',
+      rng,
+    });
+  }
+
+  return buildChoiceProblem({
+    question: `IN ${dividend} ÷ ${divisor}, IF YOU DOUBLE ${divisor}, THE QUOTIENT...`,
+    answer: 'Halves',
+    distractors: ['Doubles', 'Stays the same', 'Increases by 2'],
+    archetype: 'EFFECT_OF_CHANGE',
+    rng,
+  });
+};
+
+const t3BenchmarkCompare: ConceptualGenerator = (rng = Math.random) => {
+  if (rng() < 0.5) {
+    const dividend = pick([48, 60, 72, 96, 120], rng);
+    const d1 = pick([3, 4, 6, 8, 12], rng);
+    const d2 = pick([3, 4, 6, 8, 12], rng);
+    return buildBenchmarkProblem({
+      question: `COMPARE: ${dividend} ÷ ${d1}  _  ${dividend} ÷ ${d2}`,
+      answer: compareNumbers(dividend / d1, dividend / d2),
+    });
+  }
+
+  const divisor = pick([4, 5, 6, 8], rng);
+  const q1 = randInt(8, 22, rng);
+  const q2 = randInt(8, 22, rng);
+  return buildBenchmarkProblem({
+    question: `COMPARE: ${divisor * q1} ÷ ${divisor}  _  ${divisor * q2} ÷ ${divisor}`,
+    answer: compareNumbers(q1, q2),
+  });
+};
+
+const t3EquivalenceStructure: ConceptualGenerator = (rng = Math.random) => {
+  if (rng() < 0.5) {
+    const a = randInt(6, 14, rng);
+    const b = pick([7, 8, 9, 10, 11, 12, 13, 14, 15].filter((v) => v !== a), rng);
+    const prod = a * b;
+    return buildChoiceProblem({
+      question: `IF ${a} × ${b} = ${prod}, WHICH STATEMENT MUST BE TRUE?`,
+      answer: `${prod} ÷ ${b} = ${a}`,
+      distractors: [
+        `${prod} ÷ ${a} = ${a}`,
+        `${b} ÷ ${prod} = ${a}`,
+        `${prod} × ${b} = ${a}`,
+      ],
+      archetype: 'EQUIVALENCE_STRUCTURE',
+      rng,
+    });
+  }
+
+  const tens = randInt(2, 5, rng) * 10;
+  const ones = randInt(2, 8, rng);
+  const mult = randInt(11, 15, rng);
+  return buildChoiceProblem({
+    question: `WHICH AREA-MODEL SPLIT EQUALS ${tens + ones} × ${mult}?`,
+    answer: `(${tens} × ${mult}) + (${ones} × ${mult})`,
+    distractors: [
+      `(${tens} + ${mult}) × (${ones} + ${mult})`,
+      `(${tens} × ${ones}) + ${mult}`,
+      `(${tens} × ${mult}) + ${ones}`,
+    ],
+    archetype: 'EQUIVALENCE_STRUCTURE',
+    rng,
+  });
+};
+
+// --- TIER 4 NEW TEMPLATES ---
+
+const t4EffectOfChange: ConceptualGenerator = (rng = Math.random) => {
+  const num = randInt(2, 5, rng);
+  const den = randInt(num + 2, 11, rng);
+  if (rng() < 0.5) {
+    return buildChoiceProblem({
+      question: `IN ${num}/${den}, IF YOU INCREASE THE DENOMINATOR (SAME TOP), THE FRACTION...`,
+      answer: 'Gets smaller',
+      distractors: ['Gets larger', 'Stays the same', 'Becomes greater than 1'],
+      archetype: 'EFFECT_OF_CHANGE',
+      rng,
+    });
+  }
+
+  return buildChoiceProblem({
+    question: `IN ${num}/${den}, IF YOU INCREASE THE NUMERATOR (SAME BOTTOM), THE FRACTION...`,
+    answer: 'Gets larger',
+    distractors: ['Gets smaller', 'Stays the same', 'Always equals 1'],
+    archetype: 'EFFECT_OF_CHANGE',
+    rng,
+  });
+};
+
+const t4MagnitudeEstimation: ConceptualGenerator = (rng = Math.random) => {
+  const den = pick([8, 10, 12], rng);
+  const branch = randInt(0, 2, rng);
+
+  if (branch === 0) {
+    // Near 1
+    const n1 = den / 2;
+    const n2 = den / 2 - 1;
+    return buildChoiceProblem({
+      question: `ESTIMATE: ${n1}/${den} + ${n2}/${den} IS CLOSEST TO...`,
+      answer: '1',
+      distractors: ['0', '1/2', '2'],
+      archetype: 'MAGNITUDE_ESTIMATION',
+      rng,
+    });
+  }
+
+  if (branch === 1) {
+    // Near 0
+    const n2 = randInt(2, den - 2, rng);
+    const n1 = n2 + 1;
+    return buildChoiceProblem({
+      question: `ESTIMATE: ${n1}/${den} - ${n2}/${den} IS CLOSEST TO...`,
+      answer: '0',
+      distractors: ['1/2', '1', '2'],
+      archetype: 'MAGNITUDE_ESTIMATION',
+      rng,
+    });
+  }
+
+  // Near 1/2
+  const half = den / 2;
+  const n1 = 2;
+  const n2 = half - 1;
+  return buildChoiceProblem({
+    question: `ESTIMATE: ${n1}/${den} + ${n2}/${den} IS CLOSEST TO...`,
+    answer: '1/2',
+    distractors: ['0', '1', '2'],
+    archetype: 'MAGNITUDE_ESTIMATION',
+    rng,
+  });
+};
+
+const t4FirstStepStrategy: ConceptualGenerator = (rng = Math.random) => {
+  if (rng() < 0.5) {
+    const num = randInt(2, 5, rng);
+    const d1 = num + randInt(2, 4, rng);
+    const d2 = d1 + randInt(2, 4, rng);
+    return buildChoiceProblem({
+      question: `FASTEST WAY TO COMPARE ${num}/${d1} AND ${num}/${d2}:`,
+      answer: 'Same top: smaller denominator is larger',
+      distractors: [
+        'Same top: larger denominator is larger',
+        'Add the two denominators first',
+        'Multiply the numerators together',
+      ],
+      archetype: 'FIRST_STEP_STRATEGY',
+      rng,
+    });
+  }
+
+  const den = pick([7, 9, 11, 12], rng);
+  const n1 = randInt(2, den - 3, rng);
+  const n2 = n1 + randInt(1, 2, rng);
+  return buildChoiceProblem({
+    question: `FASTEST WAY TO COMPARE ${n1}/${den} AND ${n2}/${den}:`,
+    answer: 'Same bottom: larger numerator is larger',
+    distractors: [
+      'Same bottom: smaller numerator is larger',
+      'Find a new common denominator first',
+      'Divide both numerators by 2',
+    ],
+    archetype: 'FIRST_STEP_STRATEGY',
+    rng,
+  });
+};
+
+// --- TIER 5 NEW TEMPLATES ---
+
+const t5EffectOfChange: ConceptualGenerator = (rng = Math.random) => {
+  const baseVol = pick([12, 18, 24, 30, 40], rng);
+  if (rng() < 0.5) {
+    return buildChoiceProblem({
+      question: `A PRISM HAS VOLUME ${baseVol}. IF YOU DOUBLE BOTH LENGTH AND WIDTH, VOLUME BECOMES...`,
+      answer: `${baseVol * 4}`,
+      distractors: [`${baseVol * 2}`, `${baseVol * 8}`, `${baseVol}`],
+      archetype: 'EFFECT_OF_CHANGE',
+      rng,
+    });
+  }
+
+  return buildChoiceProblem({
+    question: `A PRISM HAS VOLUME ${baseVol}. IF YOU DOUBLE HEIGHT AND HALVE WIDTH, VOLUME...`,
+    answer: 'Stays the same',
+    distractors: ['Doubles', 'Halves', 'Becomes 4× as large'],
+    archetype: 'EFFECT_OF_CHANGE',
+    rng,
+  });
+};
+
+const t5SpotTheGlitch: ConceptualGenerator = (rng = Math.random) => {
+  const pairs: Array<{ n1: number; d1: number; n2: number; d2: number }> = [
+    { n1: 1, d1: 2, n2: 1, d2: 4 },
+    { n1: 1, d1: 3, n2: 1, d2: 6 },
+    { n1: 2, d1: 3, n2: 1, d2: 6 },
+    { n1: 1, d1: 4, n2: 1, d2: 8 },
+    { n1: 3, d1: 4, n2: 1, d2: 8 },
+    { n1: 2, d1: 5, n2: 1, d2: 10 },
+  ];
+  const { n1, d1, n2, d2 } = pick(pairs, rng);
+  const k = d2 / d1;
+  const scaledN1 = n1 * k;
+
+  if (rng() < 0.5) {
+    return buildChoiceProblem({
+      question: `SPOT THE GLITCH IN ${n1}/${d1} + ${n2}/${d2}:`,
+      promptLines: [
+        `Step 1: Rewrite ${n1}/${d1} as ${n1}/${d2}`,
+        `Step 2: Add numerators: ${n1} + ${n2} = ${n1 + n2}`,
+        `Step 3: Result = ${n1 + n2}/${d2}`,
+      ],
+      answer: 'Step 1',
+      distractors: ['Step 2', 'Step 3'],
+      archetype: 'SPOT_THE_GLITCH',
+      rng,
+    });
+  }
+
+  return buildChoiceProblem({
+    question: `SPOT THE GLITCH IN ${n1}/${d1} + ${n2}/${d2}:`,
+    promptLines: [
+      `Step 1: Rewrite ${n1}/${d1} as ${scaledN1}/${d2}`,
+      `Step 2: Add tops and bottoms: (${scaledN1}+${n2})/(${d2}+${d2})`,
+      `Step 3: Result = ${scaledN1 + n2}/${d2 * 2}`,
+    ],
+    answer: 'Step 2',
+    distractors: ['Step 1', 'Step 3'],
+    archetype: 'SPOT_THE_GLITCH',
+    rng,
+  });
+};
+
+const t5EquivalenceStructure: ConceptualGenerator = (rng = Math.random) => {
+  const cases = [
+    { expr: '1/2 + 1/4', answer: '2/4 + 1/4', distractors: ['1/4 + 1/4', '2/2 + 1/4', '1/6 + 1/6'] },
+    { expr: '1/3 + 1/6', answer: '2/6 + 1/6', distractors: ['1/6 + 1/6', '3/6 + 1/6', '2/9 + 1/9'] },
+    { expr: '2/3 + 1/6', answer: '4/6 + 1/6', distractors: ['2/6 + 1/6', '3/6 + 1/6', '2/9 + 1/9'] },
+    { expr: '1/2 + 1/6', answer: '3/6 + 1/6', distractors: ['1/6 + 1/6', '2/6 + 1/6', '1/8 + 1/8'] },
+    { expr: '3/4 + 1/8', answer: '6/8 + 1/8', distractors: ['3/8 + 1/8', '4/8 + 1/8', '3/12 + 1/12'] },
+    { expr: '2/5 + 3/10', answer: '4/10 + 3/10', distractors: ['2/10 + 3/10', '5/10 + 3/10', '2/15 + 3/15'] },
+  ];
+  const chosen = pick(cases, rng);
+  return buildChoiceProblem({
+    question: `WHICH REWRITE EQUALS ${chosen.expr}?`,
+    answer: chosen.answer,
+    distractors: chosen.distractors,
+    archetype: 'EQUIVALENCE_STRUCTURE',
+    rng,
+  });
+};
+
+// --- TIER 6 NEW TEMPLATES ---
+
+const t6EffectOfChange: ConceptualGenerator = (rng = Math.random) => {
+  const whole = randInt(1, 9, rng);
+  const tenths = randInt(1, 9, rng);
+  const numStr = `${whole}.${tenths}`;
+  const cases = [
+    {
+      op: '× 10',
+      answer: '1 place right',
+      distractors: ['1 place left', '2 places right', 'Does not move'],
+    },
+    {
+      op: '× 100',
+      answer: '2 places right',
+      distractors: ['1 place right', '2 places left', 'Does not move'],
+    },
+    {
+      op: '÷ 10',
+      answer: '1 place left',
+      distractors: ['1 place right', '2 places left', 'Does not move'],
+    },
+    {
+      op: '÷ 100',
+      answer: '2 places left',
+      distractors: ['1 place left', '2 places right', 'Does not move'],
+    },
+  ];
+  const chosen = pick(cases, rng);
+  return buildChoiceProblem({
+    question: `FOR ${numStr} ${chosen.op}, THE DECIMAL POINT SHIFTS...`,
+    answer: chosen.answer,
+    distractors: chosen.distractors,
+    archetype: 'EFFECT_OF_CHANGE',
+    rng,
+  });
+};
+
+const t6EquivalenceStructure: ConceptualGenerator = (rng = Math.random) => {
+  const cases = [
+    { dec: '0.25', answer: '1/4', distractors: ['2/5', '1/25', '1/5'] },
+    { dec: '0.75', answer: '3/4', distractors: ['7/5', '3/5', '7/10'] },
+    { dec: '0.2', answer: '1/5', distractors: ['1/2', '2/5', '1/20'] },
+    { dec: '0.4', answer: '2/5', distractors: ['1/4', '4/5', '1/40'] },
+    { dec: '0.6', answer: '3/5', distractors: ['1/6', '6/100', '2/3'] },
+    { dec: '0.5', answer: '1/2', distractors: ['1/5', '5/100', '2/5'] },
+    { dec: '0.8', answer: '4/5', distractors: ['1/8', '8/100', '3/4'] },
+  ];
+  const chosen = pick(cases, rng);
+  return buildChoiceProblem({
+    question: `WHICH SIMPLIFIED FRACTION EQUALS ${chosen.dec}?`,
+    answer: chosen.answer,
+    distractors: chosen.distractors,
+    archetype: 'EQUIVALENCE_STRUCTURE',
+    rng,
+  });
+};
+
+const t6FirstStepStrategy: ConceptualGenerator = (rng = Math.random) => {
+  const a = `${randInt(2, 9, rng)}.${randInt(1, 9, rng)}`;
+  const b = `0.${randInt(11, 89, rng)}`;
+  if (rng() < 0.5) {
+    return buildChoiceProblem({
+      question: `BEST FIRST MOVE FOR ${a} + ${b}:`,
+      answer: 'Line up the decimal points vertically',
+      distractors: [
+        'Line up the rightmost digits',
+        'Count total decimal places first',
+        'Ignore the decimal points completely',
+      ],
+      archetype: 'FIRST_STEP_STRATEGY',
+      rng,
+    });
+  }
+
+  return buildChoiceProblem({
+    question: `HOW DO YOU PLACE THE DECIMAL IN ${a} × ${b}?`,
+    answer: 'Count total decimal places in both factors',
+    distractors: [
+      'Line up the decimal points before multiplying',
+      'Always keep 1 decimal place',
+      'Move the decimal point 1 place right',
+    ],
+    archetype: 'FIRST_STEP_STRATEGY',
+    rng,
+  });
+};
+
+// --- TIER 7 NEW TEMPLATES ---
+
+const t7EffectOfChange: ConceptualGenerator = (rng = Math.random) => {
+  if (rng() < 0.5) {
+    const pct = pick([15, 20, 25, 30], rng);
+    return buildChoiceProblem({
+      question: `IF A TOTAL DOUBLES, THEN ${pct}% OF THAT TOTAL...`,
+      answer: 'Doubles',
+      distractors: ['Stays the same', 'Halves', 'Becomes 4× as large'],
+      archetype: 'EFFECT_OF_CHANGE',
+      rng,
+    });
+  }
+
+  const a = randInt(2, 5, rng);
+  const b = randInt(3, 7, rng);
+  const scale = pick([2, 3, 4], rng);
+  return buildChoiceProblem({
+    question: `IF YOU MULTIPLY BOTH TERMS OF ${a}:${b} BY ${scale}, THE UNIT RATE...`,
+    answer: 'Stays the same',
+    distractors: [
+      `Becomes ${scale}× as large`,
+      `Divides by ${scale}`,
+      `Increases by ${scale}`,
+    ],
+    archetype: 'EFFECT_OF_CHANGE',
+    rng,
+  });
+};
+
+const t7SpotTheGlitch: ConceptualGenerator = (rng = Math.random) => {
+  const a = randInt(2, 5, rng);
+  const b = a + randInt(1, 4, rng);
+  const addK = randInt(2, 5, rng);
+  return buildChoiceProblem({
+    question: `SPOT THE GLITCH MAKING AN EQUIVALENT RATIO TO ${a}:${b}:`,
+    promptLines: [
+      `Step 1: Start with ratio ${a}:${b}`,
+      `Step 2: Add ${addK} to both terms: (${a}+${addK}):(${b}+${addK})`,
+      `Step 3: Write equivalent ratio ${a + addK}:${b + addK}`,
+    ],
+    answer: 'Step 2',
+    distractors: ['Step 1', 'Step 3'],
+    archetype: 'SPOT_THE_GLITCH',
+    rng,
+  });
+};
+
+const t7FirstStepStrategy: ConceptualGenerator = (rng = Math.random) => {
+  if (rng() < 0.5) {
+    const pct = pick([15, 20, 30, 40], rng);
+    const total = pick([60, 80, 120, 140, 240], rng);
+    return buildChoiceProblem({
+      question: `FASTEST MENTAL FIRST STEP FOR ${pct}% OF ${total}:`,
+      answer: `Find 10% of ${total} first`,
+      distractors: [
+        `Divide ${total} by ${pct}`,
+        `Add ${pct} to ${total}`,
+        `Multiply ${total} by ${pct}`,
+      ],
+      archetype: 'FIRST_STEP_STRATEGY',
+      rng,
+    });
+  }
+
+  const qty = pick([4, 5, 6, 8], rng);
+  const cost = qty * randInt(3, 7, rng);
+  return buildChoiceProblem({
+    question: `${qty} CORES COST $${cost}. BEST FIRST STEP TO FIND COST OF 7 CORES:`,
+    answer: `Divide $${cost} by ${qty} to get unit rate`,
+    distractors: [
+      `Multiply $${cost} by ${qty}`,
+      `Add 7 to $${cost}`,
+      `Subtract ${qty} from $${cost}`,
+    ],
+    archetype: 'FIRST_STEP_STRATEGY',
+    rng,
+  });
+};
+
+// --- TIER 8 NEW TEMPLATES ---
+
+const t8EffectOfChange: ConceptualGenerator = (rng = Math.random) => {
+  const a = randInt(-8, 8, rng);
+  const b = randInt(2, 9, rng);
+  const branch = randInt(0, 2, rng);
+
+  if (branch === 0) {
+    return buildChoiceProblem({
+      question: `ON A NUMBER LINE, SUBTRACTING (-${b}) FROM ${a} MOVES...`,
+      answer: `${b} units right`,
+      distractors: [`${b} units left`, `Stays at ${a}`, `${b * 2} units right`],
+      archetype: 'EFFECT_OF_CHANGE',
+      rng,
+    });
+  }
+
+  if (branch === 1) {
+    return buildChoiceProblem({
+      question: `ON A NUMBER LINE, ADDING (-${b}) TO ${a} MOVES...`,
+      answer: `${b} units left`,
+      distractors: [`${b} units right`, `Stays at ${a}`, `${b * 2} units left`],
+      archetype: 'EFFECT_OF_CHANGE',
+      rng,
+    });
+  }
+
+  const nonZero = pick([-7, -5, -3, 3, 5, 7], rng);
+  return buildChoiceProblem({
+    question: `MULTIPLYING ${nonZero} BY -1 ON A NUMBER LINE...`,
+    answer: 'Reflects it across 0',
+    distractors: ['Moves it 1 unit left', 'Moves it 1 unit right', 'Makes it 0'],
+    archetype: 'EFFECT_OF_CHANGE',
+    rng,
+  });
+};
+
+const t8SpotTheGlitch: ConceptualGenerator = (rng = Math.random) => {
+  const a = randInt(3, 12, rng);
+  const b = randInt(2, 9, rng);
+  if (rng() < 0.5) {
+    return buildChoiceProblem({
+      question: `SPOT THE GLITCH IN ${a} - (-${b}):`,
+      promptLines: [
+        `Step 1: Rewrite ${a} - (-${b}) as ${a} - ${b}`,
+        `Step 2: Subtract: ${a} - ${b} = ${a - b}`,
+        `Step 3: Result = ${a - b}`,
+      ],
+      answer: 'Step 1',
+      distractors: ['Step 2', 'Step 3'],
+      archetype: 'SPOT_THE_GLITCH',
+      rng,
+    });
+  }
+
+  const big = randInt(7, 14, rng);
+  const small = randInt(2, big - 2, rng);
+  return buildChoiceProblem({
+    question: `SPOT THE GLITCH IN -${big} + ${small}:`,
+    promptLines: [
+      `Step 1: Find difference of magnitudes: ${big} - ${small} = ${big - small}`,
+      `Step 2: Keep positive sign because of +${small}`,
+      `Step 3: Result = +${big - small}`,
+    ],
+    answer: 'Step 2',
+    distractors: ['Step 1', 'Step 3'],
+    archetype: 'SPOT_THE_GLITCH',
+    rng,
+  });
+};
+
+const t8EquivalenceStructure: ConceptualGenerator = (rng = Math.random) => {
+  const a = pick([-9, -8, -7, -6, -5, -4, -3, -2, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], rng);
+  const b = pick([2, 3, 4, 5, 6, 7, 8, 9, 10, 11].filter((v) => v !== Math.abs(a)), rng);
+  const negA = -a;
+  if (rng() < 0.5) {
+    return buildChoiceProblem({
+      question: `WHICH EXPRESSION EQUALS ${a} - (-${b})?`,
+      answer: `${a} + ${b}`,
+      distractors: [`${a} - ${b}`, `${negA} - ${b}`, `${negA} + ${b}`],
+      archetype: 'EQUIVALENCE_STRUCTURE',
+      rng,
+    });
+  }
+
+  return buildChoiceProblem({
+    question: `WHICH EXPRESSION EQUALS ${a} + (-${b})?`,
+    answer: `${a} - ${b}`,
+    distractors: [`${a} + ${b}`, `${negA} + ${b}`, `${negA} - ${b}`],
+    archetype: 'EQUIVALENCE_STRUCTURE',
+    rng,
+  });
+};
+
+// --- TIER 9 NEW TEMPLATES ---
+
+const t9EffectOfChange: ConceptualGenerator = (rng = Math.random) => {
+  if (rng() < 0.5) {
+    return buildChoiceProblem({
+      question: `IF x DOUBLES (x > 0), THEN x² BECOMES...`,
+      answer: '4× as large',
+      distractors: ['2× as large', 'Stays the same', '8× as large'],
+      archetype: 'EFFECT_OF_CHANGE',
+      rng,
+    });
+  }
+
+  const k = randInt(2, 6, rng);
+  const b = pick([3, 4, 5, 6, 7, 8, 9].filter((v) => v !== k), rng);
+  return buildChoiceProblem({
+    question: `IN ${k}x + ${b}, IF x INCREASES BY 1, THE VALUE...`,
+    answer: `Increases by ${k}`,
+    distractors: [
+      `Increases by 1`,
+      `Increases by ${b}`,
+      `Increases by ${k + b}`,
+    ],
+    archetype: 'EFFECT_OF_CHANGE',
+    rng,
+  });
+};
+
+const t9BenchmarkCompare: ConceptualGenerator = (rng = Math.random) => {
+  if (rng() < 0.6) {
+    const a = randInt(1, 6, rng);
+    return buildBenchmarkProblem({
+      question: `COMPARE: ${a}²  _  2 × ${a}`,
+      answer: compareNumbers(a * a, 2 * a),
+    });
+  }
+
+  const a = randInt(1, 4, rng);
+  return buildBenchmarkProblem({
+    question: `COMPARE: ${a}³  _  3 × ${a}`,
+    answer: compareNumbers(a * a * a, 3 * a),
+  });
+};
+
+const t9MagnitudeEstimation: ConceptualGenerator = (rng = Math.random) => {
+  const k = pick([4, 5, 6], rng);
+  const roundX = pick([10, 20], rng);
+  const x = roundX + pick([-1, 1], rng);
+  const b = randInt(1, 3, rng);
+  const est = k * roundX;
+
+  return buildChoiceProblem({
+    question: `IF x = ${x}, ESTIMATE ${k}x + ${b} (CLOSEST TO):`,
+    answer: formatNumber(est),
+    distractors: [
+      formatNumber(est / 2),
+      formatNumber(est * 2),
+      formatNumber(est * 5),
+    ],
+    archetype: 'MAGNITUDE_ESTIMATION',
+    rng,
+  });
+};
+
+// --- TIER 10 NEW TEMPLATES ---
+
+const t10EffectOfChange: ConceptualGenerator = (rng = Math.random) => {
+  if (rng() < 0.5) {
+    const k = pick([5, 10, 12], rng);
+    return buildChoiceProblem({
+      question: `IF YOU ADD +${k} TO EVERY NUMBER IN A DATA SET, THE RANGE...`,
+      answer: 'Stays the same',
+      distractors: [
+        `Increases by ${k}`,
+        `Decreases by ${k}`,
+        `Doubles`,
+      ],
+      archetype: 'EFFECT_OF_CHANGE',
+      rng,
+    });
+  }
+
+  const outlier = pick([100, 200, 500], rng);
+  return buildChoiceProblem({
+    question: `REPLACING THE MAX OF {4, 6, 8, 10, 12} WITH ${outlier}: WHICH STAYS THE SAME?`,
+    answer: 'Median',
+    distractors: ['Mean', 'Range', 'Sum'],
+    archetype: 'EFFECT_OF_CHANGE',
+    rng,
+  });
+};
+
+const t10BenchmarkCompare: ConceptualGenerator = (rng = Math.random) => {
+  const a = randInt(2, 5, rng);
+  const x = randInt(2, 6, rng);
+  const b = randInt(1, 9, rng);
+  const lhs = a * x + b;
+  const delta = pick([-4, -2, 0, 2, 4], rng);
+  const rhs = lhs + delta;
+
+  return buildBenchmarkProblem({
+    question: `WHEN x = ${x}, COMPARE: ${a}x + ${b}  _  ${rhs}`,
+    answer: compareNumbers(lhs, rhs),
+  });
+};
+
+const t10EquivalenceStructure: ConceptualGenerator = (rng = Math.random) => {
+  const a = randInt(2, 6, rng);
+  const b = randInt(3, 9, rng);
+  const c = randInt(12, 28, rng);
+  if (rng() < 0.5) {
+    return buildChoiceProblem({
+      question: `WHICH EQUATION IS EQUIVALENT TO ${a}x + ${b} = ${c}?`,
+      answer: `${a}x = ${c - b}`,
+      distractors: [
+        `${a}x = ${c + b}`,
+        `x + ${b} = ${c}`,
+        `${a}x = ${c * b}`,
+      ],
+      archetype: 'EQUIVALENCE_STRUCTURE',
+      rng,
+    });
+  }
+
+  return buildChoiceProblem({
+    question: `WHICH EQUATION IS EQUIVALENT TO ${a}x - ${b} = ${c}?`,
+    answer: `${a}x = ${c + b}`,
+    distractors: [
+      `${a}x = ${c - b}`,
+      `x - ${b} = ${c + a}`,
+      `${a}x = ${c * b}`,
+    ],
+    archetype: 'EQUIVALENCE_STRUCTURE',
+    rng,
+  });
+};
+
+// --- TIER 11 NEW TEMPLATES ---
+
+const t11EffectOfChange: ConceptualGenerator = (rng = Math.random) => {
+  const branch = randInt(0, 2, rng);
+  if (branch === 0) {
+    return buildChoiceProblem({
+      question: `IN SIMPLE INTEREST I = Prt, IF TIME t DOUBLES, INTEREST I...`,
+      answer: 'Doubles',
+      distractors: ['Stays the same', 'Halves', 'Becomes 4× as large'],
+      archetype: 'EFFECT_OF_CHANGE',
+      rng,
+    });
+  }
+
+  if (branch === 1) {
+    return buildChoiceProblem({
+      question: `IN I = Prt, IF PRINCIPAL P DOUBLES AND TIME t HALVES, INTEREST I...`,
+      answer: 'Stays the same',
+      distractors: ['Doubles', 'Halves', 'Becomes 4× as large'],
+      archetype: 'EFFECT_OF_CHANGE',
+      rng,
+    });
+  }
+
+  return buildChoiceProblem({
+    question: `IN I = Prt, IF BOTH RATE r AND TIME t DOUBLE, INTEREST I...`,
+    answer: 'Becomes 4× as large',
+    distractors: ['Doubles', 'Stays the same', 'Halves'],
+    archetype: 'EFFECT_OF_CHANGE',
+    rng,
+  });
+};
+
+const t11BenchmarkCompare: ConceptualGenerator = (rng = Math.random) => {
+  if (rng() < 0.5) {
+    const k1 = randInt(2, 7, rng);
+    const k2 = randInt(2, 7, rng);
+    const x = randInt(3, 9, rng);
+    return buildBenchmarkProblem({
+      question: `AT x = ${x}, COMPARE: y = ${k1}x  _  y = ${k2}x`,
+      answer: compareNumbers(k1 * x, k2 * x),
+    });
+  }
+
+  const price = pick([40, 60, 80, 100], rng);
+  const d1 = pick([10, 20, 25], rng);
+  const d2 = pick([10, 20, 25], rng);
+  return buildBenchmarkProblem({
+    question: `COMPARE: $${price} AFTER ${d1}% OFF  _  $${price} AFTER ${d2}% OFF`,
+    answer: compareNumbers(price * (100 - d1), price * (100 - d2)),
+  });
+};
+
+const t11SpotTheGlitch: ConceptualGenerator = (rng = Math.random) => {
+  if (rng() < 0.5) {
+    const bill = pick([20, 40, 60, 80], rng);
+    const pct = pick([15, 20], rng);
+    return buildChoiceProblem({
+      question: `SPOT THE GLITCH FINDING ${pct}% TIP ON $${bill}:`,
+      promptLines: [
+        `Step 1: Multiply $${bill} × ${pct} = $${bill * pct}`,
+        `Step 2: Add tip to bill: $${bill} + $${bill * pct}`,
+        `Step 3: Total = $${bill + bill * pct}`,
+      ],
+      answer: 'Step 1',
+      distractors: ['Step 2', 'Step 3'],
+      archetype: 'SPOT_THE_GLITCH',
+      rng,
+    });
+  }
+
+  const bill = pick([30, 50, 70, 90], rng);
+  const tax = bill / 10;
+  return buildChoiceProblem({
+    question: `SPOT THE GLITCH ADDING 10% TAX TO $${bill}:`,
+    promptLines: [
+      `Step 1: Find 10% of $${bill} = $${tax}`,
+      `Step 2: Subtract tax: $${bill} - $${tax}`,
+      `Step 3: Total = $${bill - tax}`,
+    ],
+    answer: 'Step 2',
+    distractors: ['Step 1', 'Step 3'],
+    archetype: 'SPOT_THE_GLITCH',
+    rng,
+  });
+};
+
+// --- TIER 12 NEW TEMPLATES ---
+
+const t12EffectOfChange: ConceptualGenerator = (rng = Math.random) => {
+  const count = pick([3, 4, 5], rng);
+  if (rng() < 0.5) {
+    return buildChoiceProblem({
+      question: `IN A PRODUCT OF ${count} NONZERO RATIONALS, FLIPPING 1 SIGN...`,
+      answer: 'Flips the sign of the product',
+      distractors: [
+        'Keeps the sign unchanged',
+        'Always makes it positive',
+        'Makes the product 0',
+      ],
+      archetype: 'EFFECT_OF_CHANGE',
+      rng,
+    });
+  }
+
+  return buildChoiceProblem({
+    question: `IN A PRODUCT OF ${count} NONZERO RATIONALS, FLIPPING 2 SIGNS...`,
+    answer: 'Keeps the sign unchanged',
+    distractors: [
+      'Flips the sign of the product',
+      'Always makes it negative',
+      'Makes the product 0',
+    ],
+    archetype: 'EFFECT_OF_CHANGE',
+    rng,
+  });
+};
+
+const t12EquivalenceStructure: ConceptualGenerator = (rng = Math.random) => {
+  const n1 = randInt(1, 5, rng);
+  const d1 = randInt(n1 + 1, 7, rng);
+  const secondFractionCandidates: Array<[number, number]> = [];
+  for (let num = 2; num <= 5; num++) {
+    for (let den = num + 1; den <= 8; den++) {
+      if (n1 * den !== num * d1) {
+        secondFractionCandidates.push([num, den]);
+      }
+    }
+  }
+  const [n2, d2] = pick(secondFractionCandidates, rng);
+  if (rng() < 0.5) {
+    return buildChoiceProblem({
+      question: `WHICH EXPRESSION EQUALS (${n1}/${d1}) ÷ (-${n2}/${d2})?`,
+      answer: `(${n1}/${d1}) × (-${d2}/${n2})`,
+      distractors: [
+        `(${d1}/${n1}) × (-${n2}/${d2})`,
+        `(${n1}/${d1}) × (${d2}/${n2})`,
+        `(${n1}/${d1}) × (-${n2}/${d2})`,
+      ],
+      archetype: 'EQUIVALENCE_STRUCTURE',
+      rng,
+    });
+  }
+
+  return buildChoiceProblem({
+    question: `WHICH FRACTION IS NOT EQUIVALENT TO -(${n1}/${d1})?`,
+    answer: `(-${n1})/(-${d1})`,
+    distractors: [`(-${n1})/${d1}`, `${n1}/(-${d1})`, `-${n1}/${d1}`],
+    archetype: 'EQUIVALENCE_STRUCTURE',
+    rng,
+  });
+};
+
+const t12FirstStepStrategy: ConceptualGenerator = (rng = Math.random) => {
+  const a = randInt(2, 5, rng);
+  const b = randInt(3, 7, rng);
+  const c = randInt(2, 6, rng);
+  if (rng() < 0.5) {
+    return buildChoiceProblem({
+      question: `BEST FIRST MOVE FOR (-1/${a}) × (-1/${b}) × (1/${c}):`,
+      answer: 'Count negatives to determine the final sign',
+      distractors: [
+        'Find a common denominator first',
+        'Add all three denominators',
+        'Flip the first fraction',
+      ],
+      archetype: 'FIRST_STEP_STRATEGY',
+      rng,
+    });
+  }
+
+  return buildChoiceProblem({
+    question: `BEST FIRST MOVE FOR (-${a}/${b}) ÷ (${c}/${b + 1}):`,
+    answer: 'Multiply by the reciprocal of the second fraction',
+    distractors: [
+      'Flip the first fraction and multiply',
+      'Divide numerators and add denominators',
+      'Find a common denominator first',
+    ],
+    archetype: 'FIRST_STEP_STRATEGY',
+    rng,
+  });
+};
+
+// ============================================================================
+// CROSS-TIER FOUNDATIONAL POOL (8 Grade-4+ Templates for Early Signal Sweeps)
+// ============================================================================
+
+const fEffectScale10: ConceptualGenerator = (rng = Math.random) => {
+  const n = randInt(12, 95, rng);
+  const factor = pick([10, 100], rng);
+  return buildChoiceProblem({
+    question: `IF YOU MULTIPLY ${n} BY ${factor}, ITS VALUE BECOMES...`,
+    answer: `${factor}× as large`,
+    distractors: [
+      `${factor} more`,
+      `1/${factor} as large`,
+      'Stays the same',
+    ],
+    archetype: 'EFFECT_OF_CHANGE',
+    rng,
+  });
+};
+
+const fEffectAddendBalance: ConceptualGenerator = (rng = Math.random) => {
+  const a = randInt(25, 85, rng);
+  const b = randInt(25, 85, rng);
+  const k = randInt(3, 12, rng);
+  return buildChoiceProblem({
+    question: `IN ${a} + ${b}, ADD ${k} TO ${a} AND SUBTRACT ${k} FROM ${b}. THE SUM...`,
+    answer: 'Stays the same',
+    distractors: [
+      `Increases by ${k}`,
+      `Decreases by ${k}`,
+      `Increases by ${k * 2}`,
+    ],
+    archetype: 'EFFECT_OF_CHANGE',
+    rng,
+  });
+};
+
+const fEstRoundSum: ConceptualGenerator = (rng = Math.random) => {
+  const t1 = randInt(2, 6, rng);
+  const t2 = randInt(2, 5, rng);
+  const a = t1 * 10 + pick([-2, -1, 1, 2], rng);
+  const b = t2 * 10 + pick([-2, -1, 1, 2], rng);
+  const est = (t1 + t2) * 10;
+  return buildChoiceProblem({
+    question: `ESTIMATE: ${a} + ${b} IS CLOSEST TO...`,
+    answer: `${est}`,
+    distractors: [`${est + 30}`, `${Math.max(10, est - 30)}`, `${est * 10}`],
+    archetype: 'MAGNITUDE_ESTIMATION',
+    rng,
+  });
+};
+
+const fBenchThousand: ConceptualGenerator = (rng = Math.random) => {
+  if (rng() < 0.5) {
+    const a = pick([480, 495, 500, 515, 540], rng);
+    const b = pick([480, 500, 505, 520], rng);
+    return buildBenchmarkProblem({
+      question: `COMPARE: ${a} + ${b}  _  1,000`,
+      answer: compareNumbers(a + b, 1000),
+    });
+  }
+
+  const a = pick([8, 10, 12, 15], rng);
+  const b = pick([8, 10, 12], rng);
+  return buildBenchmarkProblem({
+    question: `COMPARE: ${a} × ${b}  _  100`,
+    answer: compareNumbers(a * b, 100),
+  });
+};
+
+const fEquivGrouping: ConceptualGenerator = (rng = Math.random) => {
+  const pairs: Array<[number, number]> = [
+    [17, 3],
+    [26, 4],
+    [38, 2],
+    [45, 5],
+    [64, 6],
+    [72, 8],
+  ];
+  const [a, c] = pick(pairs, rng);
+  const b = randInt(11, 29, rng);
+  return buildChoiceProblem({
+    question: `WHICH REGROUPING EQUALS (${a} + ${b}) + ${c}?`,
+    answer: `(${a} + ${c}) + ${b}`,
+    distractors: [
+      `(${a} × ${c}) + ${b}`,
+      `(${a} - ${c}) + ${b}`,
+      `${a} + (${b} × ${c})`,
+    ],
+    archetype: 'EQUIVALENCE_STRUCTURE',
+    rng,
+  });
+};
+
+const fStrategyOperation: ConceptualGenerator = (rng = Math.random) => {
+  const groups = randInt(4, 9, rng);
+  const perGroup = randInt(6, 15, rng);
+  if (rng() < 0.5) {
+    return buildChoiceProblem({
+      question: `${groups} SQUADS EACH CARRY ${perGroup} CELLS. WHICH OPERATION FINDS THE TOTAL?`,
+      answer: 'Multiply',
+      distractors: ['Divide', 'Subtract', 'Add once'],
+      archetype: 'FIRST_STEP_STRATEGY',
+      rng,
+    });
+  }
+
+  const total = groups * perGroup;
+  return buildChoiceProblem({
+    question: `${total} CELLS SPLIT EQUALLY AMONG ${groups} SQUADS. WHICH OPERATION FINDS EACH SHARE?`,
+    answer: 'Divide',
+    distractors: ['Multiply', 'Add', 'Subtract once'],
+    archetype: 'FIRST_STEP_STRATEGY',
+    rng,
+  });
+};
+
+const fGlitchPlaceValue: ConceptualGenerator = (rng = Math.random) => {
+  const hundreds = randInt(2, 6, rng);
+  const tens = randInt(1, 5, rng);
+  const base = hundreds * 100 + tens * 10;
+  const ones = randInt(2, 8, rng);
+  if (rng() < 0.5) {
+    return buildChoiceProblem({
+      question: `SPOT THE GLITCH IN ${base} + ${ones}:`,
+      promptLines: [
+        `Step 1: Line up ${ones} under the hundreds digit (${hundreds})`,
+        `Step 2: Add hundreds: ${hundreds} + ${ones} = ${hundreds + ones}`,
+        `Step 3: Result = ${(hundreds + ones) * 100 + tens * 10}`,
+      ],
+      answer: 'Step 1',
+      distractors: ['Step 2', 'Step 3'],
+      archetype: 'SPOT_THE_GLITCH',
+      rng,
+    });
+  }
+
+  return buildChoiceProblem({
+    question: `SPOT THE GLITCH IN ${base} + ${ones}:`,
+    promptLines: [
+      `Step 1: Add ones: 0 + ${ones} = ${ones}`,
+      `Step 2: Also add ${ones} to tens: ${tens} + ${ones} = ${tens + ones}`,
+      `Step 3: Result = ${hundreds * 100 + (tens + ones) * 10 + ones}`,
+    ],
+    answer: 'Step 2',
+    distractors: ['Step 1', 'Step 3'],
+    archetype: 'SPOT_THE_GLITCH',
+    rng,
+  });
+};
+
+const fBenchHalfOfTotal: ConceptualGenerator = (rng = Math.random) => {
+  const total = pick([40, 60, 80, 100, 120, 200], rng);
+  const half = total / 2;
+  const n = half + pick([-10, -5, 0, 5, 10], rng);
+  return buildBenchmarkProblem({
+    question: `COMPARE: ${n}  _  HALF OF ${total}`,
+    answer: compareNumbers(n, half),
+  });
+};
+
+// ============================================================================
+// REGISTRY (Tiers 1-12, 6 Parameterized Generators per Tier = 72 + 8 Foundational = 80)
 // ============================================================================
 
 const TAGGED_CONCEPTUAL_GENERATORS: Record<number, readonly TaggedConceptualGenerator[]> = {
   1: [
-    { archetype: 'MAGNITUDE_ESTIMATION', generate: t1MagnitudeEstimation },
-    { archetype: 'BENCHMARK_COMPARE', generate: t1BenchmarkCompare },
-    { archetype: 'SPOT_THE_GLITCH', generate: t1SpotTheGlitch },
+    { id: 't1-mag-est', archetype: 'MAGNITUDE_ESTIMATION', generate: t1MagnitudeEstimation },
+    { id: 't1-bench', archetype: 'BENCHMARK_COMPARE', generate: t1BenchmarkCompare },
+    { id: 't1-glitch', archetype: 'SPOT_THE_GLITCH', generate: t1SpotTheGlitch },
+    { id: 't1-effect', archetype: 'EFFECT_OF_CHANGE', generate: t1EffectOfChange },
+    { id: 't1-equiv', archetype: 'EQUIVALENCE_STRUCTURE', generate: t1EquivalenceStructure },
+    { id: 't1-first-step', archetype: 'FIRST_STEP_STRATEGY', generate: t1FirstStepStrategy },
   ],
   2: [
-    { archetype: 'EQUIVALENCE_STRUCTURE', generate: t2EquivalenceStructure },
-    { archetype: 'MAGNITUDE_ESTIMATION', generate: t2MagnitudeEstimation },
-    { archetype: 'SPOT_THE_GLITCH', generate: t2SpotTheGlitch },
+    { id: 't2-equiv', archetype: 'EQUIVALENCE_STRUCTURE', generate: t2EquivalenceStructure },
+    { id: 't2-mag-est', archetype: 'MAGNITUDE_ESTIMATION', generate: t2MagnitudeEstimation },
+    { id: 't2-glitch', archetype: 'SPOT_THE_GLITCH', generate: t2SpotTheGlitch },
+    { id: 't2-effect', archetype: 'EFFECT_OF_CHANGE', generate: t2EffectOfChange },
+    { id: 't2-bench', archetype: 'BENCHMARK_COMPARE', generate: t2BenchmarkCompare },
+    { id: 't2-first-step', archetype: 'FIRST_STEP_STRATEGY', generate: t2FirstStepStrategy },
   ],
   3: [
-    { archetype: 'MAGNITUDE_ESTIMATION', generate: t3MagnitudeEstimation },
-    { archetype: 'FIRST_STEP_STRATEGY', generate: t3FirstStepStrategy },
-    { archetype: 'SPOT_THE_GLITCH', generate: t3SpotTheGlitch },
+    { id: 't3-mag-est', archetype: 'MAGNITUDE_ESTIMATION', generate: t3MagnitudeEstimation },
+    { id: 't3-first-step', archetype: 'FIRST_STEP_STRATEGY', generate: t3FirstStepStrategy },
+    { id: 't3-glitch', archetype: 'SPOT_THE_GLITCH', generate: t3SpotTheGlitch },
+    { id: 't3-effect', archetype: 'EFFECT_OF_CHANGE', generate: t3EffectOfChange },
+    { id: 't3-bench', archetype: 'BENCHMARK_COMPARE', generate: t3BenchmarkCompare },
+    { id: 't3-equiv', archetype: 'EQUIVALENCE_STRUCTURE', generate: t3EquivalenceStructure },
   ],
   4: [
-    { archetype: 'BENCHMARK_COMPARE', generate: t4BenchmarkCompare },
-    { archetype: 'EQUIVALENCE_STRUCTURE', generate: t4EquivalenceStructure },
-    { archetype: 'SPOT_THE_GLITCH', generate: t4SpotTheGlitch },
+    { id: 't4-bench', archetype: 'BENCHMARK_COMPARE', generate: t4BenchmarkCompare },
+    { id: 't4-equiv', archetype: 'EQUIVALENCE_STRUCTURE', generate: t4EquivalenceStructure },
+    { id: 't4-glitch', archetype: 'SPOT_THE_GLITCH', generate: t4SpotTheGlitch },
+    { id: 't4-effect', archetype: 'EFFECT_OF_CHANGE', generate: t4EffectOfChange },
+    { id: 't4-mag-est', archetype: 'MAGNITUDE_ESTIMATION', generate: t4MagnitudeEstimation },
+    { id: 't4-first-step', archetype: 'FIRST_STEP_STRATEGY', generate: t4FirstStepStrategy },
   ],
   5: [
-    { archetype: 'BENCHMARK_COMPARE', generate: t5BenchmarkCompare },
-    { archetype: 'FIRST_STEP_STRATEGY', generate: t5FirstStepStrategy },
-    { archetype: 'MAGNITUDE_ESTIMATION', generate: t5MagnitudeEstimation },
+    { id: 't5-bench', archetype: 'BENCHMARK_COMPARE', generate: t5BenchmarkCompare },
+    { id: 't5-first-step', archetype: 'FIRST_STEP_STRATEGY', generate: t5FirstStepStrategy },
+    { id: 't5-mag-est', archetype: 'MAGNITUDE_ESTIMATION', generate: t5MagnitudeEstimation },
+    { id: 't5-effect', archetype: 'EFFECT_OF_CHANGE', generate: t5EffectOfChange },
+    { id: 't5-glitch', archetype: 'SPOT_THE_GLITCH', generate: t5SpotTheGlitch },
+    { id: 't5-equiv', archetype: 'EQUIVALENCE_STRUCTURE', generate: t5EquivalenceStructure },
   ],
   6: [
-    { archetype: 'MAGNITUDE_ESTIMATION', generate: t6MagnitudeEstimation },
-    { archetype: 'BENCHMARK_COMPARE', generate: t6BenchmarkCompare },
-    { archetype: 'SPOT_THE_GLITCH', generate: t6SpotTheGlitch },
+    { id: 't6-mag-est', archetype: 'MAGNITUDE_ESTIMATION', generate: t6MagnitudeEstimation },
+    { id: 't6-bench', archetype: 'BENCHMARK_COMPARE', generate: t6BenchmarkCompare },
+    { id: 't6-glitch', archetype: 'SPOT_THE_GLITCH', generate: t6SpotTheGlitch },
+    { id: 't6-effect', archetype: 'EFFECT_OF_CHANGE', generate: t6EffectOfChange },
+    { id: 't6-equiv', archetype: 'EQUIVALENCE_STRUCTURE', generate: t6EquivalenceStructure },
+    { id: 't6-first-step', archetype: 'FIRST_STEP_STRATEGY', generate: t6FirstStepStrategy },
   ],
   7: [
-    { archetype: 'BENCHMARK_COMPARE', generate: t7BenchmarkCompare },
-    { archetype: 'MAGNITUDE_ESTIMATION', generate: t7MagnitudeEstimation },
-    { archetype: 'EQUIVALENCE_STRUCTURE', generate: t7EquivalenceStructure },
+    { id: 't7-bench', archetype: 'BENCHMARK_COMPARE', generate: t7BenchmarkCompare },
+    { id: 't7-mag-est', archetype: 'MAGNITUDE_ESTIMATION', generate: t7MagnitudeEstimation },
+    { id: 't7-equiv', archetype: 'EQUIVALENCE_STRUCTURE', generate: t7EquivalenceStructure },
+    { id: 't7-effect', archetype: 'EFFECT_OF_CHANGE', generate: t7EffectOfChange },
+    { id: 't7-glitch', archetype: 'SPOT_THE_GLITCH', generate: t7SpotTheGlitch },
+    { id: 't7-first-step', archetype: 'FIRST_STEP_STRATEGY', generate: t7FirstStepStrategy },
   ],
   8: [
-    { archetype: 'SIGN_PREDICTION', generate: t8SignPrediction },
-    { archetype: 'VISUAL_QUADRANT', generate: t8VisualQuadrant },
-    { archetype: 'BENCHMARK_COMPARE', generate: t8BenchmarkCompare },
+    { id: 't8-sign', archetype: 'SIGN_PREDICTION', generate: t8SignPrediction },
+    { id: 't8-quadrant', archetype: 'VISUAL_QUADRANT', generate: t8VisualQuadrant },
+    { id: 't8-bench', archetype: 'BENCHMARK_COMPARE', generate: t8BenchmarkCompare },
+    { id: 't8-effect', archetype: 'EFFECT_OF_CHANGE', generate: t8EffectOfChange },
+    { id: 't8-glitch', archetype: 'SPOT_THE_GLITCH', generate: t8SpotTheGlitch },
+    { id: 't8-equiv', archetype: 'EQUIVALENCE_STRUCTURE', generate: t8EquivalenceStructure },
   ],
   9: [
-    { archetype: 'FIRST_STEP_STRATEGY', generate: t9FirstStepStrategy },
-    { archetype: 'SPOT_THE_GLITCH', generate: t9SpotTheGlitch },
-    { archetype: 'EQUIVALENCE_STRUCTURE', generate: t9EquivalenceStructure },
+    { id: 't9-first-step', archetype: 'FIRST_STEP_STRATEGY', generate: t9FirstStepStrategy },
+    { id: 't9-glitch', archetype: 'SPOT_THE_GLITCH', generate: t9SpotTheGlitch },
+    { id: 't9-equiv', archetype: 'EQUIVALENCE_STRUCTURE', generate: t9EquivalenceStructure },
+    { id: 't9-effect', archetype: 'EFFECT_OF_CHANGE', generate: t9EffectOfChange },
+    { id: 't9-bench', archetype: 'BENCHMARK_COMPARE', generate: t9BenchmarkCompare },
+    { id: 't9-mag-est', archetype: 'MAGNITUDE_ESTIMATION', generate: t9MagnitudeEstimation },
   ],
   10: [
-    { archetype: 'FIRST_STEP_STRATEGY', generate: t10FirstStepStrategy },
-    { archetype: 'SPOT_THE_GLITCH', generate: t10SpotTheGlitch },
-    { archetype: 'VISUAL_QUADRANT', generate: t10VisualQuadrant },
+    { id: 't10-first-step', archetype: 'FIRST_STEP_STRATEGY', generate: t10FirstStepStrategy },
+    { id: 't10-glitch', archetype: 'SPOT_THE_GLITCH', generate: t10SpotTheGlitch },
+    { id: 't10-quadrant', archetype: 'VISUAL_QUADRANT', generate: t10VisualQuadrant },
+    { id: 't10-effect', archetype: 'EFFECT_OF_CHANGE', generate: t10EffectOfChange },
+    { id: 't10-bench', archetype: 'BENCHMARK_COMPARE', generate: t10BenchmarkCompare },
+    { id: 't10-equiv', archetype: 'EQUIVALENCE_STRUCTURE', generate: t10EquivalenceStructure },
   ],
   11: [
-    { archetype: 'VISUAL_QUADRANT', generate: t11VisualQuadrant },
-    { archetype: 'MAGNITUDE_ESTIMATION', generate: t11MagnitudeEstimation },
-    { archetype: 'EQUIVALENCE_STRUCTURE', generate: t11EquivalenceStructure },
+    { id: 't11-quadrant', archetype: 'VISUAL_QUADRANT', generate: t11VisualQuadrant },
+    { id: 't11-mag-est', archetype: 'MAGNITUDE_ESTIMATION', generate: t11MagnitudeEstimation },
+    { id: 't11-equiv', archetype: 'EQUIVALENCE_STRUCTURE', generate: t11EquivalenceStructure },
+    { id: 't11-effect', archetype: 'EFFECT_OF_CHANGE', generate: t11EffectOfChange },
+    { id: 't11-bench', archetype: 'BENCHMARK_COMPARE', generate: t11BenchmarkCompare },
+    { id: 't11-glitch', archetype: 'SPOT_THE_GLITCH', generate: t11SpotTheGlitch },
   ],
   12: [
-    { archetype: 'SIGN_PREDICTION', generate: t12SignPrediction },
-    { archetype: 'SPOT_THE_GLITCH', generate: t12SpotTheGlitch },
-    { archetype: 'BENCHMARK_COMPARE', generate: t12BenchmarkCompare },
+    { id: 't12-sign', archetype: 'SIGN_PREDICTION', generate: t12SignPrediction },
+    { id: 't12-glitch', archetype: 'SPOT_THE_GLITCH', generate: t12SpotTheGlitch },
+    { id: 't12-bench', archetype: 'BENCHMARK_COMPARE', generate: t12BenchmarkCompare },
+    { id: 't12-effect', archetype: 'EFFECT_OF_CHANGE', generate: t12EffectOfChange },
+    { id: 't12-equiv', archetype: 'EQUIVALENCE_STRUCTURE', generate: t12EquivalenceStructure },
+    { id: 't12-first-step', archetype: 'FIRST_STEP_STRATEGY', generate: t12FirstStepStrategy },
   ],
 };
+
+export const FOUNDATIONAL_TAGGED_GENERATORS: readonly TaggedConceptualGenerator[] = [
+  { id: 'f-effect-scale10', archetype: 'EFFECT_OF_CHANGE', generate: fEffectScale10 },
+  { id: 'f-effect-balance', archetype: 'EFFECT_OF_CHANGE', generate: fEffectAddendBalance },
+  { id: 'f-mag-est-sum', archetype: 'MAGNITUDE_ESTIMATION', generate: fEstRoundSum },
+  { id: 'f-bench-1000', archetype: 'BENCHMARK_COMPARE', generate: fBenchThousand },
+  { id: 'f-equiv-group', archetype: 'EQUIVALENCE_STRUCTURE', generate: fEquivGrouping },
+  { id: 'f-first-step-op', archetype: 'FIRST_STEP_STRATEGY', generate: fStrategyOperation },
+  { id: 'f-glitch-place', archetype: 'SPOT_THE_GLITCH', generate: fGlitchPlaceValue },
+  { id: 'f-bench-half', archetype: 'BENCHMARK_COMPARE', generate: fBenchHalfOfTotal },
+];
+
+export const FOUNDATIONAL_CONCEPTUAL_GENERATORS: readonly ConceptualGenerator[] =
+  FOUNDATIONAL_TAGGED_GENERATORS.map((entry) => entry.generate);
+
+export function getFoundationalConceptualGenerators(): readonly TaggedConceptualGenerator[] {
+  return FOUNDATIONAL_TAGGED_GENERATORS;
+}
+
+export function getTaggedConceptualGeneratorsForTier(
+  tier: number
+): readonly TaggedConceptualGenerator[] {
+  const safeTier = clampTier(tier);
+  return TAGGED_CONCEPTUAL_GENERATORS[safeTier] || TAGGED_CONCEPTUAL_GENERATORS[1];
+}
 
 export const CONCEPTUAL_GENERATORS: Record<number, readonly ConceptualGenerator[]> =
   Object.fromEntries(
@@ -1174,23 +2451,126 @@ export function getConceptualArchetypesForTier(tier: number): readonly Conceptua
   return tierEntries.map((entry) => entry.archetype);
 }
 
+export interface ConceptualGenerationOptions {
+  archetype?: ConceptualArchetype;
+  rng?: () => number;
+  excludeQuestions?: ReadonlySet<string>;
+  excludeTemplateIds?: ReadonlySet<string>;
+  excludeArchetypes?: ReadonlySet<ConceptualArchetype>;
+  conceptSchedule?: ConceptScheduleMap;
+  conceptStepCounter?: number;
+  includeFoundational?: boolean;
+}
+
+interface SlottedGenerator {
+  slotTier: number;
+  entry: TaggedConceptualGenerator;
+}
+
+const MAX_QUESTION_DEDUP_RETRIES = 8;
+
 export function generateConceptualProblem(
   tier: number,
   type: Exclude<ProblemType, 'ATTACK'> = 'MEDITATION',
-  options?: { archetype?: ConceptualArchetype; rng?: () => number }
+  options?: ConceptualGenerationOptions
 ): MathProblem {
   const safeTier = clampTier(tier);
   const rng = options?.rng ?? Math.random;
   const tierEntries = TAGGED_CONCEPTUAL_GENERATORS[safeTier] || TAGGED_CONCEPTUAL_GENERATORS[1];
 
-  const pool = options?.archetype
-    ? tierEntries.filter((entry) => entry.archetype === options.archetype)
-    : tierEntries;
-  const selected = pick(pool.length > 0 ? pool : tierEntries, rng);
+  const allCandidates: SlottedGenerator[] = tierEntries.map((entry) => ({
+    slotTier: safeTier,
+    entry,
+  }));
+  if (options?.includeFoundational) {
+    for (const entry of FOUNDATIONAL_TAGGED_GENERATORS) {
+      allCandidates.push({ slotTier: 0, entry });
+    }
+  }
+
+  const excludeTemplateIds = options?.excludeTemplateIds;
+  const excludeArchetypes = options?.excludeArchetypes;
+  const excludeQuestions = options?.excludeQuestions;
+
+  const filterByTemplateId = (pool: readonly SlottedGenerator[]): SlottedGenerator[] => {
+    if (!excludeTemplateIds || excludeTemplateIds.size === 0) return [...pool];
+    const filtered = pool.filter((item) => !excludeTemplateIds.has(item.entry.id));
+    return filtered.length > 0 ? filtered : [...pool];
+  };
+
+  let pool: SlottedGenerator[];
+
+  if (options?.archetype) {
+    const byArchetype = allCandidates.filter((item) => item.entry.archetype === options.archetype);
+    pool = filterByTemplateId(byArchetype.length > 0 ? byArchetype : allCandidates);
+  } else if (options?.conceptSchedule) {
+    const templateEligible = filterByTemplateId(allCandidates);
+    const slotMap = new Map<string, ConceptSlot>();
+    for (const item of templateEligible) {
+      const key = `${item.slotTier}:${item.entry.archetype}`;
+      if (!slotMap.has(key)) {
+        slotMap.set(key, { tier: item.slotTier, archetype: item.entry.archetype });
+      }
+    }
+    const selectedSlot = selectWeightedConceptSlot(
+      Array.from(slotMap.values()),
+      options.conceptSchedule,
+      options.conceptStepCounter ?? 0,
+      { excludeArchetypes, rng }
+    );
+    if (selectedSlot) {
+      const matched = templateEligible.filter(
+        (item) =>
+          item.slotTier === selectedSlot.tier && item.entry.archetype === selectedSlot.archetype
+      );
+      pool = matched.length > 0 ? matched : templateEligible;
+    } else {
+      pool = templateEligible;
+    }
+  } else {
+    // Graceful anti-repeat cascade:
+    // 1) Exclude both archetypes and templateIds
+    // 2) Relax archetype exclusion (keep templateIds)
+    // 3) Relax templateId exclusion (keep archetypes)
+    // 4) Full pool fallback
+    const noArchNoTpl = allCandidates.filter(
+      (item) =>
+        !(excludeArchetypes && excludeArchetypes.has(item.entry.archetype)) &&
+        !(excludeTemplateIds && excludeTemplateIds.has(item.entry.id))
+    );
+    if (noArchNoTpl.length > 0) {
+      pool = noArchNoTpl;
+    } else {
+      const noTpl = allCandidates.filter(
+        (item) => !(excludeTemplateIds && excludeTemplateIds.has(item.entry.id))
+      );
+      if (noTpl.length > 0) {
+        pool = noTpl;
+      } else {
+        const noArch = allCandidates.filter(
+          (item) => !(excludeArchetypes && excludeArchetypes.has(item.entry.archetype))
+        );
+        pool = noArch.length > 0 ? noArch : allCandidates;
+      }
+    }
+  }
+
+  let selected = pick(pool, rng).entry;
+  let generated = selected.generate(rng);
+
+  if (excludeQuestions && excludeQuestions.size > 0) {
+    let retries = 0;
+    while (excludeQuestions.has(generated.question) && retries < MAX_QUESTION_DEDUP_RETRIES) {
+      selected = pick(pool, rng).entry;
+      generated = selected.generate(rng);
+      retries += 1;
+    }
+  }
 
   return {
-    ...selected.generate(rng),
+    ...generated,
     type,
     category: 'CONCEPTUAL',
+    templateId: selected.id,
   };
 }

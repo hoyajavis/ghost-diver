@@ -3,16 +3,23 @@ import {
   AnonymizedCacheProfile,
   AnonymizedPlayerTelemetry,
   ArchetypeAccuracyMap,
+  ConceptScheduleMap,
   ConceptualArchetype,
+  LeitnerBox,
   PlayerStats,
   ProblemMetricSummary,
   ReconBuffType,
   SaveSlot,
   UpgradeLevels,
 } from '../types';
+import {
+  MAX_LEITNER_BOX,
+  parseConceptKey,
+  summarizeConceptBoxDistribution,
+} from './conceptSpacedRep';
 import { clampFloor } from './dungeonLogic';
 
-export const SAVE_SCHEMA_VERSION = 4;
+export const SAVE_SCHEMA_VERSION = 5;
 
 const SLOT_IDS = [1, 2, 3] as const;
 const SAVE_KEY_PREFIX = 'ghost_diver_save_';
@@ -30,7 +37,7 @@ const VALID_RECON_BUFFS = new Set<ReconBuffType>([
   'FREE_SHIELD',
 ]);
 
-const VALID_CONCEPTUAL_ARCHETYPES = new Set<ConceptualArchetype>([
+export const VALID_CONCEPTUAL_ARCHETYPES = new Set<ConceptualArchetype>([
   'MAGNITUDE_ESTIMATION',
   'BENCHMARK_COMPARE',
   'SPOT_THE_GLITCH',
@@ -38,6 +45,7 @@ const VALID_CONCEPTUAL_ARCHETYPES = new Set<ConceptualArchetype>([
   'SIGN_PREDICTION',
   'EQUIVALENCE_STRUCTURE',
   'VISUAL_QUADRANT',
+  'EFFECT_OF_CHANGE',
 ]);
 
 export interface PersistedSaveData {
@@ -55,6 +63,8 @@ export interface PersistedSaveData {
   activeReconBuff: ReconBuffType | null;
   reconRewardAvailable: boolean;
   archetypeStats: ArchetypeAccuracyMap;
+  conceptSchedule: ConceptScheduleMap;
+  conceptStepCounter: number;
 }
 
 export const INITIAL_STATS: PlayerStats = {
@@ -80,6 +90,8 @@ export const INITIAL_STATS: PlayerStats = {
   activeReconBuff: null,
   reconRewardAvailable: true,
   archetypeStats: {},
+  conceptSchedule: {},
+  conceptStepCounter: 0,
 };
 
 export const INITIAL_TELEMETRY: AnonymizedPlayerTelemetry = {
@@ -264,6 +276,26 @@ function sanitizeArchetypeStats(raw: unknown): ArchetypeAccuracyMap {
   return result;
 }
 
+export function sanitizeConceptSchedule(raw: unknown): ConceptScheduleMap {
+  if (!isRecord(raw)) return {};
+  const result: ConceptScheduleMap = {};
+  for (const [key, value] of Object.entries(raw)) {
+    const parsed = parseConceptKey(key, VALID_CONCEPTUAL_ARCHETYPES);
+    if (!parsed) continue;
+    if (!isRecord(value)) continue;
+    const lastResult = value.lastResult;
+    if (lastResult !== 'PASS' && lastResult !== 'MISS') continue;
+    const box = Math.min(MAX_LEITNER_BOX, toNonNegativeInt(value.box, 0)) as LeitnerBox;
+    const nextDueStep = toNonNegativeInt(value.nextDueStep, 0);
+    result[`${parsed.tier}:${parsed.archetype}`] = {
+      box,
+      nextDueStep,
+      lastResult,
+    };
+  }
+  return result;
+}
+
 export function hydrateSaveData(raw: unknown): PlayerStats | null {
   if (!isRecord(raw)) return null;
 
@@ -291,6 +323,8 @@ export function hydrateSaveData(raw: unknown): PlayerStats | null {
     reconRewardAvailable:
       typeof raw.reconRewardAvailable === 'boolean' ? raw.reconRewardAvailable : true,
     archetypeStats: sanitizeArchetypeStats(raw.archetypeStats),
+    conceptSchedule: sanitizeConceptSchedule(raw.conceptSchedule),
+    conceptStepCounter: toNonNegativeInt(raw.conceptStepCounter, 0),
     maxHp,
     maxFp,
     hp: maxHp,
@@ -326,6 +360,8 @@ export function toPersistedSaveData(
     reconRewardAvailable:
       typeof stats.reconRewardAvailable === 'boolean' ? stats.reconRewardAvailable : true,
     archetypeStats: sanitizeArchetypeStats(stats.archetypeStats),
+    conceptSchedule: sanitizeConceptSchedule(stats.conceptSchedule),
+    conceptStepCounter: toNonNegativeInt(stats.conceptStepCounter, 0),
   };
 }
 
@@ -572,6 +608,9 @@ export function exportAnonymizedCacheData(): AnonymizedCacheExport {
     exportedDay: getCoarseUtcDay(),
     anonymousId,
     telemetry: loadTelemetry(),
+    conceptMasteryDistribution: summarizeConceptBoxDistribution(
+      slots.map((slot) => slot.stats?.conceptSchedule)
+    ),
     slots: slots.map((slot) => ({
       slotId: slot.id,
       data: slot.stats

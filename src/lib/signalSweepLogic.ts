@@ -29,6 +29,7 @@ export const ARCHETYPE_LABELS: Record<ConceptualArchetype, string> = {
   SIGN_PREDICTION: 'Sign Prediction',
   EQUIVALENCE_STRUCTURE: 'Equivalence',
   VISUAL_QUADRANT: 'Visual / Quadrant',
+  EFFECT_OF_CHANGE: 'Scaling & Change',
 };
 
 export interface ReconBuffOption {

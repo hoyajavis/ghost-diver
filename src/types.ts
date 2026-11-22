@@ -23,6 +23,24 @@ export interface ArchetypeAccuracyStat {
 
 export type ArchetypeAccuracyMap = Partial<Record<ConceptualArchetype, ArchetypeAccuracyStat>>;
 
+export type ConceptResult = 'PASS' | 'MISS';
+export type LeitnerBox = 0 | 1 | 2 | 3 | 4;
+
+export interface ConceptCard {
+  box: LeitnerBox;
+  nextDueStep: number;
+  lastResult: ConceptResult;
+}
+
+export type ConceptScheduleMap = Record<string, ConceptCard>;
+
+export interface ConceptBoxDistribution {
+  totalTracked: number;
+  byBox: Record<'0' | '1' | '2' | '3' | '4', number>;
+  passCount: number;
+  missCount: number;
+}
+
 export interface PlayerStats {
   hp: number;
   maxHp: number;
@@ -42,6 +60,8 @@ export interface PlayerStats {
   activeReconBuff: ReconBuffType | null;
   reconRewardAvailable: boolean;
   archetypeStats: ArchetypeAccuracyMap;
+  conceptSchedule: ConceptScheduleMap;
+  conceptStepCounter: number;
 }
 
 export interface Position {
@@ -130,6 +150,7 @@ export interface AnonymizedCacheExport {
   exportedDay: string;
   anonymousId: string;
   telemetry: AnonymizedPlayerTelemetry;
+  conceptMasteryDistribution: ConceptBoxDistribution;
   slots: Array<{
     slotId: number;
     data: Record<string, unknown> | null;
@@ -163,7 +184,8 @@ export type ConceptualArchetype =
   | 'FIRST_STEP_STRATEGY'
   | 'SIGN_PREDICTION'
   | 'EQUIVALENCE_STRUCTURE'
-  | 'VISUAL_QUADRANT';
+  | 'VISUAL_QUADRANT'
+  | 'EFFECT_OF_CHANGE';
 
 export type ProblemCategory = 'PROCEDURAL' | 'CONCEPTUAL';
 
@@ -178,6 +200,7 @@ export interface MathProblem {
   complexity: ProblemComplexity;
   category?: ProblemCategory;
   archetype?: ConceptualArchetype;
+  templateId?: string;
   promptLines?: string[];
   inputType?: InputType;
   requireSimplified?: boolean;

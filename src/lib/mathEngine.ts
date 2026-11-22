@@ -1,12 +1,16 @@
 import { MathProblem, ProblemType } from '../types';
 import { ATTACK_GENERATORS } from './mathGenerators';
-import { generateConceptualProblem } from './generators/conceptual';
+import {
+  ConceptualGenerationOptions,
+  generateConceptualProblem,
+} from './generators/conceptual';
 import { clampTier } from './dungeonLogic';
 
 export function generateProblem(
   tier: number,
   type: ProblemType,
-  variant: 1 | 2 | 3 | 4 | 5 = 1
+  variant: 1 | 2 | 3 | 4 | 5 = 1,
+  conceptualOptions?: ConceptualGenerationOptions
 ): MathProblem {
   if (type === 'ATTACK') {
     const safeTier = clampTier(tier);
@@ -15,5 +19,5 @@ export function generateProblem(
     return { ...generator(), type: 'ATTACK', category: 'PROCEDURAL' };
   }
 
-  return generateConceptualProblem(tier, type);
+  return generateConceptualProblem(tier, type, conceptualOptions);
 }

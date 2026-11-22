@@ -106,15 +106,15 @@ describe('storage schema hydration', () => {
     expect(hydrated?.unlockedDemos).toEqual(['3-1', '3-2']);
   });
 
-  it('serializes persisted save data with schemaVersion 4, anonymousId, coarse UTC day, and v4 defaults', () => {
-    expect(SAVE_SCHEMA_VERSION).toBe(4);
+  it('serializes persisted save data with schemaVersion 5, anonymousId, coarse UTC day, and v5 defaults', () => {
+    expect(SAVE_SCHEMA_VERSION).toBe(5);
     const persisted = toPersistedSaveData({
       ...INITIAL_STATS,
       knowledge: 500,
       maxExtractedFloor: 15,
     });
 
-    expect(persisted.schemaVersion).toBe(4);
+    expect(persisted.schemaVersion).toBe(5);
     expect(persisted.anonymousId).toMatch(/^gd-[a-f0-9]{8}-[a-f0-9]{4}$/);
     expect(persisted.updatedAtDay).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(persisted.knowledge).toBe(500);
@@ -122,10 +122,12 @@ describe('storage schema hydration', () => {
     expect(persisted.activeReconBuff).toBeNull();
     expect(persisted.reconRewardAvailable).toBe(true);
     expect(persisted.archetypeStats).toEqual({});
+    expect(persisted.conceptSchedule).toEqual({});
+    expect(persisted.conceptStepCounter).toBe(0);
   });
 
-  it('migrates schema v3 payloads to v4 defaults cleanly', () => {
-    const hydrated = hydrateSaveData({
+  it('migrates schema v3 and v4 payloads to v5 defaults cleanly', () => {
+    const hydratedV3 = hydrateSaveData({
       schemaVersion: 3,
       knowledge: 180,
       maxExtractedFloor: 6,
@@ -135,10 +137,31 @@ describe('storage schema hydration', () => {
       unlockedDemos: ['1-1'],
     });
 
-    expect(hydrated).not.toBeNull();
-    expect(hydrated?.activeReconBuff).toBeNull();
-    expect(hydrated?.reconRewardAvailable).toBe(true);
-    expect(hydrated?.archetypeStats).toEqual({});
+    expect(hydratedV3).not.toBeNull();
+    expect(hydratedV3?.activeReconBuff).toBeNull();
+    expect(hydratedV3?.reconRewardAvailable).toBe(true);
+    expect(hydratedV3?.archetypeStats).toEqual({});
+    expect(hydratedV3?.conceptSchedule).toEqual({});
+    expect(hydratedV3?.conceptStepCounter).toBe(0);
+
+    // Schema v4 payload without conceptSchedule / conceptStepCounter hydrates seamlessly
+    const hydratedV4 = hydrateSaveData({
+      schemaVersion: 4,
+      knowledge: 240,
+      maxExtractedFloor: 10,
+      activeReconBuff: 'START_FP_20',
+      reconRewardAvailable: false,
+      archetypeStats: {
+        MAGNITUDE_ESTIMATION: { attempts: 3, correct: 2 },
+      },
+    });
+    expect(hydratedV4?.activeReconBuff).toBe('START_FP_20');
+    expect(hydratedV4?.reconRewardAvailable).toBe(false);
+    expect(hydratedV4?.archetypeStats).toEqual({
+      MAGNITUDE_ESTIMATION: { attempts: 3, correct: 2 },
+    });
+    expect(hydratedV4?.conceptSchedule).toEqual({});
+    expect(hydratedV4?.conceptStepCounter).toBe(0);
 
     // Non-boolean reconRewardAvailable also defaults to true
     const malformedFlag = hydrateSaveData({
@@ -148,7 +171,7 @@ describe('storage schema hydration', () => {
     expect(malformedFlag?.reconRewardAvailable).toBe(true);
   });
 
-  it('round-trips activeReconBuff, reconRewardAvailable, and archetypeStats through localStorage', () => {
+  it('round-trips activeReconBuff, reconRewardAvailable, archetypeStats (including EFFECT_OF_CHANGE), conceptSchedule, and conceptStepCounter', () => {
     saveSlot(1, {
       ...INITIAL_STATS,
       knowledge: 300,
@@ -157,7 +180,13 @@ describe('storage schema hydration', () => {
       archetypeStats: {
         MAGNITUDE_ESTIMATION: { attempts: 6, correct: 5 },
         SPOT_THE_GLITCH: { attempts: 4, correct: 4 },
+        EFFECT_OF_CHANGE: { attempts: 3, correct: 3 },
       },
+      conceptSchedule: {
+        '1:EFFECT_OF_CHANGE': { box: 2, nextDueStep: 11, lastResult: 'PASS' },
+        '0:BENCHMARK_COMPARE': { box: 0, nextDueStep: 6, lastResult: 'MISS' },
+      },
+      conceptStepCounter: 5,
     });
 
     const slots = loadSlots();
@@ -166,12 +195,26 @@ describe('storage schema hydration', () => {
     expect(slots[0].stats?.archetypeStats).toEqual({
       MAGNITUDE_ESTIMATION: { attempts: 6, correct: 5 },
       SPOT_THE_GLITCH: { attempts: 4, correct: 4 },
+      EFFECT_OF_CHANGE: { attempts: 3, correct: 3 },
+    });
+    expect(slots[0].stats?.conceptSchedule).toEqual({
+      '1:EFFECT_OF_CHANGE': { box: 2, nextDueStep: 11, lastResult: 'PASS' },
+      '0:BENCHMARK_COMPARE': { box: 0, nextDueStep: 6, lastResult: 'MISS' },
+    });
+    expect(slots[0].stats?.conceptStepCounter).toBe(5);
+
+    const exported = exportAnonymizedCacheData();
+    expect(exported.conceptMasteryDistribution).toEqual({
+      totalTracked: 2,
+      byBox: { '0': 1, '1': 0, '2': 1, '3': 0, '4': 0 },
+      passCount: 1,
+      missCount: 1,
     });
   });
 
-  it('sanitizes invalid recon buffs, strips unknown/PII archetype keys, clamps correct <= attempts, and omits zero-attempt entries', () => {
+  it('sanitizes invalid recon buffs, strips unknown/PII archetype & conceptSchedule keys, clamps values, and omits malformed entries', () => {
     const dirtyPayload = {
-      schemaVersion: 4,
+      schemaVersion: 5,
       activeReconBuff: 'UNLIMITED_GOD_MODE',
       reconRewardAvailable: false,
       archetypeStats: {
@@ -181,6 +224,14 @@ describe('storage schema hydration', () => {
         'jane@example.com': { attempts: 10, correct: 10 },
         CUSTOM_PII_KEY: { attempts: 4, correct: 3 },
       },
+      conceptSchedule: {
+        '3:EFFECT_OF_CHANGE': { box: 99, nextDueStep: 15, lastResult: 'PASS' },
+        '13:EFFECT_OF_CHANGE': { box: 1, nextDueStep: 5, lastResult: 'PASS' },
+        '1:INVALID_ARCHETYPE': { box: 1, nextDueStep: 5, lastResult: 'PASS' },
+        'jane@example.com': { box: 1, nextDueStep: 5, lastResult: 'PASS' },
+        '2:SPOT_THE_GLITCH': { box: 1, nextDueStep: 5, lastResult: 'HACKED' },
+      },
+      conceptStepCounter: -42,
     };
 
     const hydrated = hydrateSaveData(dirtyPayload);
@@ -189,6 +240,10 @@ describe('storage schema hydration', () => {
     expect(hydrated?.archetypeStats).toEqual({
       BENCHMARK_COMPARE: { attempts: 5, correct: 5 },
     });
+    expect(hydrated?.conceptSchedule).toEqual({
+      '3:EFFECT_OF_CHANGE': { box: 4, nextDueStep: 15, lastResult: 'PASS' },
+    });
+    expect(hydrated?.conceptStepCounter).toBe(0);
 
     const dirtyStats = {
       ...INITIAL_STATS,
@@ -199,6 +254,11 @@ describe('storage schema hydration', () => {
         FIRST_STEP_STRATEGY: { attempts: 0, correct: 0 },
         'student-name-pii': { attempts: 2, correct: 2 },
       },
+      conceptSchedule: {
+        '5:BENCHMARK_COMPARE': { box: 2, nextDueStep: 12, lastResult: 'PASS' },
+        'student-secret-pii': { box: 1, nextDueStep: 3, lastResult: 'MISS' },
+      },
+      conceptStepCounter: 9,
     };
 
     const persisted = toPersistedSaveData(dirtyStats as unknown as typeof INITIAL_STATS);
@@ -209,12 +269,24 @@ describe('storage schema hydration', () => {
     });
     expect(persisted.archetypeStats).not.toHaveProperty('student-name-pii');
     expect(persisted.archetypeStats).not.toHaveProperty('FIRST_STEP_STRATEGY');
+    expect(persisted.conceptSchedule).toEqual({
+      '5:BENCHMARK_COMPARE': { box: 2, nextDueStep: 12, lastResult: 'PASS' },
+    });
+    expect(persisted.conceptSchedule).not.toHaveProperty('student-secret-pii');
+    expect(persisted.conceptStepCounter).toBe(9);
 
     saveSlot(2, dirtyStats as unknown as typeof INITIAL_STATS);
     const exported = exportAnonymizedCacheData();
     const serialized = JSON.stringify(exported);
-    expect(exported.schemaVersion).toBe(4);
+    expect(exported.schemaVersion).toBe(5);
+    expect(exported.conceptMasteryDistribution).toEqual({
+      totalTracked: 1,
+      byBox: { '0': 0, '1': 0, '2': 1, '3': 0, '4': 0 },
+      passCount: 1,
+      missCount: 0,
+    });
     expect(serialized).not.toContain('student-name-pii');
+    expect(serialized).not.toContain('student-secret-pii');
     expect(serialized).not.toContain('INVALID_BUFF');
   });
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { PlayerStats, Position, ReconBuffType } from '../types';
 import { SignalSweepNodeOutcome } from '../lib/signalSweepLogic';
+import { ConceptOutcome } from '../lib/conceptSpacedRep';
 import { TrainingSim } from './TrainingSim';
 import { ScarCalibrationModal } from './ScarCalibrationModal';
 import { SignalSweep } from './SignalSweep';
@@ -36,6 +37,7 @@ interface Props {
   onCalibrateScar: (scar: string) => void;
   onUpgrade: (type: 'hp' | 'fp' | 'hints' | 'buy_hint') => void;
   onUnlockDemo: (variantId: string) => void;
+  onRecordConceptOutcome: (outcome: ConceptOutcome) => void;
   onRecordArchetypeStats: (outcomes: readonly SignalSweepNodeOutcome[]) => void;
   onClaimReconBuff: (buff: ReconBuffType) => void;
   onLogout: () => void;
@@ -112,6 +114,7 @@ export const HomeBase: React.FC<Props> = ({
   onCalibrateScar,
   onUpgrade,
   onUnlockDemo,
+  onRecordConceptOutcome,
   onRecordArchetypeStats,
   onClaimReconBuff,
   onLogout,
@@ -480,6 +483,9 @@ export const HomeBase: React.FC<Props> = ({
           <ScarCalibrationModal
             scar={calibratingScar}
             maxExtractedFloor={stats.maxExtractedFloor}
+            conceptSchedule={stats.conceptSchedule}
+            conceptStepCounter={stats.conceptStepCounter}
+            onRecordConceptOutcome={onRecordConceptOutcome}
             onComplete={(clearedScar) => {
               onCalibrateScar(clearedScar);
               setCalibratingScar(null);

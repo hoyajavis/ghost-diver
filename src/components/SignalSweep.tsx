@@ -78,7 +78,10 @@ export const SignalSweep: React.FC<SignalSweepProps> = ({
   const [timed, setTimed] = useState<boolean>(initialTimed);
   const [phase, setPhase] = useState<'PLAYING' | 'SUMMARY'>('PLAYING');
   const [deck, setDeck] = useState<SignalSweepNode[]>(() =>
-    generateSignalSweepDeck(reachedTiers, SIGNAL_SWEEP_NODE_COUNT)
+    generateSignalSweepDeck(reachedTiers, SIGNAL_SWEEP_NODE_COUNT, Math.random, {
+      conceptSchedule: stats.conceptSchedule,
+      conceptStepCounter: stats.conceptStepCounter,
+    })
   );
   const [nodeIndex, setNodeIndex] = useState<number>(0);
   const [outcomes, setOutcomes] = useState<SignalSweepNodeOutcome[]>([]);
@@ -99,6 +102,10 @@ export const SignalSweep: React.FC<SignalSweepProps> = ({
   const problemStartTimeRef = useRef<number>(Date.now());
   const runStartTimeRef = useRef<number>(Date.now());
   const completedRunRef = useRef<boolean>(false);
+  const recentQuestionsRef = useRef<Set<string>>(new Set(deck.map((n) => n.problem.question)));
+  const recentTemplateIdsRef = useRef<Set<string>>(
+    new Set(deck.map((n) => n.problem.templateId).filter((id): id is string => Boolean(id)))
+  );
 
   const currentNode = deck[nodeIndex] ?? deck[0];
   const problem = currentNode.problem;
@@ -145,7 +152,18 @@ export const SignalSweep: React.FC<SignalSweepProps> = ({
 
   const handleRunAgain = useCallback(() => {
     clearAllTimeouts();
-    const freshDeck = generateSignalSweepDeck(reachedTiers, SIGNAL_SWEEP_NODE_COUNT);
+    const freshDeck = generateSignalSweepDeck(reachedTiers, SIGNAL_SWEEP_NODE_COUNT, Math.random, {
+      conceptSchedule: stats.conceptSchedule,
+      conceptStepCounter: stats.conceptStepCounter,
+      excludeQuestions: recentQuestionsRef.current,
+      excludeTemplateIds: recentTemplateIdsRef.current,
+    });
+    for (const node of freshDeck) {
+      recentQuestionsRef.current.add(node.problem.question);
+    }
+    recentTemplateIdsRef.current = new Set(
+      freshDeck.map((n) => n.problem.templateId).filter((id): id is string => Boolean(id))
+    );
     setDeck(freshDeck);
     setNodeIndex(0);
     setOutcomes([]);
@@ -161,7 +179,7 @@ export const SignalSweep: React.FC<SignalSweepProps> = ({
     problemStartTimeRef.current = now;
     runStartTimeRef.current = now;
     setPhase('PLAYING');
-  }, [clearAllTimeouts, reachedTiers, resetInputs]);
+  }, [clearAllTimeouts, reachedTiers, resetInputs, stats.conceptSchedule, stats.conceptStepCounter]);
 
   const handleSubmit = (overrideInput?: string) => {
     if (phase !== 'PLAYING' || feedback !== 'IDLE') return;

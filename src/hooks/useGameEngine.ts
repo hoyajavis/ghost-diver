@@ -29,6 +29,11 @@ import {
   RECON_START_FP_BONUS,
   SignalSweepNodeOutcome,
 } from '../lib/signalSweepLogic';
+import {
+  applyConceptOutcomeToStats,
+  ConceptOutcome,
+  recordConceptOutcomesBatch,
+} from '../lib/conceptSpacedRep';
 import { LORE_ENTRIES } from '../lib/lore';
 import { getRandomScar } from '../lib/scarData';
 import {
@@ -118,6 +123,8 @@ export function useGameEngine() {
     stats.activeReconBuff,
     stats.reconRewardAvailable,
     stats.archetypeStats,
+    stats.conceptSchedule,
+    stats.conceptStepCounter,
     currentSlot,
     gameState,
   ]);
@@ -486,12 +493,25 @@ export function useGameEngine() {
     }
   };
 
+  const handleRecordConceptOutcome = (outcome: ConceptOutcome) => {
+    setStats((prev) => applyConceptOutcomeToStats(prev, outcome));
+  };
+
   const handleRecordArchetypeStats = (outcomes: readonly SignalSweepNodeOutcome[]) => {
     if (outcomes.length === 0) return;
-    setStats((prev) => ({
-      ...prev,
-      archetypeStats: mergeArchetypeStats(prev.archetypeStats, outcomes),
-    }));
+    setStats((prev) => {
+      const spacedRep = recordConceptOutcomesBatch(
+        prev.conceptSchedule,
+        prev.conceptStepCounter,
+        outcomes
+      );
+      return {
+        ...prev,
+        archetypeStats: mergeArchetypeStats(prev.archetypeStats, outcomes),
+        conceptSchedule: spacedRep.conceptSchedule,
+        conceptStepCounter: spacedRep.conceptStepCounter,
+      };
+    });
   };
 
   const handleClaimReconBuff = (buff: ReconBuffType) => {
@@ -538,6 +558,7 @@ export function useGameEngine() {
     handleEmergencyEject,
     handleUpgrade,
     handleUnlockDemo,
+    handleRecordConceptOutcome,
     handleRecordArchetypeStats,
     handleClaimReconBuff,
   };

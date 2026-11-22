@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
-import { MathProblem } from '../types';
+import { ConceptScheduleMap, ConceptualArchetype, MathProblem } from '../types';
 import { generateProblem } from '../lib/mathEngine';
+import { ConceptOutcome } from '../lib/conceptSpacedRep';
 import {
   BLUE_CACHE_FAIL_DAMAGE,
   COMBO_STEP_ADVANCE_MS,
@@ -26,6 +27,9 @@ export interface LockModalProps {
   tier: number;
   playerHp: number;
   playerMaxHp: number;
+  conceptSchedule?: ConceptScheduleMap;
+  conceptStepCounter?: number;
+  onRecordConceptOutcome?: (outcome: ConceptOutcome) => void;
   onSuccess: () => void;
   onMiss: (damage: number) => void;
   onClose: () => void;
@@ -33,26 +37,49 @@ export interface LockModalProps {
 
 const LOCK_RETRY_DELAY_MS = 1200;
 
-function drawFreshLockProblem(tier: number, previousQuestion?: string): MathProblem {
-  let candidate = generateProblem(tier, 'LOCK');
-  for (let attempt = 0; attempt < 4; attempt++) {
-    if (!previousQuestion || candidate.question !== previousQuestion) {
-      return candidate;
-    }
-    candidate = generateProblem(tier, 'LOCK');
-  }
-  return candidate;
+interface LockAntiRepeatState {
+  seenQuestions: ReadonlySet<string>;
+  seenTemplateIds: ReadonlySet<string>;
+  lastArchetype: ConceptualArchetype | null;
+  lastTemplateId: string | null;
+}
+
+function drawFreshLockProblem(
+  tier: number,
+  conceptSchedule: ConceptScheduleMap | undefined,
+  conceptStepCounter: number | undefined,
+  antiRepeat?: LockAntiRepeatState
+): MathProblem {
+  const excludeTemplateIds =
+    antiRepeat && antiRepeat.seenTemplateIds.size > 0
+      ? antiRepeat.seenTemplateIds
+      : antiRepeat?.lastTemplateId
+        ? new Set([antiRepeat.lastTemplateId])
+        : undefined;
+
+  return generateProblem(tier, 'LOCK', 1, {
+    conceptSchedule,
+    conceptStepCounter,
+    excludeQuestions: antiRepeat && antiRepeat.seenQuestions.size > 0 ? antiRepeat.seenQuestions : undefined,
+    excludeArchetypes: antiRepeat?.lastArchetype ? new Set([antiRepeat.lastArchetype]) : undefined,
+    excludeTemplateIds,
+  });
 }
 
 export const LockModal: React.FC<LockModalProps> = ({
   tier,
   playerHp,
   playerMaxHp,
+  conceptSchedule,
+  conceptStepCounter,
+  onRecordConceptOutcome,
   onSuccess,
   onMiss,
   onClose,
 }) => {
-  const [problem, setProblem] = useState<MathProblem>(() => drawFreshLockProblem(tier));
+  const [problem, setProblem] = useState<MathProblem>(() =>
+    drawFreshLockProblem(tier, conceptSchedule, conceptStepCounter)
+  );
   const [input, setInput] = useState('');
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   const [fractionInput, setFractionInput] = useState({ num: '', den: '' });
@@ -62,6 +89,16 @@ export const LockModal: React.FC<LockModalProps> = ({
 
   const { scheduleTimeout, clearAllTimeouts } = useSafeTimeout();
   const problemStartTimeRef = useRef<number>(Date.now());
+  const seenQuestionsRef = useRef<Set<string>>(new Set([problem.question]));
+  const seenTemplateIdsRef = useRef<Set<string>>(
+    new Set(problem.templateId ? [problem.templateId] : [])
+  );
+  const lastArchetypeRef = useRef<ConceptualArchetype | null>(problem.archetype ?? null);
+  const lastTemplateIdRef = useRef<string | null>(problem.templateId ?? null);
+  const latestScheduleRef = useRef<ConceptScheduleMap | undefined>(conceptSchedule);
+  const latestStepRef = useRef<number | undefined>(conceptStepCounter);
+  latestScheduleRef.current = conceptSchedule;
+  latestStepRef.current = conceptStepCounter;
 
   const resetInputs = () => {
     setInput('');
@@ -127,6 +164,14 @@ export const LockModal: React.FC<LockModalProps> = ({
       firstTryCorrect: isCorrect,
     });
 
+    if (problem.archetype && onRecordConceptOutcome) {
+      onRecordConceptOutcome({
+        tier,
+        archetype: problem.archetype,
+        correct: isCorrect,
+      });
+    }
+
     if (isCorrect) {
       setFeedback('CORRECT');
       setFeedbackMessage('Lock Breached — Cache Unlocked');
@@ -143,7 +188,23 @@ export const LockModal: React.FC<LockModalProps> = ({
     onMiss(BLUE_CACHE_FAIL_DAMAGE);
 
     scheduleTimeout(() => {
-      const nextProblem = drawFreshLockProblem(tier, problem.question);
+      const nextProblem = drawFreshLockProblem(
+        tier,
+        latestScheduleRef.current,
+        latestStepRef.current,
+        {
+          seenQuestions: seenQuestionsRef.current,
+          seenTemplateIds: seenTemplateIdsRef.current,
+          lastArchetype: lastArchetypeRef.current,
+          lastTemplateId: lastTemplateIdRef.current,
+        }
+      );
+      seenQuestionsRef.current.add(nextProblem.question);
+      if (nextProblem.templateId) {
+        seenTemplateIdsRef.current.add(nextProblem.templateId);
+      }
+      lastArchetypeRef.current = nextProblem.archetype ?? null;
+      lastTemplateIdRef.current = nextProblem.templateId ?? null;
       setProblem(nextProblem);
       resetInputs();
       setFeedback('IDLE');

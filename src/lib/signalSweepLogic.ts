@@ -1,14 +1,22 @@
 import {
   ArchetypeAccuracyMap,
+  ConceptScheduleMap,
   ConceptualArchetype,
   MathProblem,
   PlayerStats,
   ReconBuffType,
 } from '../types';
+import {
+  ConceptSlot,
+  isConceptDue,
+  makeConceptKey,
+  selectWeightedConceptSlot,
+} from './conceptSpacedRep';
 import { clampFloor, clampTier, getTierForFloor } from './dungeonLogic';
 import {
-  generateConceptualProblem,
-  getConceptualArchetypesForTier,
+  getFoundationalConceptualGenerators,
+  getTaggedConceptualGeneratorsForTier,
+  TaggedConceptualGenerator,
 } from './generators/conceptual';
 
 export const SIGNAL_SWEEP_NODE_COUNT = 10;
@@ -99,15 +107,24 @@ export interface SignalSweepSummary {
   archetypeBreakdown: ArchetypeBreakdownEntry[];
 }
 
-function shuffleWithRng<T>(items: readonly T[], rng: () => number): T[] {
-  const copy = [...items];
-  for (let i = copy.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
-    const tmp = copy[i];
-    copy[i] = copy[j];
-    copy[j] = tmp;
-  }
-  return copy;
+export interface SignalSweepDeckOptions {
+  conceptSchedule?: ConceptScheduleMap;
+  conceptStepCounter?: number;
+  excludeQuestions?: ReadonlySet<string>;
+  excludeTemplateIds?: ReadonlySet<string>;
+}
+
+interface DeckTemplateCandidate {
+  tier: number;
+  archetype: ConceptualArchetype;
+  templateId: string;
+  generate: TaggedConceptualGenerator['generate'];
+  isFoundational: boolean;
+}
+
+function pickUniform<T>(items: readonly T[], rng: () => number): T {
+  const index = Math.min(items.length - 1, Math.max(0, Math.floor(rng() * items.length)));
+  return items[index];
 }
 
 export function getReachedTiers(
@@ -132,15 +149,48 @@ export function getReachedTiers(
   return Array.from({ length: maxTier }, (_, index) => index + 1);
 }
 
-interface TierArchetypeSlot {
-  tier: number;
-  archetype: ConceptualArchetype;
+const DECK_QUESTION_RETRIES = 10;
+
+function generateUniqueProblemForCandidate(
+  candidate: DeckTemplateCandidate,
+  deckSeenQuestions: ReadonlySet<string>,
+  crossRunExcludeQuestions: ReadonlySet<string> | undefined,
+  rng: () => number
+): MathProblem {
+  let notInDeckFallback: MathProblem | null = null;
+  let anyFallback: MathProblem | null = null;
+
+  for (let attempt = 0; attempt < DECK_QUESTION_RETRIES; attempt++) {
+    const raw = candidate.generate(rng);
+    const problem: MathProblem = {
+      ...raw,
+      type: 'LOCK',
+      category: 'CONCEPTUAL',
+      templateId: candidate.templateId,
+    };
+
+    const inDeck = deckSeenQuestions.has(problem.question);
+    const inCrossRun = Boolean(crossRunExcludeQuestions?.has(problem.question));
+
+    if (!inDeck && !inCrossRun) {
+      return problem;
+    }
+    if (!inDeck && notInDeckFallback === null) {
+      notInDeckFallback = problem;
+    }
+    if (anyFallback === null) {
+      anyFallback = problem;
+    }
+  }
+
+  return notInDeckFallback ?? anyFallback!;
 }
 
 export function generateSignalSweepDeck(
   reachedTiers: readonly number[],
   count: number = SIGNAL_SWEEP_NODE_COUNT,
-  rng: () => number = Math.random
+  rng: () => number = Math.random,
+  options?: SignalSweepDeckOptions
 ): SignalSweepNode[] {
   const safeCount = Number.isFinite(count) ? Math.max(0, Math.floor(count)) : SIGNAL_SWEEP_NODE_COUNT;
   if (safeCount === 0) return [];
@@ -154,93 +204,168 @@ export function generateSignalSweepDeck(
   ).sort((a, b) => a - b);
 
   const activeTiers = normalizedTiers.length > 0 ? normalizedTiers : [1];
+  const allCandidates: DeckTemplateCandidate[] = [];
 
-  const pairsByArchetype = new Map<ConceptualArchetype, TierArchetypeSlot[]>();
   for (const tier of activeTiers) {
-    for (const archetype of getConceptualArchetypesForTier(tier)) {
-      const list = pairsByArchetype.get(archetype) ?? [];
-      list.push({ tier, archetype });
-      pairsByArchetype.set(archetype, list);
-    }
-  }
-
-  const archetypes = shuffleWithRng(Array.from(pairsByArchetype.keys()), rng);
-  if (archetypes.length === 0) return [];
-
-  const queues = new Map<ConceptualArchetype, TierArchetypeSlot[]>();
-  for (const archetype of archetypes) {
-    queues.set(archetype, shuffleWithRng(pairsByArchetype.get(archetype) ?? [], rng));
-  }
-
-  // Round-robin across distinct archetypes, exhausting distinct (tier, archetype) pairs before repeating
-  const selectedByArchetype = new Map<ConceptualArchetype, TierArchetypeSlot[]>();
-  for (let i = 0; i < safeCount; i++) {
-    const archetype = archetypes[i % archetypes.length];
-    let queue = queues.get(archetype) ?? [];
-    if (queue.length === 0) {
-      queue = shuffleWithRng(pairsByArchetype.get(archetype) ?? [], rng);
-      queues.set(archetype, queue);
-    }
-    const slot = queue.pop()!;
-    const bucket = selectedByArchetype.get(archetype) ?? [];
-    bucket.push(slot);
-    selectedByArchetype.set(archetype, bucket);
-  }
-
-  // Order slots greedily by highest remaining count while avoiding consecutive identical archetypes
-  const orderedSlots: TierArchetypeSlot[] = [];
-  let prevArchetype: ConceptualArchetype | null = null;
-
-  while (orderedSlots.length < safeCount) {
-    const remaining: Array<[ConceptualArchetype, TierArchetypeSlot[]]> = Array.from(
-      selectedByArchetype.entries()
-    ).filter(([, bucket]) => bucket.length > 0);
-    if (remaining.length === 0) break;
-
-    const lastArchetype: ConceptualArchetype | null = prevArchetype;
-    const nonConsecutive: Array<[ConceptualArchetype, TierArchetypeSlot[]]> =
-      remaining.length > 1 && lastArchetype !== null
-        ? remaining.filter(([archetype]) => archetype !== lastArchetype)
-        : remaining;
-    const candidates: Array<[ConceptualArchetype, TierArchetypeSlot[]]> =
-      nonConsecutive.length > 0 ? nonConsecutive : remaining;
-
-    let maxLen = 0;
-    for (const [, bucket] of candidates) {
-      if (bucket.length > maxLen) maxLen = bucket.length;
-    }
-
-    const topCandidates: Array<[ConceptualArchetype, TierArchetypeSlot[]]> = candidates.filter(
-      ([, bucket]) => bucket.length === maxLen
-    );
-    const chosenIndex = Math.floor(rng() * topCandidates.length);
-    const [chosenArchetype, chosenBucket] = topCandidates[chosenIndex];
-    const nextSlot = chosenBucket.pop()!;
-    orderedSlots.push(nextSlot);
-    prevArchetype = chosenArchetype;
-  }
-
-  // Generate conceptual problems with retry to avoid duplicate questions in the same deck
-  const seenQuestions = new Set<string>();
-  const deck: SignalSweepNode[] = [];
-
-  for (const slot of orderedSlots) {
-    let problem = generateConceptualProblem(slot.tier, 'LOCK', {
-      archetype: slot.archetype,
-      rng,
-    });
-
-    for (let attempt = 1; attempt < 6 && seenQuestions.has(problem.question); attempt++) {
-      problem = generateConceptualProblem(slot.tier, 'LOCK', {
-        archetype: slot.archetype,
-        rng,
+    for (const entry of getTaggedConceptualGeneratorsForTier(tier)) {
+      allCandidates.push({
+        tier,
+        archetype: entry.archetype,
+        templateId: entry.id,
+        generate: entry.generate,
+        isFoundational: false,
       });
     }
+  }
 
-    seenQuestions.add(problem.question);
+  // Include cross-tier foundational conceptual pool for early-sector decks (Tiers 1-2)
+  // Slotted with activeTiers[0] so UI displays T1/T2 cleanly and schedule keys stay in 1..12
+  if (activeTiers.length <= 2) {
+    const displayTier = activeTiers[0];
+    for (const entry of getFoundationalConceptualGenerators()) {
+      allCandidates.push({
+        tier: displayTier,
+        archetype: entry.archetype,
+        templateId: entry.id,
+        generate: entry.generate,
+        isFoundational: true,
+      });
+    }
+  }
+
+  if (allCandidates.length === 0) return [];
+
+  const schedule = options?.conceptSchedule;
+  const stepCounter = options?.conceptStepCounter ?? 0;
+  const crossRunExcludeQuestions = options?.excludeQuestions;
+  const crossRunExcludeTemplates = options?.excludeTemplateIds;
+
+  const deck: SignalSweepNode[] = [];
+  const deckSeenQuestions = new Set<string>();
+  const usedTemplateIds = new Set<string>();
+  const usedTierArchetypes = new Set<string>();
+  const archetypeCounts = new Map<ConceptualArchetype, number>();
+  let prevArchetype: ConceptualArchetype | null = null;
+  let lastTemplateId: string | null = null;
+
+  for (let i = 0; i < safeCount; i++) {
+    // Anti-repeat candidate cascade:
+    // 1) Unused template in this deck + not prevArchetype + not in cross-run excluded templates
+    // 2) Unused template in this deck + not prevArchetype (relax cross-run exclusion)
+    // 3) Not lastTemplateId + not prevArchetype (relax deck-wide template uniqueness)
+    // 4) Not lastTemplateId (relax prevArchetype)
+    // 5) Full candidate pool fallback
+    let stepCandidates = allCandidates.filter(
+      (c) =>
+        !usedTemplateIds.has(c.templateId) &&
+        c.archetype !== prevArchetype &&
+        !(crossRunExcludeTemplates && crossRunExcludeTemplates.has(c.templateId))
+    );
+    if (stepCandidates.length === 0) {
+      stepCandidates = allCandidates.filter(
+        (c) => !usedTemplateIds.has(c.templateId) && c.archetype !== prevArchetype
+      );
+    }
+    if (stepCandidates.length === 0) {
+      stepCandidates = allCandidates.filter(
+        (c) => c.templateId !== lastTemplateId && c.archetype !== prevArchetype
+      );
+    }
+    if (stepCandidates.length === 0) {
+      stepCandidates = allCandidates.filter((c) => c.templateId !== lastTemplateId);
+    }
+    if (stepCandidates.length === 0) {
+      stepCandidates = allCandidates;
+    }
+
+    const hasDueInStep =
+      Boolean(schedule) &&
+      stepCandidates.some((c) => isConceptDue(schedule?.[makeConceptKey(c.tier, c.archetype)], stepCounter));
+
+    let chosenCandidate: DeckTemplateCandidate;
+
+    if (schedule && hasDueInStep) {
+      const slotMap = new Map<string, ConceptSlot>();
+      for (const c of stepCandidates) {
+        const key = makeConceptKey(c.tier, c.archetype);
+        if (!slotMap.has(key)) {
+          slotMap.set(key, { tier: c.tier, archetype: c.archetype });
+        }
+      }
+
+      const selectedSlot = selectWeightedConceptSlot(
+        Array.from(slotMap.values()),
+        schedule,
+        stepCounter,
+        { excludeArchetype: prevArchetype, rng }
+      );
+
+      if (selectedSlot) {
+        const matching = stepCandidates.filter(
+          (c) => c.tier === selectedSlot.tier && c.archetype === selectedSlot.archetype
+        );
+        chosenCandidate = pickUniform(matching.length > 0 ? matching : stepCandidates, rng);
+      } else {
+        chosenCandidate = pickUniform(stepCandidates, rng);
+      }
+    } else {
+      // Balanced archetype variety: prefer least-used archetypes in this deck, then unused (tier, archetype) pairs
+      let minArchCount = Number.POSITIVE_INFINITY;
+      for (const c of stepCandidates) {
+        const countForArch = archetypeCounts.get(c.archetype) ?? 0;
+        if (countForArch < minArchCount) {
+          minArchCount = countForArch;
+        }
+      }
+
+      const leastUsedArchetypes = stepCandidates.filter(
+        (c) => (archetypeCounts.get(c.archetype) ?? 0) === minArchCount
+      );
+      const unusedPairs = leastUsedArchetypes.filter(
+        (c) => !usedTierArchetypes.has(makeConceptKey(c.tier, c.archetype))
+      );
+      const balancedPool = unusedPairs.length > 0 ? unusedPairs : leastUsedArchetypes;
+      chosenCandidate = pickUniform(balancedPool, rng);
+    }
+
+    let problem = generateUniqueProblemForCandidate(
+      chosenCandidate,
+      deckSeenQuestions,
+      crossRunExcludeQuestions,
+      rng
+    );
+
+    // If a small-parameter template still collided with an existing deck prompt, try other stepCandidates
+    if (deckSeenQuestions.has(problem.question)) {
+      for (const alt of stepCandidates) {
+        if (alt.templateId === chosenCandidate.templateId) continue;
+        const altProblem = generateUniqueProblemForCandidate(
+          alt,
+          deckSeenQuestions,
+          crossRunExcludeQuestions,
+          rng
+        );
+        if (!deckSeenQuestions.has(altProblem.question)) {
+          chosenCandidate = alt;
+          problem = altProblem;
+          break;
+        }
+      }
+    }
+
+    deckSeenQuestions.add(problem.question);
+    usedTemplateIds.add(chosenCandidate.templateId);
+    usedTierArchetypes.add(makeConceptKey(chosenCandidate.tier, chosenCandidate.archetype));
+    archetypeCounts.set(
+      chosenCandidate.archetype,
+      (archetypeCounts.get(chosenCandidate.archetype) ?? 0) + 1
+    );
+    prevArchetype = chosenCandidate.archetype;
+    lastTemplateId = chosenCandidate.templateId;
+
     deck.push({
-      tier: slot.tier,
-      archetype: problem.archetype ?? slot.archetype,
+      tier: chosenCandidate.tier,
+      archetype: problem.archetype ?? chosenCandidate.archetype,
       problem,
     });
   }

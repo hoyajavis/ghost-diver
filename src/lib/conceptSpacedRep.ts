@@ -159,7 +159,7 @@ function pickWeightedDueSlot(
 
   for (const slot of dueSlots) {
     const card = schedule[makeConceptKey(slot.tier, slot.archetype)];
-    const box = card ? card.box : 0;
+    const box = card ? toLeitnerBox(card.box) : 0;
     const weight = Math.max(1, 5 - box);
     weights.push(weight);
     totalWeight += weight;

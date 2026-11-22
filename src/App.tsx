@@ -42,6 +42,7 @@ export default function App() {
     handleEmergencyEject,
     handleUpgrade,
     handleUnlockDemo,
+    handleRecordConceptOutcome,
     handleRecordArchetypeStats,
     handleClaimReconBuff,
   } = useGameEngine();
@@ -69,6 +70,7 @@ export default function App() {
             onCalibrateScar={handleCalibrateScar}
             onUpgrade={handleUpgrade}
             onUnlockDemo={handleUnlockDemo}
+            onRecordConceptOutcome={handleRecordConceptOutcome}
             onRecordArchetypeStats={handleRecordArchetypeStats}
             onClaimReconBuff={handleClaimReconBuff}
             onLogout={() => setGameState('TITLE')}
@@ -98,6 +100,9 @@ export default function App() {
                   tier={dungeon.tier}
                   playerHp={stats.hp}
                   playerMaxHp={stats.maxHp}
+                  conceptSchedule={stats.conceptSchedule}
+                  conceptStepCounter={stats.conceptStepCounter}
+                  onRecordConceptOutcome={handleRecordConceptOutcome}
                   onSuccess={handleBlueCacheSuccess}
                   onMiss={handleBlueCacheFail}
                   onClose={handleBlueCacheClose}

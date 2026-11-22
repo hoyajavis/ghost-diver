@@ -1,6 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { CombatMode, PlayerStats, Enemy, MathProblem, ProblemType } from '../types';
+import {
+  CombatMode,
+  ConceptualArchetype,
+  PlayerStats,
+  Enemy,
+  MathProblem,
+  ProblemType,
+} from '../types';
 import { generateProblem } from '../lib/mathEngine';
+import { applyConceptOutcomeToStats } from '../lib/conceptSpacedRep';
+import { ConceptualGenerationOptions } from '../lib/generators/conceptual';
 import { ENEMY_TIERS } from '../lib/enemyData';
 import {
   APEX_INTRO_MS,
@@ -90,7 +99,12 @@ export const Combat: React.FC<Props> = ({
   const [phaseBanner, setPhaseBanner] = useState<string | null>(null);
   const [mode, setMode] = useState<CombatMode>(initialMode);
   const [problem, setProblem] = useState<MathProblem>(() =>
-    generateProblem(tier, getProblemTypeForMode(initialMode), enemy.variant)
+    initialMode === 'ATTACK'
+      ? generateProblem(tier, 'ATTACK', enemy.variant)
+      : generateProblem(tier, getProblemTypeForMode(initialMode), enemy.variant, {
+          conceptSchedule: stats.conceptSchedule,
+          conceptStepCounter: stats.conceptStepCounter,
+        })
   );
   const [turn, setTurn] = useState<CombatTurnState>(() =>
     createCombatTurnState({
@@ -114,6 +128,72 @@ export const Combat: React.FC<Props> = ({
   const totalHints = getTotalHints(stats);
   const problemStartTimeRef = useRef<number>(Date.now());
   const hadWrongAttemptRef = useRef<boolean>(false);
+  const statsRef = useRef<PlayerStats>(stats);
+  statsRef.current = stats;
+
+  // Encounter-scoped anti-repeat tracking for conceptual checks (Shield Break, Focus Scan, Meditation)
+  const seenConceptQuestionsRef = useRef<Set<string>>(
+    new Set(initialMode !== 'ATTACK' ? [problem.question] : [])
+  );
+  const seenConceptTemplateIdsRef = useRef<Set<string>>(
+    new Set(initialMode !== 'ATTACK' && problem.templateId ? [problem.templateId] : [])
+  );
+  const lastConceptArchetypeRef = useRef<ConceptualArchetype | null>(
+    initialMode !== 'ATTACK' ? (problem.archetype ?? null) : null
+  );
+  const lastConceptTemplateIdRef = useRef<string | null>(
+    initialMode !== 'ATTACK' ? (problem.templateId ?? null) : null
+  );
+
+  const generateCombatProblem = (nextMode: CombatMode): MathProblem => {
+    const problemType = getProblemTypeForMode(nextMode);
+    if (problemType === 'ATTACK') {
+      return generateProblem(tier, 'ATTACK', enemy.variant);
+    }
+
+    const latestStats = statsRef.current;
+    const excludeTemplateIds =
+      seenConceptTemplateIdsRef.current.size > 0
+        ? seenConceptTemplateIdsRef.current
+        : lastConceptTemplateIdRef.current
+          ? new Set([lastConceptTemplateIdRef.current])
+          : undefined;
+    const conceptualOptions: ConceptualGenerationOptions = {
+      conceptSchedule: latestStats.conceptSchedule,
+      conceptStepCounter: latestStats.conceptStepCounter,
+      excludeQuestions:
+        seenConceptQuestionsRef.current.size > 0 ? seenConceptQuestionsRef.current : undefined,
+      excludeArchetypes: lastConceptArchetypeRef.current
+        ? new Set([lastConceptArchetypeRef.current])
+        : undefined,
+      excludeTemplateIds,
+    };
+
+    const nextProblem = generateProblem(tier, problemType, enemy.variant, conceptualOptions);
+    seenConceptQuestionsRef.current.add(nextProblem.question);
+    if (nextProblem.templateId) {
+      seenConceptTemplateIdsRef.current.add(nextProblem.templateId);
+    }
+    lastConceptArchetypeRef.current = nextProblem.archetype ?? null;
+    lastConceptTemplateIdRef.current = nextProblem.templateId ?? null;
+    return nextProblem;
+  };
+
+  const withConceptOutcome = (
+    nextStats: PlayerStats,
+    activeMode: CombatMode,
+    activeProblem: MathProblem,
+    correct: boolean
+  ): PlayerStats => {
+    if (activeMode === 'ATTACK' || !activeProblem.archetype) {
+      return nextStats;
+    }
+    return applyConceptOutcomeToStats(nextStats, {
+      tier,
+      archetype: activeProblem.archetype,
+      correct,
+    });
+  };
 
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   const [fractionInput, setFractionInput] = useState({ num: '', den: '' });
@@ -186,7 +266,7 @@ export const Combat: React.FC<Props> = ({
     clearPhaseBanner = false
   ) => {
     scheduleTimeout(() => {
-      const nextProblem = generateProblem(tier, getProblemTypeForMode(nextMode), enemy.variant);
+      const nextProblem = generateCombatProblem(nextMode);
       setMode(nextMode);
       setFeedback('IDLE');
       setFeedbackMessage(null);
@@ -326,10 +406,17 @@ export const Combat: React.FC<Props> = ({
           neuralScars: stats.neuralScars,
         });
         setShieldLayers(res.newShieldLayers);
-        onUpdateStats({
-          ...stats,
-          fp: Math.min(stats.maxFp, stats.fp + res.fpGain),
-        });
+        onUpdateStats(
+          withConceptOutcome(
+            {
+              ...stats,
+              fp: Math.min(stats.maxFp, stats.fp + res.fpGain),
+            },
+            'SHIELD_BREAK',
+            problem,
+            true
+          )
+        );
 
         if (res.shieldBroken) {
           setIsVulnerable(true);
@@ -348,7 +435,7 @@ export const Combat: React.FC<Props> = ({
       if (mode === 'FOCUS_SCAN') {
         emitProblemTelemetry(!hadWrongAttemptRef.current, 'FOCUS_SCAN', problem);
         const res = applyFocusScanSuccess(stats, shieldLayers);
-        onUpdateStats(res.nextStats);
+        onUpdateStats(withConceptOutcome(res.nextStats, 'FOCUS_SCAN', problem, true));
         setShieldLayers(res.newShieldLayers);
 
         if (res.shieldBroken) {
@@ -369,7 +456,7 @@ export const Combat: React.FC<Props> = ({
       }
 
       emitProblemTelemetry(!hadWrongAttemptRef.current, 'MEDITATION', problem);
-      onUpdateStats(applyMeditationRecovery(stats));
+      onUpdateStats(withConceptOutcome(applyMeditationRecovery(stats), 'MEDITATION', problem, true));
       setFeedbackMessage(`Emergency Heal Complete: +${MEDITATION_HEAL_AMOUNT} HP`);
       const nextModeAfterHeal: CombatMode = shieldLayers > 0 ? 'SHIELD_BREAK' : 'ATTACK';
       scheduleNextProblem(nextModeAfterHeal, PROBLEM_ADVANCE_MS, stats.runBuffs);
@@ -400,11 +487,18 @@ export const Combat: React.FC<Props> = ({
     }
 
     setTurn(res.nextTurn);
-    onUpdateStats({
-      ...stats,
-      hp: res.newPlayerHp,
-      runBuffs: nextRunBuffs,
-    });
+    onUpdateStats(
+      withConceptOutcome(
+        {
+          ...stats,
+          hp: res.newPlayerHp,
+          runBuffs: nextRunBuffs,
+        },
+        mode,
+        problem,
+        false
+      )
+    );
 
     const hitPrefix = res.shieldAbsorbed
       ? 'Shield Absorbed Counter-Hit (0 HP)'
@@ -452,7 +546,7 @@ export const Combat: React.FC<Props> = ({
   const handleFocusScanClick = () => {
     if (!focusScanAvailable || feedback !== 'IDLE' || isIntro) return;
     clearAllTimeouts();
-    const nextProblem = generateProblem(tier, 'MEDITATION', enemy.variant);
+    const nextProblem = generateCombatProblem('FOCUS_SCAN');
     setFocusScanUsed(true);
     setMode('FOCUS_SCAN');
     setProblem(nextProblem);
@@ -475,7 +569,7 @@ export const Combat: React.FC<Props> = ({
   const handleMeditationClick = () => {
     if (stats.fp >= MEDITATION_FP_COST && mode !== 'MEDITATION' && feedback === 'IDLE' && !isIntro) {
       clearAllTimeouts();
-      const nextProblem = generateProblem(tier, 'MEDITATION', enemy.variant);
+      const nextProblem = generateCombatProblem('MEDITATION');
       setMode('MEDITATION');
       setProblem(nextProblem);
       setTurn(

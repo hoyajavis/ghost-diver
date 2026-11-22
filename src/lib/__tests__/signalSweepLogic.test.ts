@@ -199,6 +199,147 @@ describe('signalSweepLogic', () => {
         deckB.map((n) => `${n.tier}:${n.archetype}:${n.problem.question}`)
       );
     });
+
+    it('fuzzes 60 seeds of Tier-1-only 10-node decks with 0 duplicate prompts, 0 back-to-back archetypes/templates, and 10 unique templates including foundational pool', () => {
+      let foundationalAppearances = 0;
+
+      for (let seed = 1; seed <= 60; seed++) {
+        const deck = generateSignalSweepDeck([1], 10, createSeededRng(seed * 97 + 13));
+        expect(deck).toHaveLength(10);
+
+        const seenQuestions = new Set<string>();
+        const seenTemplateIds = new Set<string>();
+
+        for (let i = 0; i < deck.length; i++) {
+          const node = deck[i];
+          expect(node.tier).toBe(1);
+          expect(node.problem.category).toBe('CONCEPTUAL');
+          expect(node.problem.templateId).toBeTruthy();
+
+          if (node.problem.templateId?.startsWith('f-')) {
+            foundationalAppearances += 1;
+          }
+
+          expect(seenQuestions.has(node.problem.question)).toBe(false);
+          seenQuestions.add(node.problem.question);
+
+          if (node.problem.templateId) {
+            seenTemplateIds.add(node.problem.templateId);
+          }
+
+          if (i > 0) {
+            expect(node.archetype).not.toBe(deck[i - 1].archetype);
+            expect(node.problem.templateId).not.toBe(deck[i - 1].problem.templateId);
+          }
+        }
+
+        // Tier 1 (6 templates) + Foundational (8 templates) = 14 templates => 10 unique templates per deck
+        expect(seenTemplateIds.size).toBe(10);
+      }
+
+      // Every Tier-1 deck of 10 unique templates must draw at least 4 foundational templates (60 * 4 = 240+)
+      expect(foundationalAppearances).toBeGreaterThanOrEqual(240);
+    });
+
+    it('fuzzes 50 seeds each of Tiers 1-2 and Tiers 1-12 decks with 0 duplicate prompts and 0 consecutive repeats', () => {
+      const tierSets = [
+        [1, 2],
+        [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+      ];
+
+      for (const tiers of tierSets) {
+        for (let seed = 1; seed <= 50; seed++) {
+          const deck = generateSignalSweepDeck(tiers, 10, createSeededRng(seed * 131 + tiers.length));
+          expect(deck).toHaveLength(10);
+
+          const seenQuestions = new Set<string>();
+          const seenTemplateIds = new Set<string>();
+
+          for (let i = 0; i < deck.length; i++) {
+            const node = deck[i];
+            expect(tiers.includes(node.tier)).toBe(true);
+            expect(seenQuestions.has(node.problem.question)).toBe(false);
+            seenQuestions.add(node.problem.question);
+
+            if (node.problem.templateId) {
+              seenTemplateIds.add(node.problem.templateId);
+            }
+
+            if (i > 0) {
+              expect(node.archetype).not.toBe(deck[i - 1].archetype);
+              expect(node.problem.templateId).not.toBe(deck[i - 1].problem.templateId);
+            }
+          }
+
+          expect(seenTemplateIds.size).toBe(10);
+        }
+      }
+    });
+
+    it('silently weights due concepts higher when conceptSchedule has due cards while blending fresh concepts and obeying anti-repeat', () => {
+      const schedule = {
+        '1:EFFECT_OF_CHANGE': { box: 0 as const, nextDueStep: 2, lastResult: 'MISS' as const },
+        '1:MAGNITUDE_ESTIMATION': { box: 4 as const, nextDueStep: 99, lastResult: 'PASS' as const },
+      };
+
+      let dueCount = 0;
+      let nonDueCount = 0;
+      let freshCount = 0;
+      const trials = 60;
+
+      for (let seed = 1; seed <= trials; seed++) {
+        const deck = generateSignalSweepDeck([1], 10, createSeededRng(seed * 53 + 7), {
+          conceptSchedule: schedule,
+          conceptStepCounter: 10,
+        });
+        expect(deck).toHaveLength(10);
+
+        const seenQuestions = new Set<string>();
+        for (let i = 0; i < deck.length; i++) {
+          const node = deck[i];
+          expect(seenQuestions.has(node.problem.question)).toBe(false);
+          seenQuestions.add(node.problem.question);
+
+          if (i > 0) {
+            expect(node.archetype).not.toBe(deck[i - 1].archetype);
+            expect(node.problem.templateId).not.toBe(deck[i - 1].problem.templateId);
+          }
+
+          if (node.archetype === 'EFFECT_OF_CHANGE') {
+            dueCount += 1;
+          } else if (node.archetype === 'MAGNITUDE_ESTIMATION') {
+            nonDueCount += 1;
+          } else {
+            freshCount += 1;
+          }
+        }
+      }
+
+      // Due archetype (3 templates in Tier 1 + foundational) appears near its max (~3 per deck)
+      expect(dueCount).toBeGreaterThan(nonDueCount * 2);
+      // Fresh/unseen archetypes still blend into every deck
+      expect(freshCount).toBeGreaterThan(trials * 4);
+    });
+
+    it('honors cross-run excludeQuestions and excludeTemplateIds when pool permits', () => {
+      const run1 = generateSignalSweepDeck([1, 2, 3, 4], 10, createSeededRng(501));
+      const excludeQuestions = new Set(run1.map((n) => n.problem.question));
+      const excludeTemplateIds = new Set(
+        run1.map((n) => n.problem.templateId).filter((id): id is string => Boolean(id))
+      );
+
+      // Tiers 1-4 have 24 templates; excluding 10 from run1 leaves 14 fresh templates for run2
+      const run2 = generateSignalSweepDeck([1, 2, 3, 4], 10, createSeededRng(502), {
+        excludeQuestions,
+        excludeTemplateIds,
+      });
+
+      expect(run2).toHaveLength(10);
+      for (const node of run2) {
+        expect(excludeQuestions.has(node.problem.question)).toBe(false);
+        expect(excludeTemplateIds.has(node.problem.templateId ?? '')).toBe(false);
+      }
+    });
   });
 
   describe('evaluateSignalSweepRun', () => {

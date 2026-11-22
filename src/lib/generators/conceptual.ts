@@ -951,9 +951,18 @@ const t10VisualQuadrant: ConceptualGenerator = (rng = Math.random) => {
 const t11VisualQuadrant: ConceptualGenerator = (rng = Math.random) => {
   const k = randInt(2, 9, rng);
   const b = randInt(1, 8, rng);
+  const question = pick(
+    [
+      'WHICH EQUATION GRAPHS A PROPORTIONAL LINE THROUGH (0, 0)?',
+      'WHICH EQUATION PASSES THROUGH THE ORIGIN (0, 0) WITH CONSTANT RATE?',
+      'WHICH LINEAR EQUATION SHOWS A PROPORTIONAL RELATIONSHIP (y = kx)?',
+      'A GRAPH IS A STRAIGHT LINE THROUGH (0, 0). WHICH EQUATION MATCHES?',
+    ],
+    rng
+  );
 
   return buildChoiceProblem({
-    question: `WHICH EQUATION GRAPHS A PROPORTIONAL LINE THROUGH (0, 0)?`,
+    question,
     answer: `y = ${k}x`,
     distractors: [`y = ${k}x + ${b}`, `y = ${k}x - ${b}`, `y = x + ${k}`],
     archetype: 'VISUAL_QUADRANT',
@@ -2468,6 +2477,7 @@ interface SlottedGenerator {
 }
 
 const MAX_QUESTION_DEDUP_RETRIES = 8;
+const MAX_FALLBACK_TEMPLATE_RETRIES = 4;
 
 export function generateConceptualProblem(
   tier: number,
@@ -2498,13 +2508,14 @@ export function generateConceptualProblem(
     return filtered.length > 0 ? filtered : [...pool];
   };
 
+  const templateEligible = filterByTemplateId(allCandidates);
+
   let pool: SlottedGenerator[];
 
   if (options?.archetype) {
     const byArchetype = allCandidates.filter((item) => item.entry.archetype === options.archetype);
     pool = filterByTemplateId(byArchetype.length > 0 ? byArchetype : allCandidates);
   } else if (options?.conceptSchedule) {
-    const templateEligible = filterByTemplateId(allCandidates);
     const slotMap = new Map<string, ConceptSlot>();
     for (const item of templateEligible) {
       const key = `${item.slotTier}:${item.entry.archetype}`;
@@ -2564,6 +2575,45 @@ export function generateConceptualProblem(
       selected = pick(pool, rng).entry;
       generated = selected.generate(rng);
       retries += 1;
+    }
+
+    if (excludeQuestions.has(generated.question)) {
+      const notExcludedArchetype = (item: SlottedGenerator): boolean =>
+        !(excludeArchetypes && excludeArchetypes.has(item.entry.archetype));
+
+      const fallbackTiers: SlottedGenerator[][] = [
+        templateEligible.filter(notExcludedArchetype),
+        templateEligible,
+        allCandidates.filter(notExcludedArchetype),
+        allCandidates,
+      ];
+
+      const triedIds = new Set<string>(pool.length === 1 ? [selected.id] : []);
+
+      for (const tierCandidates of fallbackTiers) {
+        if (!excludeQuestions.has(generated.question)) break;
+        const remaining = tierCandidates.filter((item) => !triedIds.has(item.entry.id));
+        // Fisher-Yates shuffle a copy using rng so fallback maintains variety
+        for (let i = remaining.length - 1; i > 0; i--) {
+          const j = Math.floor(rng() * (i + 1));
+          [remaining[i], remaining[j]] = [remaining[j], remaining[i]];
+        }
+
+        for (const alt of remaining) {
+          triedIds.add(alt.entry.id);
+          let found = false;
+          for (let attempt = 0; attempt < MAX_FALLBACK_TEMPLATE_RETRIES; attempt++) {
+            const candidate = alt.entry.generate(rng);
+            if (!excludeQuestions.has(candidate.question)) {
+              selected = alt.entry;
+              generated = candidate;
+              found = true;
+              break;
+            }
+          }
+          if (found) break;
+        }
+      }
     }
   }
 

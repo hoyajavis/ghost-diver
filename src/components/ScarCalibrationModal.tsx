@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
-import { MathProblem } from '../types';
+import { ConceptScheduleMap, ConceptualArchetype, MathProblem } from '../types';
 import { generateProblem } from '../lib/mathEngine';
+import { ConceptOutcome } from '../lib/conceptSpacedRep';
 import { clampFloor, getTierForFloor } from '../lib/dungeonLogic';
 import { getScarName } from '../lib/scarData';
 import {
@@ -27,33 +28,68 @@ import { motion } from 'motion/react';
 export interface ScarCalibrationModalProps {
   scar: string;
   maxExtractedFloor: number;
+  conceptSchedule?: ConceptScheduleMap;
+  conceptStepCounter?: number;
+  onRecordConceptOutcome?: (outcome: ConceptOutcome) => void;
   onComplete: (scar: string) => void;
   onClose: () => void;
 }
 
 const CALIBRATION_TARGET_STREAK = 3;
 
-function drawCalibrationProblem(maxTier: number, previousQuestion?: string): MathProblem {
+interface DrawnCalibrationProblem {
+  tier: number;
+  problem: MathProblem;
+}
+
+interface CalibrationAntiRepeatState {
+  seenQuestions: ReadonlySet<string>;
+  seenTemplateIds: ReadonlySet<string>;
+  lastArchetype: ConceptualArchetype | null;
+  lastTemplateId: string | null;
+}
+
+function drawCalibrationProblem(
+  maxTier: number,
+  conceptSchedule: ConceptScheduleMap | undefined,
+  conceptStepCounter: number | undefined,
+  antiRepeat?: CalibrationAntiRepeatState
+): DrawnCalibrationProblem {
   const safeMaxTier = Math.max(1, maxTier);
-  let candidate = generateProblem(Math.floor(Math.random() * safeMaxTier) + 1, 'LOCK');
-  for (let attempt = 0; attempt < 4; attempt++) {
-    if (!previousQuestion || candidate.question !== previousQuestion) {
-      return candidate;
-    }
-    const tier = Math.floor(Math.random() * safeMaxTier) + 1;
-    candidate = generateProblem(tier, 'LOCK');
-  }
-  return candidate;
+  const tier = Math.floor(Math.random() * safeMaxTier) + 1;
+  const excludeTemplateIds =
+    antiRepeat && antiRepeat.seenTemplateIds.size > 0
+      ? antiRepeat.seenTemplateIds
+      : antiRepeat?.lastTemplateId
+        ? new Set([antiRepeat.lastTemplateId])
+        : undefined;
+
+  const problem = generateProblem(tier, 'LOCK', 1, {
+    conceptSchedule,
+    conceptStepCounter,
+    excludeQuestions:
+      antiRepeat && antiRepeat.seenQuestions.size > 0 ? antiRepeat.seenQuestions : undefined,
+    excludeArchetypes: antiRepeat?.lastArchetype ? new Set([antiRepeat.lastArchetype]) : undefined,
+    excludeTemplateIds,
+  });
+
+  return { tier, problem };
 }
 
 export const ScarCalibrationModal: React.FC<ScarCalibrationModalProps> = ({
   scar,
   maxExtractedFloor,
+  conceptSchedule,
+  conceptStepCounter,
+  onRecordConceptOutcome,
   onComplete,
   onClose,
 }) => {
   const maxTier = getTierForFloor(clampFloor(maxExtractedFloor));
-  const [problem, setProblem] = useState<MathProblem>(() => drawCalibrationProblem(maxTier));
+  const [drawn, setDrawn] = useState<DrawnCalibrationProblem>(() =>
+    drawCalibrationProblem(maxTier, conceptSchedule, conceptStepCounter)
+  );
+  const problem = drawn.problem;
   const [streak, setStreak] = useState<number>(0);
   const [input, setInput] = useState('');
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
@@ -65,6 +101,37 @@ export const ScarCalibrationModal: React.FC<ScarCalibrationModalProps> = ({
 
   const { scheduleTimeout, clearAllTimeouts } = useSafeTimeout();
   const problemStartTimeRef = useRef<number>(Date.now());
+  const seenQuestionsRef = useRef<Set<string>>(new Set([drawn.problem.question]));
+  const seenTemplateIdsRef = useRef<Set<string>>(
+    new Set(drawn.problem.templateId ? [drawn.problem.templateId] : [])
+  );
+  const lastArchetypeRef = useRef<ConceptualArchetype | null>(drawn.problem.archetype ?? null);
+  const lastTemplateIdRef = useRef<string | null>(drawn.problem.templateId ?? null);
+  const latestScheduleRef = useRef<ConceptScheduleMap | undefined>(conceptSchedule);
+  const latestStepRef = useRef<number | undefined>(conceptStepCounter);
+  latestScheduleRef.current = conceptSchedule;
+  latestStepRef.current = conceptStepCounter;
+
+  const drawNextCalibration = () => {
+    const nextDrawn = drawCalibrationProblem(
+      maxTier,
+      latestScheduleRef.current,
+      latestStepRef.current,
+      {
+        seenQuestions: seenQuestionsRef.current,
+        seenTemplateIds: seenTemplateIdsRef.current,
+        lastArchetype: lastArchetypeRef.current,
+        lastTemplateId: lastTemplateIdRef.current,
+      }
+    );
+    seenQuestionsRef.current.add(nextDrawn.problem.question);
+    if (nextDrawn.problem.templateId) {
+      seenTemplateIdsRef.current.add(nextDrawn.problem.templateId);
+    }
+    lastArchetypeRef.current = nextDrawn.problem.archetype ?? null;
+    lastTemplateIdRef.current = nextDrawn.problem.templateId ?? null;
+    setDrawn(nextDrawn);
+  };
 
   const resetInputs = () => {
     setInput('');
@@ -130,6 +197,14 @@ export const ScarCalibrationModal: React.FC<ScarCalibrationModalProps> = ({
       firstTryCorrect: isCorrect,
     });
 
+    if (problem.archetype && onRecordConceptOutcome) {
+      onRecordConceptOutcome({
+        tier: drawn.tier,
+        archetype: problem.archetype,
+        correct: isCorrect,
+      });
+    }
+
     if (isCorrect) {
       const nextStreak = streak + 1;
       setStreak(nextStreak);
@@ -146,8 +221,7 @@ export const ScarCalibrationModal: React.FC<ScarCalibrationModalProps> = ({
 
       setFeedbackMessage(`Signal Aligned (${nextStreak}/${CALIBRATION_TARGET_STREAK})`);
       scheduleTimeout(() => {
-        const nextProblem = drawCalibrationProblem(maxTier, problem.question);
-        setProblem(nextProblem);
+        drawNextCalibration();
         resetInputs();
         setFeedback('IDLE');
         setFeedbackMessage(null);
@@ -161,8 +235,7 @@ export const ScarCalibrationModal: React.FC<ScarCalibrationModalProps> = ({
     setFeedbackMessage(`Calibration Reset (0/${CALIBRATION_TARGET_STREAK}) · Answer: ${expectedAnswer}`);
 
     scheduleTimeout(() => {
-      const nextProblem = drawCalibrationProblem(maxTier, problem.question);
-      setProblem(nextProblem);
+      drawNextCalibration();
       resetInputs();
       setFeedback('IDLE');
       setFeedbackMessage(null);

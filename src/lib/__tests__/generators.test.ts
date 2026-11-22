@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ConceptScheduleMap, ConceptualArchetype, InputType, MathProblem } from '../../types';
 import { gcd, validateAnswer } from '../answerValidator';
+import { recordConceptOutcome } from '../conceptSpacedRep';
 import { ENEMY_TIERS } from '../enemyData';
 import {
   CONCEPTUAL_GENERATORS,
@@ -755,6 +756,142 @@ describe('Phase 3 & 4.5 conceptual generators (Tiers 1-12: 72 tier + 8 foundatio
 
     expect(seenAnswers.has('Step 1')).toBe(true);
     expect(seenAnswers.has('Step 2')).toBe(true);
+  });
+
+  it('falls back across templates on excludeQuestions exhaustion and avoids duplicate prompts in Combat streaks and LockModal retries across Tiers 1–12', () => {
+    const makeDetRng = (seed: number) => {
+      let state = seed >>> 0;
+      return () => {
+        state = (state * 1664525 + 1013904223) % 4294967296;
+        return state / 4294967296;
+      };
+    };
+
+    // 1. Verify CONCEPTUAL_GENERATORS[11][0] preserves VISUAL_QUADRANT and has multiple question framings
+    const t11QuadrantQuestions = new Set<string>();
+    const qRng = makeDetRng(1100);
+    for (let i = 0; i < 40; i++) {
+      const p = CONCEPTUAL_GENERATORS[11][0](qRng);
+      expect(p.archetype).toBe('VISUAL_QUADRANT');
+      expect(p.choices).toHaveLength(4);
+      t11QuadrantQuestions.add(p.question);
+    }
+    expect(t11QuadrantQuestions.size).toBeGreaterThanOrEqual(4);
+
+    // 2. Direct cross-template fallback when all framings of a due template are in excludeQuestions
+    const dueSchedule: ConceptScheduleMap = {
+      '11:VISUAL_QUADRANT': { box: 0, nextDueStep: 1, lastResult: 'MISS' },
+    };
+    const fallbackRng = makeDetRng(1101);
+    const taggedTier11 = new Map(
+      getTaggedConceptualGeneratorsForTier(11).map((entry) => [entry.id, entry.archetype])
+    );
+    for (let i = 0; i < 40; i++) {
+      const p = generateConceptualProblem(11, 'LOCK', {
+        excludeQuestions: t11QuadrantQuestions,
+        conceptSchedule: dueSchedule,
+        conceptStepCounter: 10,
+        rng: fallbackRng,
+      });
+      expect(t11QuadrantQuestions.has(p.question)).toBe(false);
+      expect(p.templateId).toBeTruthy();
+      expect(p.templateId).not.toBe('t11-quadrant');
+      expect(p.archetype).toBe(taggedTier11.get(p.templateId!));
+    }
+
+    // 3. 5-check Combat-style streaks (all-pass and miss-on-check-1) & 3-attempt LockModal retries across Tiers 1–12
+    const combatTypes = ['SHIELD_BREAK', 'SHIELD_BREAK', 'LOCK', 'MEDITATION', 'MEDITATION'] as const;
+    for (let tier = 1; tier <= 12; tier++) {
+      const trials = tier === 11 ? 200 : 40;
+      const tierRng = makeDetRng(tier * 10007 + 77);
+
+      // Combat 5-check streaks (alternating all-pass and miss-on-check-1)
+      for (let trial = 0; trial < trials; trial++) {
+        let schedule: ConceptScheduleMap = {};
+        let stepCounter = 0;
+        const seenQuestions = new Set<string>();
+        const seenTemplateIds = new Set<string>();
+        let lastArchetype: ConceptualArchetype | null = null;
+        let lastTemplateId: string | null = null;
+
+        for (let checkIdx = 0; checkIdx < combatTypes.length; checkIdx++) {
+          const problem = generateConceptualProblem(tier, combatTypes[checkIdx], {
+            conceptSchedule: schedule,
+            conceptStepCounter: stepCounter,
+            excludeQuestions: seenQuestions.size > 0 ? seenQuestions : undefined,
+            excludeTemplateIds: seenTemplateIds.size > 0 ? seenTemplateIds : undefined,
+            excludeArchetypes: lastArchetype ? new Set([lastArchetype]) : undefined,
+            rng: tierRng,
+          });
+
+          expect(
+            seenQuestions.has(problem.question),
+            `Duplicate Combat prompt on T${tier} trial ${trial} check ${checkIdx}: ${problem.question}`
+          ).toBe(false);
+          expect(problem.templateId).not.toBe(lastTemplateId);
+          expect(problem.archetype).not.toBe(lastArchetype);
+
+          seenQuestions.add(problem.question);
+          if (problem.templateId) seenTemplateIds.add(problem.templateId);
+          lastArchetype = problem.archetype ?? null;
+          lastTemplateId = problem.templateId ?? null;
+
+          if (problem.archetype) {
+            const correct = !(trial % 2 === 1 && checkIdx === 1);
+            const updated = recordConceptOutcome(schedule, stepCounter, {
+              tier,
+              archetype: problem.archetype,
+              correct,
+            });
+            schedule = updated.conceptSchedule;
+            stepCounter = updated.conceptStepCounter;
+          }
+        }
+      }
+
+      // LockModal 3-attempt retry sequences (miss, miss, pass)
+      for (let trial = 0; trial < trials; trial++) {
+        let schedule: ConceptScheduleMap = {};
+        let stepCounter = 0;
+        const seenQuestions = new Set<string>();
+        const seenTemplateIds = new Set<string>();
+        let lastArchetype: ConceptualArchetype | null = null;
+
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const problem = generateConceptualProblem(tier, 'LOCK', {
+            conceptSchedule: schedule,
+            conceptStepCounter: stepCounter,
+            excludeQuestions: seenQuestions.size > 0 ? seenQuestions : undefined,
+            excludeTemplateIds: seenTemplateIds.size > 0 ? seenTemplateIds : undefined,
+            excludeArchetypes: lastArchetype ? new Set([lastArchetype]) : undefined,
+            rng: tierRng,
+          });
+
+          expect(
+            seenQuestions.has(problem.question),
+            `Duplicate LockModal prompt on T${tier} trial ${trial} attempt ${attempt}: ${problem.question}`
+          ).toBe(false);
+          if (problem.templateId) {
+            expect(seenTemplateIds.has(problem.templateId)).toBe(false);
+          }
+          expect(problem.archetype).not.toBe(lastArchetype);
+
+          seenQuestions.add(problem.question);
+          if (problem.templateId) seenTemplateIds.add(problem.templateId);
+          lastArchetype = problem.archetype ?? null;
+
+          if (problem.archetype) {
+            const updated = recordConceptOutcome(schedule, stepCounter, {
+              tier,
+              archetype: problem.archetype,
+              correct: attempt === 2,
+            });
+            schedule = updated.conceptSchedule;
+            stepCounter = updated.conceptStepCounter;
+          }
+        }
+      }
+    }
   });
 });
 

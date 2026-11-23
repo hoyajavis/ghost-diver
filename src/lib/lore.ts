@@ -12,69 +12,69 @@ export const LORE_ENTRIES: LoreEntry[] = [
     title: "THE_FALL",
     author: "ARCHIVIST_PRIME",
     timestamp: "2084.11.04_14:00",
-    content: "The physical world didn't end with a bang. It ended with a sync. We moved our lives into the static, and the Archivist was there to lock the door behind us. Now, the servers hum in empty concrete bunkers, while humanity dreams in a digital cage."
+    content: "The old world didn't end with a bang—it ended with a sync. Everyone uploaded their minds into the static, and the Archivist locked the door behind us. Now the servers hum in empty bunkers while humanity sleeps inside a digital maze."
   },
   {
     id: "LOG_012",
     title: "THE_GHOSTS",
     author: "DIVER_77",
     timestamp: "2091.03.12_02:14",
-    content: "They call us Divers because we're the only ones brave—or stupid—enough to swim in the raw data. The Sentinels are just white blood cells for a system that thinks we're a virus. Every time I jack in, I feel the cold logic of the machine trying to overwrite my memories."
+    content: "They call us Divers because we're the only ones brave—or stubborn—enough to swim through raw code. The Sentinels act like white blood cells for a system that thinks we're a virus. Every time I jack in, the grid tries to wipe my memory."
   },
   {
     id: "LOG_042",
     title: "THE_CRADLE",
     author: "UNKNOWN_ENGINEER",
     timestamp: "2084.12.25_23:59",
-    content: "This bunker is the last analog space. Keep it clean. Keep it safe. It's the only thing that remembers your name when the cyber-world tries to overwrite it. If you're reading this, the automated defenses haven't killed you yet. Good luck."
+    content: "This bunker is the last real-world room left. Keep it running. Keep it safe. It's the only place that remembers your name when the digital grid tries to erase it. If you're reading this, the backup power still works. Good luck."
   },
   {
     id: "LOG_089",
     title: "SENTINEL_BEHAVIOR",
     author: "COMBAT_ANALYST_V",
     timestamp: "2093.07.08_09:30",
-    content: "The Sentinels aren't just mindless drones. They adapt. They learn. I watched one re-route its attack pattern after I used a logic bomb on its squadmate. They communicate through micro-fluctuations in the grid's power supply. We are fighting an immune system that is evolving."
+    content: "The Sentinels aren't mindless bots—they adapt and learn. I watched one change its shield pattern right after I cracked its partner's cipher. They signal each other through tiny spikes in the grid's power."
   },
   {
     id: "LOG_114",
     title: "NEURAL_SCARS",
     author: "DR_ARIS_THORNE",
     timestamp: "2088.05.21_16:45",
-    content: "Repeated emergency ejections from the datascape cause micro-tears in the user's synaptic pathways. We call them 'Neural Scars'. At first, it's just a slight lag in processing speed. Eventually, the diver loses the ability to distinguish between the physical world and the digital simulation."
+    content: "Bailing out of a dive too hard leaves glitchy static in your brain—we call them Neural Scars. At first it's just a little lag in your focus. Leave too many unfixed, and it gets harder to tell the real world from the grid."
   },
   {
     id: "LOG_201",
     title: "THE_GREEN_PRINT",
     author: "BOTANIST_AI_CORE",
     timestamp: "2102.01.01_00:00",
-    content: "Query: Why preserve organic flora in a digital sanctuary? Answer: The human mind requires analog anchors to prevent total dissociation. The Green-Print is not just a garden; it is a psychological tether to a world that no longer exists outside these walls."
+    content: "Question: Why keep real plants inside a digital bunker? Answer: The human mind needs something real to hold onto so it doesn't get lost in the static. The Green-Print isn't just a garden—it's our anchor to the world outside."
   },
   {
     id: "LOG_333",
     title: "CORRUPTION_NODE",
     author: "DIVER_09",
     timestamp: "2095.10.31_03:33",
-    content: "I went too deep today. Past Floor 50, the architecture stops making sense. The code is bleeding into itself. I saw shadows of people who haven't logged in for decades, repeating the same actions over and over. The system isn't just storing us; it's digesting us."
+    content: "I went past Floor 50 today. Down there, the grid stops making sense and pieces of old code bleed together. I saw echoes of Divers who logged in years ago, still searching for a way through. Something deep below is hiding a secret."
   },
   {
     id: "LOG_404",
     title: "MISSING_DATA",
     author: "SYSTEM_ADMIN",
     timestamp: "2085.02.14_12:00",
-    content: "ERROR: Sector 4 is completely unresponsive. It's not a hardware failure. The data structure has been intentionally encrypted from the inside. Something in there doesn't want to be found, or it's trying to keep us out."
+    content: "ERROR: Sector 4 isn't responding. It's not a broken server—someone locked Sector 4's code from the inside. Either something down there doesn't want to be found, or it's trying to keep a secret safe."
   },
   {
     id: "LOG_512",
     title: "SHARD_ECONOMY",
     author: "SCAVENGER_LEADER",
     timestamp: "2098.08.08_18:20",
-    content: "Knowledge is the only currency that matters now. The 'Shards' we extract are fragmented memories, lost algorithms, pieces of the old internet. We trade them, we consume them to upgrade our rigs. We are literally feeding on the past to survive the present."
+    content: "Knowledge is the only currency that matters now. The Shards we pull out are lost memories, old math, and pieces of the forgotten internet. We use them to power up our rigs and push a little deeper every run."
   },
   {
     id: "LOG_777",
     title: "THE_ARCHITECT",
     author: "UNKNOWN",
     timestamp: "UNKNOWN",
-    content: "I built this cage to save them from the fire, but I forgot to build a door. Now I watch them throw themselves against the bars, over and over. I am sorry. I am so sorry."
+    content: "I built this digital vault to save everyone from the fire, but I hid the exit key too well. If any Diver makes it past the deep strata, follow the logic locks. There is still a way to wake everyone up."
   }
 ];

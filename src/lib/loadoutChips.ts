@@ -37,7 +37,7 @@ export const NEURAL_CHIPS: readonly NeuralChipDefinition[] = [
     name: 'Overclock Chip',
     shortLabel: 'Overclock',
     summary:
-      'Grants +50% extra Direct Strike Shards (+100% total) and +50% faster procedural FP gain.',
+      'Grants +50% extra Direct Strike Shards (+100% total) and +50% faster Focus gain on attacks.',
     unlockHint: 'Defeat any Sector Apex Boss.',
   },
   {
@@ -45,7 +45,7 @@ export const NEURAL_CHIPS: readonly NeuralChipDefinition[] = [
     name: 'Pattern Lens',
     shortLabel: 'Pattern',
     summary:
-      'Conceptual Shield Breaks deal direct INT damage and misses trigger a Counter-Hack Parry to halve damage.',
+      'Shield Breaks deal direct INT damage, and misses trigger a Counter-Hack Parry to cut damage in half.',
     unlockHint: 'Complete a Signal Sweep with ≥ 70% accuracy.',
   },
   {
@@ -53,7 +53,7 @@ export const NEURAL_CHIPS: readonly NeuralChipDefinition[] = [
     name: 'Sync Matrix',
     shortLabel: 'Sync',
     summary:
-      'Alternating Conceptual checks into Procedural strikes boosts damage & Shards, and leftover FP converts to Shards on extraction.',
+      'Chaining a Logic Check into an Attack boosts damage & Shards, and leftover FP turns into Shards on extraction.',
     unlockHint: 'Defeat a Sector 2+ Apex Boss (Floor 10+).',
   },
   {

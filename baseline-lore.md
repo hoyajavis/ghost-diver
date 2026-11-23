@@ -96,3 +96,11 @@ Up to 2 equipable rig modules unlocked via exploration and mastery milestones:
 - **Pattern Lens** *(Complete a Signal Sweep at ≥ 70%)*
 - **Sync Matrix** *(Defeat a Sector 2+ Apex Boss)*
 - **Neural Dampener** *(Clear any Neural Scar or open a Sector 2+ Blue Cache)*
+
+---
+
+## 6. Follow-Up Narrative & Onboarding TODOs
+
+- [ ] **In-Depth Feature Onboarding (Beyond the Quick-Reference Manual):** Now that `ManualStation.tsx` is a concise cheat sheet, design a dedicated way to explain mechanics in depth when players first encounter them (e.g., contextual first-time station/combat callouts or interactive guided tips tied to progressive unlocks).
+- [ ] **Cradle Hub Revamp & Progressive Gating:** Gate stations and mechanics behind early progression milestones (Chrono Trigger *End of Time* pacing) using this baseline lore as the narrative anchor.
+- [ ] **Title Case Sector Display Names in Combat/HUD:** Format `SURFACE_WASTES` / `LOGIC_CORE` display strings cleanly in `Combat.tsx` and `Dungeon.tsx` without altering internal `enemyData.ts` identifiers.

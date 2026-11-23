@@ -76,12 +76,12 @@ export const CombatActionBar: React.FC<CombatActionBarProps> = ({
         aria-label={
           focusScanUsed
             ? 'Focus Scan already used this battle (Shift+S)'
-            : `Focus Scan: 1 free conceptual check per battle for +${FOCUS_SCAN_FP_GAIN} FP or crack Logic Shield, no HP heal (Shift+S)`
+            : `Focus Scan: 1 free logic check per battle for +${FOCUS_SCAN_FP_GAIN} FP or crack Logic Shield, no HP heal (Shift+S)`
         }
         title={
           focusScanUsed
             ? 'Focus Scan: Used this battle'
-            : `Focus Scan: Free conceptual check (+${FOCUS_SCAN_FP_GAIN} FP, no heal, Shift+S)`
+            : `Focus Scan: Free logic check (+${FOCUS_SCAN_FP_GAIN} FP, no heal, Shift+S)`
         }
         className={`${isRow ? 'flex-1' : ''} min-w-11 min-h-9 py-1 lg:min-h-11 lg:py-1.5 px-2 bg-gb-0 border ${
           !focusScanUsed && !focusScanDisabled

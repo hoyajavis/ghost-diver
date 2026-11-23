@@ -71,8 +71,8 @@ export const ArchivistStation: React.FC<Props> = ({
         <div className="bg-gb-0 border border-gb-3 p-3.5 h-72 overflow-y-auto custom-scrollbar space-y-2.5 tabular-nums">
           <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-gb-3/25 text-[11px]">
             <span className="text-gb-2 font-sans">
-              Procedural (<span className="text-neon-cyan font-bold">Attack</span>) vs. Conceptual (
-              <span className="text-purple-300 font-bold">Checks</span>)
+              <span className="text-neon-cyan font-bold">Attacks</span> (Speed) vs.{' '}
+              <span className="text-purple-300 font-bold">Logic Checks</span> (Strategy)
             </span>
             {reachedMaxTier < MAX_TIER && (
               <button
@@ -90,7 +90,11 @@ export const ArchivistStation: React.FC<Props> = ({
             const total = entry.proceduralCorrect + entry.conceptualCorrect;
             const procPct = total > 0 ? Math.round((entry.proceduralCorrect / total) * 100) : 0;
             const concPct = total > 0 ? 100 - procPct : 0;
-            const sectorName = ENEMY_TIERS[tier]?.name ?? `SECTOR_${tier}`;
+            const rawSectorName = ENEMY_TIERS[tier]?.name ?? `SECTOR_${tier}`;
+            const sectorName = rawSectorName
+              .toLowerCase()
+              .replace(/_/g, ' ')
+              .replace(/\b\w/g, (ch) => ch.toUpperCase());
 
             return (
               <div
@@ -99,7 +103,7 @@ export const ArchivistStation: React.FC<Props> = ({
               >
                 <div className="flex items-center justify-between gap-2 text-xs">
                   <span className="font-bold text-gb-3 truncate">
-                    Sector {tier} · <span className="text-gb-2 font-mono">{sectorName}</span>
+                    Sector {tier} · <span className="text-gb-2">{sectorName}</span>
                   </span>
                   <span className="text-[11px] font-mono text-gb-2 shrink-0">
                     {total} solves
@@ -107,8 +111,8 @@ export const ArchivistStation: React.FC<Props> = ({
                 </div>
 
                 <div className="flex items-center justify-between text-[11px] font-mono">
-                  <span className="text-neon-cyan">Procedural: {entry.proceduralCorrect}</span>
-                  <span className="text-purple-300">Conceptual: {entry.conceptualCorrect}</span>
+                  <span className="text-neon-cyan">Attacks: {entry.proceduralCorrect}</span>
+                  <span className="text-purple-300">Logic Checks: {entry.conceptualCorrect}</span>
                 </div>
 
                 <div

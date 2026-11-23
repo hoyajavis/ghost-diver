@@ -86,7 +86,7 @@ export const TitleScreen: React.FC<Props> = ({
             The Extraction Academy
           </h1>
           <p className="text-xs sm:text-sm md:text-base text-gb-3/90 max-w-lg mx-auto lg:mx-0 font-sans leading-snug lg:leading-relaxed">
-            Dive into the archive strata, break Sentinel shields with math, and extract Knowledge Shards before your neural integrity fails.
+            Jack into the digital ruins, crack Sentinel shields with math, and escape with Knowledge Shards before your link breaks.
           </p>
           <div className="pt-1 lg:pt-2 flex flex-wrap items-center justify-center lg:justify-start gap-2 lg:gap-3">
             <button
@@ -268,16 +268,16 @@ export const TitleScreen: React.FC<Props> = ({
 
               <div className="space-y-3 text-sm text-gb-3 font-sans leading-relaxed">
                 <p>
-                  You are a <span className="text-neon-cyan font-bold">Ghost Diver</span>, a neural specialist infiltrating the deep-web archives of the <span className="text-neon-magenta font-bold">Archivist</span>.
+                  You are a <span className="text-neon-cyan font-bold">Ghost Diver</span>, a hacker-explorer diving into the digital vaults of the <span className="text-neon-magenta font-bold">Archivist</span>.
                 </p>
                 <p>
-                  Extract <span className="text-neon-green font-bold">Knowledge Shards</span> protected by <span className="text-neon-magenta font-bold">Sentinels</span>—security programs that challenge your mathematical reasoning.
+                  Grab <span className="text-neon-green font-bold">Knowledge Shards</span> guarded by <span className="text-neon-magenta font-bold">Sentinels</span>—security programs you defeat by solving math ciphers.
                 </p>
                 <p>
-                  Every dive carries risk. Running out of integrity can inflict <span className="text-neon-magenta font-bold">Neural Scars</span>—persistent glitches until repaired at the bunker.
+                  Every dive is a risk. Losing all your integrity gives you a <span className="text-neon-magenta font-bold">Neural Scar</span>—a glitch that sticks until you fix it back at the bunker.
                 </p>
                 <p>
-                  Reach each fifth-floor Secure Node to bank your Shards, unlock Training Simulations, and upgrade your frame.
+                  Reach each 5th-floor Secure Node to bank your Shards, unlock practice sims, and power up your rig.
                 </p>
               </div>
 

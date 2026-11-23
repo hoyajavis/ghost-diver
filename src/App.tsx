@@ -1,6 +1,7 @@
 import React, { Suspense } from 'react';
 import { TitleScreen } from './components/TitleScreen';
 import { ChestLoot } from './components/ChestLoot';
+import { ColdOpenModal } from './components/ColdOpenModal';
 import { motion, MotionConfig } from 'motion/react';
 import { useGameEngine } from './hooks/useGameEngine';
 import { hasEquippedChip } from './lib/loadoutChips';
@@ -35,8 +36,10 @@ export default function App() {
     lastDefeatInflictedScar,
     currentSlot,
     slots,
+    showColdOpen,
     cacheProfile,
     handleSelectSlot,
+    handleDismissColdOpen,
     handleDeleteSlot,
     handleRotateAnonymousId,
     handleClearAllCache,
@@ -81,19 +84,28 @@ export default function App() {
 
         <Suspense fallback={<div className="w-full h-full bg-gb-0" aria-busy="true" />}>
           {gameState === 'HOME' && (
-            <HomeBase
-              stats={stats}
-              onStartDive={startDive}
-              onHealScar={handleHealScar}
-              onCalibrateScar={handleCalibrateScar}
-              onUpgrade={handleUpgrade}
-              onToggleEquipChip={handleToggleEquipChip}
-              onUnlockDemo={handleUnlockDemo}
-              onRecordConceptOutcome={handleRecordConceptOutcome}
-              onRecordArchetypeStats={handleRecordArchetypeStats}
-              onClaimReconBuff={handleClaimReconBuff}
-              onLogout={() => setGameState('TITLE')}
-            />
+            <div className="relative h-full">
+              <HomeBase
+                stats={stats}
+                isOverlayOpen={showColdOpen}
+                onStartDive={startDive}
+                onHealScar={handleHealScar}
+                onCalibrateScar={handleCalibrateScar}
+                onUpgrade={handleUpgrade}
+                onToggleEquipChip={handleToggleEquipChip}
+                onUnlockDemo={handleUnlockDemo}
+                onRecordConceptOutcome={handleRecordConceptOutcome}
+                onRecordArchetypeStats={handleRecordArchetypeStats}
+                onClaimReconBuff={handleClaimReconBuff}
+                onLogout={() => {
+                  handleDismissColdOpen();
+                  setGameState('TITLE');
+                }}
+              />
+              {showColdOpen && (
+                <ColdOpenModal slotId={currentSlot} onComplete={handleDismissColdOpen} />
+              )}
+            </div>
           )}
 
           {(gameState === 'DUNGEON' || gameState === 'CHEST_LOOT' || gameState === 'LOCK_MODAL') &&

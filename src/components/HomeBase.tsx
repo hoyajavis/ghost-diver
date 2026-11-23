@@ -33,6 +33,7 @@ import { motion, AnimatePresence } from 'motion/react';
 
 interface Props {
   stats: PlayerStats;
+  isOverlayOpen?: boolean;
   onStartDive: (startFloor?: number) => void;
   onHealScar: (scar: string) => void;
   onCalibrateScar: (scar: string) => void;
@@ -111,6 +112,7 @@ const STATIONS: Record<Exclude<BaseStation, 'NONE'>, StationConfig> = {
 
 export const HomeBase: React.FC<Props> = ({
   stats,
+  isOverlayOpen = false,
   onStartDive,
   onHealScar,
   onCalibrateScar,
@@ -139,7 +141,7 @@ export const HomeBase: React.FC<Props> = ({
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      if (activeSimTier !== null || calibratingScar !== null || signalSweepConfig !== null) return;
+      if (isOverlayOpen || activeSimTier !== null || calibratingScar !== null || signalSweepConfig !== null) return;
 
       if (activeStation !== 'NONE') {
         if (e.key === 'Escape') setActiveStation('NONE');
@@ -188,7 +190,7 @@ export const HomeBase: React.FC<Props> = ({
         handleMove(dx, dy);
       }
     },
-    [activeSimTier, calibratingScar, signalSweepConfig, activeStation, playerPos, handleMove]
+    [isOverlayOpen, activeSimTier, calibratingScar, signalSweepConfig, activeStation, playerPos, handleMove]
   );
 
   useEffect(() => {

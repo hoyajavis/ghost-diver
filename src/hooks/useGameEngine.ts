@@ -73,6 +73,7 @@ export function useGameEngine() {
   const [lastDefeatInflictedScar, setLastDefeatInflictedScar] = useState<boolean>(false);
   const [currentSlot, setCurrentSlot] = useState<number | null>(null);
   const [slots, setSlots] = useState<SaveSlot[]>([]);
+  const [showColdOpen, setShowColdOpen] = useState<boolean>(false);
   const [cacheProfile, setCacheProfile] = useState<AnonymizedCacheProfile>(() =>
     getAnonymizedCacheProfile()
   );
@@ -85,14 +86,20 @@ export function useGameEngine() {
 
   const handleSelectSlot = (id: number) => {
     const slot = slots.find((s) => s.id === id);
+    const isFreshSlot = !slot || !slot.stats;
     if (slot && slot.stats) {
       setStats(hydrateSaveData(slot.stats) ?? INITIAL_STATS);
     } else {
       setStats(INITIAL_STATS);
     }
     setLastDefeatInflictedScar(false);
+    setShowColdOpen(isFreshSlot);
     setCurrentSlot(id);
     setGameState('HOME');
+  };
+
+  const handleDismissColdOpen = () => {
+    setShowColdOpen(false);
   };
 
   const handleDeleteSlot = (id: number) => {
@@ -651,8 +658,10 @@ export function useGameEngine() {
     lastDefeatInflictedScar,
     currentSlot,
     slots,
+    showColdOpen,
     cacheProfile,
     handleSelectSlot,
+    handleDismissColdOpen,
     handleDeleteSlot,
     handleRotateAnonymousId,
     handleClearAllCache,

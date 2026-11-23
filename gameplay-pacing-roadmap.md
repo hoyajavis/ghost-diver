@@ -286,24 +286,24 @@ Each phase below ends with a **mandatory Playtest Gate**. Do not start the next 
 **Goal:** Deliver meaningful RPG build identity, extraction motivation, and learner differentiation **without** a second currency, branching skill tree UI, or letting players opt out of either conceptual or procedural math.
 
 ### Data & Persistence (`src/types.ts`, `src/lib/storage.ts`)
-- [ ] **Extend `PlayerStats` & Save Allow-List (`SAVE_SCHEMA_VERSION`):**
+- [x] **Extend `PlayerStats` & Save Allow-List (`SAVE_SCHEMA_VERSION`):**
   - Add `unlockedChips: string[]`, `equippedChips: string[]` (max 2 slots), and `sectorMastery: Record<number, { proceduralCorrect: number; conceptualCorrect: number }>` to `hydrateSaveData()` and `toPersistedSaveData()` with safe defaults for existing saves.
 
 ### Gameplay & Loadout Chips (Single-Currency / Milestone Unlocks)
-- [ ] **Neural Loadout Chip System** (1–2 chips equipped at `DiveStation.tsx` before each dive; unlocked via Sector Apex clears, Blue Caches, or Signal Sweep milestones):
+- [x] **Neural Loadout Chip System** (1–2 chips equipped at `DiveStation.tsx` before each dive; unlocked via Sector Apex clears, Blue Caches, or Signal Sweep milestones):
   - **Overclock Chip:** `+50%` Direct Strike Shard bonus and faster FP gain; still requires conceptual Focus Scans/Shield Breaks on Apex Bosses.
   - **Pattern Lens:** Conceptual Shield Breaks deal heavy direct damage and unlock *Counter-Hack Parry* on misses (answer a quick conceptual recovery prompt to halve counter-damage).
   - **Sync Matrix:** Alternating Conceptual Setup → Procedural Strike builds a **Sync Multiplier** and converts leftover FP into bonus Shards upon extraction.
   - **Structural Sight:** Automatically surfaces `step.clue` on Step 1 of `COMBO` problems without spending a Hint Pack.
   - **Neural Dampener:** Reduces Neural Scar infliction chance on defeat and softens `THE_BLUR` / `CALCULATION_LAG` penalties.
-- [ ] **Fix `GardenStation.tsx` & Rebalance Drop Costs:**
+- [x] **Fix `GardenStation.tsx` & Rebalance Drop Costs:**
   - Tie `GardenStation.tsx` restoration percentage to **lifetime extracted Shards / Sector Mastery** instead of current unspent `stats.knowledge` so buying Workbench upgrades never regresses the garden.
   - Tune floor-drop costs (`getDiveCost`) and Workbench upgrade prices so progression stays brisk through Floor 60.
 
 ### UI, Engineering Hygiene & Presentation Layer
-- [ ] **Loadout Chip Picker (`DiveStation.tsx`):** Clean 2-slot chip selector below the Floor selector with 1-sentence effect summaries and unlock hints for locked chips.
-- [ ] **Mastery Readout (`HomeBase.tsx` / `ArchivistStation.tsx`):** Add a compact **Sector Mastery** view (Procedural vs. Conceptual accuracy per Sector) for self-directed learners, teachers, and parents.
-- [ ] **Code-Splitting & Component Tests:** Add `manualChunks` / `React.lazy` splitting (the production bundle is already >500 kB) and component-level UI tests (`@testing-library/react`) for `Combat`, `TrainingSim`, and `TitleScreen` before Phase 6.
+- [x] **Loadout Chip Picker (`DiveStation.tsx`):** Clean 2-slot chip selector below the Floor selector with 1-sentence effect summaries and unlock hints for locked chips.
+- [x] **Mastery Readout (`HomeBase.tsx` / `ArchivistStation.tsx`):** Add a compact **Sector Mastery** view (Procedural vs. Conceptual accuracy per Sector) for self-directed learners, teachers, and parents.
+- [x] **Code-Splitting & Component Tests:** Add `manualChunks` / `React.lazy` splitting (the production bundle is already >500 kB) and component-level UI tests (`@testing-library/react`) for `Combat`, `TrainingSim`, and `TitleScreen` before Phase 6.
 
 ### Playtest Gate 5: "Build Diversity & Extraction Motivation Test"
 - **Format:** Multi-session playtest (2–3 dives across a few days) letting players experiment with different Neural Loadout Chip pairings.

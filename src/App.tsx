@@ -1,14 +1,25 @@
-import React from 'react';
-import { HomeBase } from './components/HomeBase';
+import React, { Suspense } from 'react';
 import { TitleScreen } from './components/TitleScreen';
-import { Dungeon } from './components/Dungeon';
-import { Combat } from './components/Combat';
-import { Sanctuary } from './components/Sanctuary';
 import { ChestLoot } from './components/ChestLoot';
-import { LockModal } from './components/LockModal';
 import { motion, MotionConfig } from 'motion/react';
 import { useGameEngine } from './hooks/useGameEngine';
 import { hasEquippedChip } from './lib/loadoutChips';
+
+const HomeBase = React.lazy(() =>
+  import('./components/HomeBase').then((m) => ({ default: m.HomeBase }))
+);
+const Dungeon = React.lazy(() =>
+  import('./components/Dungeon').then((m) => ({ default: m.Dungeon }))
+);
+const Combat = React.lazy(() =>
+  import('./components/Combat').then((m) => ({ default: m.Combat }))
+);
+const Sanctuary = React.lazy(() =>
+  import('./components/Sanctuary').then((m) => ({ default: m.Sanctuary }))
+);
+const LockModal = React.lazy(() =>
+  import('./components/LockModal').then((m) => ({ default: m.LockModal }))
+);
 
 export default function App() {
   const {
@@ -68,77 +79,81 @@ export default function App() {
           />
         )}
 
-        {gameState === 'HOME' && (
-          <HomeBase
-            stats={stats}
-            onStartDive={startDive}
-            onHealScar={handleHealScar}
-            onCalibrateScar={handleCalibrateScar}
-            onUpgrade={handleUpgrade}
-            onToggleEquipChip={handleToggleEquipChip}
-            onUnlockDemo={handleUnlockDemo}
-            onRecordConceptOutcome={handleRecordConceptOutcome}
-            onRecordArchetypeStats={handleRecordArchetypeStats}
-            onClaimReconBuff={handleClaimReconBuff}
-            onLogout={() => setGameState('TITLE')}
-          />
-        )}
-
-        {(gameState === 'DUNGEON' || gameState === 'CHEST_LOOT' || gameState === 'LOCK_MODAL') &&
-          dungeon && (
-            <div className="relative h-full">
-              <Dungeon
-                dungeon={dungeon}
-                stats={stats}
-                onMove={handleMove}
-                onEject={handleEmergencyEject}
-                isActive={gameState === 'DUNGEON'}
-                dungeonAlert={dungeonAlert}
-              />
-              {gameState === 'CHEST_LOOT' && lootMessage && (
-                <ChestLoot
-                  message={lootMessage.text}
-                  type={lootMessage.type}
-                  onDismiss={() => setGameState('DUNGEON')}
-                />
-              )}
-              {gameState === 'LOCK_MODAL' && activeLockedChest && (
-                <LockModal
-                  tier={dungeon.tier}
-                  playerHp={stats.hp}
-                  playerMaxHp={stats.maxHp}
-                  conceptSchedule={stats.conceptSchedule}
-                  conceptStepCounter={stats.conceptStepCounter}
-                  onRecordConceptOutcome={handleRecordConceptOutcome}
-                  onSuccess={handleBlueCacheSuccess}
-                  onMiss={handleBlueCacheFail}
-                  onClose={handleBlueCacheClose}
-                />
-              )}
-            </div>
+        <Suspense fallback={<div className="w-full h-full bg-gb-0" aria-busy="true" />}>
+          {gameState === 'HOME' && (
+            <HomeBase
+              stats={stats}
+              onStartDive={startDive}
+              onHealScar={handleHealScar}
+              onCalibrateScar={handleCalibrateScar}
+              onUpgrade={handleUpgrade}
+              onToggleEquipChip={handleToggleEquipChip}
+              onUnlockDemo={handleUnlockDemo}
+              onRecordConceptOutcome={handleRecordConceptOutcome}
+              onRecordArchetypeStats={handleRecordArchetypeStats}
+              onClaimReconBuff={handleClaimReconBuff}
+              onLogout={() => setGameState('TITLE')}
+            />
           )}
 
-        {gameState === 'COMBAT' && currentEnemy && dungeon && (
-          <Combat
-            stats={stats}
-            enemy={currentEnemy}
-            tier={dungeon.tier}
-            floor={dungeon.floor}
-            slotId={currentSlot}
-            onWin={handleCombatWin}
-            onLose={handleCombatLose}
-            onUpdateStats={setStats}
-          />
-        )}
+          {(gameState === 'DUNGEON' || gameState === 'CHEST_LOOT' || gameState === 'LOCK_MODAL') &&
+            dungeon && (
+              <div className="relative h-full">
+                <Dungeon
+                  dungeon={dungeon}
+                  stats={stats}
+                  onMove={handleMove}
+                  onEject={handleEmergencyEject}
+                  isActive={gameState === 'DUNGEON'}
+                  dungeonAlert={dungeonAlert}
+                />
+                {gameState === 'CHEST_LOOT' && lootMessage && (
+                  <ChestLoot
+                    message={lootMessage.text}
+                    type={lootMessage.type}
+                    onDismiss={() => setGameState('DUNGEON')}
+                  />
+                )}
+                {gameState === 'LOCK_MODAL' && activeLockedChest && (
+                  <Suspense fallback={null}>
+                    <LockModal
+                      tier={dungeon.tier}
+                      playerHp={stats.hp}
+                      playerMaxHp={stats.maxHp}
+                      conceptSchedule={stats.conceptSchedule}
+                      conceptStepCounter={stats.conceptStepCounter}
+                      onRecordConceptOutcome={handleRecordConceptOutcome}
+                      onSuccess={handleBlueCacheSuccess}
+                      onMiss={handleBlueCacheFail}
+                      onClose={handleBlueCacheClose}
+                    />
+                  </Suspense>
+                )}
+              </div>
+            )}
 
-        {gameState === 'SANCTUARY' && (
-          <Sanctuary
-            stats={stats}
-            floor={dungeon?.floor ?? 1}
-            onBankAndExit={handleBankAndExit}
-            onDiveDeeper={handleDiveDeeper}
-          />
-        )}
+          {gameState === 'COMBAT' && currentEnemy && dungeon && (
+            <Combat
+              stats={stats}
+              enemy={currentEnemy}
+              tier={dungeon.tier}
+              floor={dungeon.floor}
+              slotId={currentSlot}
+              onWin={handleCombatWin}
+              onLose={handleCombatLose}
+              onUpdateStats={setStats}
+            />
+          )}
+
+          {gameState === 'SANCTUARY' && (
+            <Sanctuary
+              stats={stats}
+              floor={dungeon?.floor ?? 1}
+              onBankAndExit={handleBankAndExit}
+              onDiveDeeper={handleDiveDeeper}
+            />
+          )}
+        </Suspense>
 
         {gameState === 'GAMEOVER' && (
           <div className="flex flex-col items-center justify-center h-full bg-gb-0 text-gb-3 p-4 scanlines terminal-text wireframe-bg overflow-y-auto custom-scrollbar">

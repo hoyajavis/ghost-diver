@@ -2,13 +2,20 @@ import React from 'react';
 import { TreePine } from 'lucide-react';
 import { SectorMasteryMap } from '../../types';
 import { calculateGardenRestoration } from '../../lib/loadoutChips';
+import { CrewResidentStatus } from '../../lib/cradleUnlocks';
+import { CrewResidentBanner } from './CrewResidentBanner';
 
 interface Props {
   lifetimeShardsExtracted: number;
   sectorMastery: SectorMasteryMap;
+  resident?: CrewResidentStatus | null;
 }
 
-export const GardenStation: React.FC<Props> = ({ lifetimeShardsExtracted, sectorMastery }) => {
+export const GardenStation: React.FC<Props> = ({
+  lifetimeShardsExtracted,
+  sectorMastery,
+  resident,
+}) => {
   const restorationPercent = calculateGardenRestoration(lifetimeShardsExtracted, sectorMastery);
 
   return (
@@ -17,6 +24,7 @@ export const GardenStation: React.FC<Props> = ({ lifetimeShardsExtracted, sector
         <TreePine className="w-5 h-5 shrink-0" />
         The Green-Print
       </h3>
+      {resident && <CrewResidentBanner resident={resident} />}
       <p className="text-sm text-gb-2 leading-relaxed font-sans">
         A digital-organic hybrid garden. It grows permanently with your lifetime extracted Shards and Sector Mastery—spending Shards at the Workbench never regresses restoration.
       </p>

@@ -14,6 +14,12 @@ import {
   isCradleSysAt,
   talkToCradleSys,
 } from '../lib/cradleProps';
+import {
+  CradleStationId,
+  countArrivedCrew,
+  getAllStationUnlockStatuses,
+  getStationResident,
+} from '../lib/cradleUnlocks';
 import { TrainingSim } from './TrainingSim';
 import { ScarCalibrationModal } from './ScarCalibrationModal';
 import { SignalSweep } from './SignalSweep';
@@ -47,6 +53,7 @@ import {
   Shield,
   Eye,
   ChevronRight,
+  Lock,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -187,23 +194,40 @@ export const HomeBase: React.FC<Props> = ({
   const [calibratingScar, setCalibratingScar] = useState<string | null>(null);
   const [signalSweepConfig, setSignalSweepConfig] = useState<{ timed: boolean } | null>(null);
   const [selectedInspectId, setSelectedInspectId] = useState<CradleInspectTargetId>('CRADLE_SYS');
+  const [offlineStationHintId, setOfflineStationHintId] = useState<CradleStationId | null>(null);
   const [inspectCounts, setInspectCounts] = useState<Partial<Record<CradleInspectTargetId, number>>>(
     {}
   );
 
   const floorGrid = useMemo(() => getCradleFloorGrid(stats), [stats]);
+  const stationUnlocks = useMemo(() => getAllStationUnlockStatuses(stats), [stats]);
+  const arrivedCrewCount = useMemo(() => countArrivedCrew(stats), [stats]);
 
   const activeReadout = useMemo(() => {
+    if (offlineStationHintId && !stationUnlocks[offlineStationHintId].unlocked) {
+      const status = stationUnlocks[offlineStationHintId];
+      return {
+        id: 'CRADLE_SYS' as const,
+        speaker: status.label,
+        tag: status.offlineTag,
+        text: status.offlineHint,
+        accent: status.accent,
+        lineIndex: 0,
+        totalLines: 1,
+      };
+    }
+
     const count = inspectCounts[selectedInspectId] ?? 0;
     if (selectedInspectId === 'CRADLE_SYS') {
       return talkToCradleSys(stats, count);
     }
     return inspectCradleProp(selectedInspectId, stats, count);
-  }, [selectedInspectId, inspectCounts, stats]);
+  }, [offlineStationHintId, stationUnlocks, selectedInspectId, inspectCounts, stats]);
 
   const focusInspectTarget = useCallback(
     (targetId: CradleInspectTargetId, advanceIfSame: boolean) => {
-      if (advanceIfSame && selectedInspectId === targetId) {
+      setOfflineStationHintId(null);
+      if (advanceIfSame && selectedInspectId === targetId && offlineStationHintId === null) {
         setInspectCounts((prev) => ({
           ...prev,
           [targetId]: (prev[targetId] ?? 0) + 1,
@@ -212,10 +236,23 @@ export const HomeBase: React.FC<Props> = ({
         setSelectedInspectId(targetId);
       }
     },
-    [selectedInspectId]
+    [selectedInspectId, offlineStationHintId]
+  );
+
+  const openOrInspectStation = useCallback(
+    (stationKey: CradleStationId) => {
+      if (!stationUnlocks[stationKey].unlocked) {
+        setOfflineStationHintId(stationKey);
+        return;
+      }
+      setOfflineStationHintId(null);
+      setActiveStation(stationKey);
+    },
+    [stationUnlocks]
   );
 
   const cycleActiveReadout = useCallback(() => {
+    setOfflineStationHintId(null);
     setInspectCounts((prev) => ({
       ...prev,
       [selectedInspectId]: (prev[selectedInspectId] ?? 0) + 1,
@@ -231,14 +268,23 @@ export const HomeBase: React.FC<Props> = ({
 
   useEffect(() => {
     if (isCradleSysAt(playerPos.x, playerPos.y)) {
+      setOfflineStationHintId(null);
       setSelectedInspectId('CRADLE_SYS');
       return;
     }
     const prop = getCradlePropAt(playerPos.x, playerPos.y);
     if (prop) {
+      setOfflineStationHintId(null);
       setSelectedInspectId(prop.id);
+      return;
     }
-  }, [playerPos.x, playerPos.y]);
+    const stationMatch = (Object.entries(STATIONS) as [CradleStationId, StationConfig][]).find(
+      ([, pos]) => playerPos.x === pos.x && playerPos.y === pos.y
+    );
+    if (stationMatch && !stationUnlocks[stationMatch[0]].unlocked) {
+      setOfflineStationHintId(stationMatch[0]);
+    }
+  }, [playerPos.x, playerPos.y, stationUnlocks]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -275,12 +321,12 @@ export const HomeBase: React.FC<Props> = ({
           break;
         case 'Enter':
         case ' ': {
-          const match = Object.entries(STATIONS).find(
+          const match = (Object.entries(STATIONS) as [CradleStationId, StationConfig][]).find(
             ([, pos]) => playerPos.x === pos.x && playerPos.y === pos.y
           );
           if (match) {
             e.preventDefault();
-            setActiveStation(match[0] as BaseStation);
+            openOrInspectStation(match[0]);
             break;
           }
           if (isCradleSysAt(playerPos.x, playerPos.y)) {
@@ -311,6 +357,7 @@ export const HomeBase: React.FC<Props> = ({
       playerPos,
       handleMove,
       focusInspectTarget,
+      openOrInspectStation,
     ]
   );
 
@@ -319,9 +366,12 @@ export const HomeBase: React.FC<Props> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
 
-  const currentStationEntry = Object.entries(STATIONS).find(
+  const currentStationEntry = (Object.entries(STATIONS) as [CradleStationId, StationConfig][]).find(
     ([, pos]) => playerPos.x === pos.x && playerPos.y === pos.y
   );
+  const currentStationUnlocked = currentStationEntry
+    ? stationUnlocks[currentStationEntry[0]].unlocked
+    : false;
   const currentProp = getCradlePropAt(playerPos.x, playerPos.y);
   const isStandingOnCradleSys = isCradleSysAt(playerPos.x, playerPos.y);
   const readoutAccent = ACCENT_STYLES[activeReadout.accent];
@@ -449,35 +499,64 @@ export const HomeBase: React.FC<Props> = ({
                   )}
 
                   {/* Primary Station Tile */}
-                  {station && stationKey ? (
-                    <button
-                      type="button"
-                      aria-label={`Open ${station.label}`}
-                      className="flex flex-col items-center justify-center gap-1 cursor-pointer transition-transform z-20 w-full h-full p-1 hover:bg-gb-0/40"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setPlayerPos({ x, y });
-                        setActiveStation(stationKey);
-                      }}
-                    >
-                      <div
-                        className={`p-1.5 rounded-sm border ${
-                          isPlayer
-                            ? 'border-neon-cyan bg-gb-0/90'
-                            : 'border-gb-3/30 bg-gb-0/60'
+                  {station && stationKey && stationKey !== 'NONE' ? (() => {
+                    const isUnlocked = stationUnlocks[stationKey].unlocked;
+                    const resident = getStationResident(stationKey, stats);
+                    const hasArrivedResident = Boolean(isUnlocked && resident?.arrived);
+                    return (
+                      <button
+                        type="button"
+                        aria-label={
+                          isUnlocked ? `Open ${station.label}` : `${station.label} (Standby)`
+                        }
+                        className={`flex flex-col items-center justify-center gap-1 cursor-pointer transition-all z-20 w-full h-full p-1 hover:bg-gb-0/40 ${
+                          isUnlocked ? '' : 'opacity-45'
                         }`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPlayerPos({ x, y });
+                          openOrInspectStation(stationKey);
+                        }}
                       >
-                        {station.icon}
-                      </div>
-                      <span
-                        className={`text-[11px] font-bold leading-none whitespace-nowrap ${
-                          isPlayer ? 'text-neon-cyan' : 'text-gb-3'
-                        }`}
-                      >
-                        {station.shortLabel}
-                      </span>
-                    </button>
-                  ) : null}
+                        <div
+                          className={`relative p-1.5 rounded-sm border ${
+                            !isUnlocked
+                              ? 'border-dashed border-gb-3/35 bg-gb-0/50'
+                              : isPlayer
+                                ? 'border-neon-cyan bg-gb-0/90'
+                                : 'border-gb-3/30 bg-gb-0/60'
+                          }`}
+                        >
+                          {station.icon}
+                          {!isUnlocked ? (
+                            <span
+                              aria-hidden="true"
+                              className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-gb-0 border border-gb-3/50 flex items-center justify-center"
+                            >
+                              <Lock className="w-2 h-2 text-gb-2" />
+                            </span>
+                          ) : hasArrivedResident ? (
+                            <span
+                              aria-hidden="true"
+                              title={resident?.name}
+                              className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-neon-green shadow-[0_0_6px_rgba(57,255,20,0.7)]"
+                            />
+                          ) : null}
+                        </div>
+                        <span
+                          className={`text-[11px] font-bold leading-none whitespace-nowrap ${
+                            !isUnlocked
+                              ? 'text-gb-2'
+                              : isPlayer
+                                ? 'text-neon-cyan'
+                                : 'text-gb-3'
+                          }`}
+                        >
+                          {station.shortLabel}
+                        </span>
+                      </button>
+                    );
+                  })() : null}
 
                   {/* CRADLE_SYS Caretaker Tile at (2,2) */}
                   {isCradleSysTile ? (
@@ -573,17 +652,19 @@ export const HomeBase: React.FC<Props> = ({
                   {activeReadout.tag}
                 </span>
               </div>
-              <button
-                type="button"
-                onClick={cycleActiveReadout}
-                aria-label={`Next ${activeReadout.speaker} note`}
-                className="px-1.5 py-0.5 border border-gb-3/50 text-gb-2 hover:text-neon-cyan hover:border-neon-cyan text-[10px] font-bold uppercase tracking-wider flex items-center gap-0.5 shrink-0 transition-colors tabular-nums"
-              >
-                <span>
-                  {activeReadout.lineIndex + 1}/{activeReadout.totalLines}
-                </span>
-                <ChevronRight className="w-3 h-3" />
-              </button>
+              {activeReadout.totalLines > 1 && (
+                <button
+                  type="button"
+                  onClick={cycleActiveReadout}
+                  aria-label={`Next ${activeReadout.speaker} note`}
+                  className="px-1.5 py-0.5 border border-gb-3/50 text-gb-2 hover:text-neon-cyan hover:border-neon-cyan text-[10px] font-bold uppercase tracking-wider flex items-center gap-0.5 shrink-0 transition-colors tabular-nums"
+                >
+                  <span>
+                    {activeReadout.lineIndex + 1}/{activeReadout.totalLines}
+                  </span>
+                  <ChevronRight className="w-3 h-3" />
+                </button>
+              )}
             </div>
             <p className="text-xs sm:text-sm text-gb-3 font-sans leading-snug">
               {activeReadout.text}
@@ -594,17 +675,32 @@ export const HomeBase: React.FC<Props> = ({
           <div className="min-h-10 flex items-center justify-center">
             <AnimatePresence mode="wait">
               {currentStationEntry ? (
-                <motion.button
-                  key={`station-${currentStationEntry[0]}`}
-                  type="button"
-                  initial={{ y: 6, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  exit={{ y: 6, opacity: 0 }}
-                  onClick={() => setActiveStation(currentStationEntry[0] as BaseStation)}
-                  className="min-h-10 px-5 py-2 bg-gb-3 text-gb-0 hover:bg-neon-cyan text-xs font-black uppercase tracking-wider gb-border-sm transition-colors"
-                >
-                  Open {currentStationEntry[1].label} [Space]
-                </motion.button>
+                currentStationUnlocked ? (
+                  <motion.button
+                    key={`station-${currentStationEntry[0]}`}
+                    type="button"
+                    initial={{ y: 6, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    exit={{ y: 6, opacity: 0 }}
+                    onClick={() => openOrInspectStation(currentStationEntry[0])}
+                    className="min-h-10 px-5 py-2 bg-gb-3 text-gb-0 hover:bg-neon-cyan text-xs font-black uppercase tracking-wider gb-border-sm transition-colors"
+                  >
+                    Open {currentStationEntry[1].label} [Space]
+                  </motion.button>
+                ) : (
+                  <motion.button
+                    key={`station-standby-${currentStationEntry[0]}`}
+                    type="button"
+                    initial={{ y: 6, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    exit={{ y: 6, opacity: 0 }}
+                    onClick={() => openOrInspectStation(currentStationEntry[0])}
+                    className="min-h-10 px-5 py-2 bg-gb-0 text-gb-2 border border-dashed border-gb-3/50 hover:border-neon-cyan hover:text-neon-cyan text-xs font-black uppercase tracking-wider transition-colors flex items-center gap-1.5"
+                  >
+                    <Lock className="w-3.5 h-3.5" />
+                    {currentStationEntry[1].label} — Standby
+                  </motion.button>
+                )
               ) : isStandingOnCradleSys ? (
                 <motion.button
                   key="cradle-sys-action"
@@ -691,14 +787,16 @@ export const HomeBase: React.FC<Props> = ({
               Bunker Stations
             </h2>
             <span className="text-xs text-gb-2 tabular-nums">
-              Max Floor {stats.maxExtractedFloor}
+              Crew {arrivedCrewCount}/5 · F{stats.maxExtractedFloor}
             </span>
           </div>
 
           <div className="space-y-2">
-            {(Object.entries(STATIONS) as [Exclude<BaseStation, 'NONE'>, StationConfig][]).map(
+            {(Object.entries(STATIONS) as [CradleStationId, StationConfig][]).map(
               ([key, station]) => {
                 const isSelected = playerPos.x === station.x && playerPos.y === station.y;
+                const isUnlocked = stationUnlocks[key].unlocked;
+                const resident = getStationResident(key, stats);
                 return (
                   <button
                     key={key}
@@ -708,18 +806,40 @@ export const HomeBase: React.FC<Props> = ({
                         setArchivistTab('LOGS');
                       }
                       setPlayerPos({ x: station.x, y: station.y });
-                      setActiveStation(key);
+                      openOrInspectStation(key);
                     }}
                     className={`w-full min-h-12 p-3 border text-left transition-colors flex items-center gap-3 gb-border-sm ${
-                      isSelected
-                        ? 'bg-gb-0 border-neon-cyan'
-                        : 'bg-gb-0/80 border-gb-3/60 hover:border-neon-cyan hover:bg-gb-0'
+                      !isUnlocked
+                        ? 'bg-gb-0/45 border-dashed border-gb-3/35 opacity-60 hover:border-gb-3/60'
+                        : isSelected
+                          ? 'bg-gb-0 border-neon-cyan'
+                          : 'bg-gb-0/80 border-gb-3/60 hover:border-neon-cyan hover:bg-gb-0'
                     }`}
                   >
-                    <div className="shrink-0">{station.icon}</div>
-                    <div className="min-w-0">
-                      <div className="text-xs font-bold text-gb-3">{station.label}</div>
-                      <div className="text-xs text-gb-2 font-sans truncate">{station.summary}</div>
+                    <div className="shrink-0 relative">
+                      {station.icon}
+                      {!isUnlocked && (
+                        <Lock className="w-3 h-3 text-gb-2 absolute -top-1 -right-1 bg-gb-0 rounded-full" />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-bold text-gb-3 truncate">
+                          {station.label}
+                        </span>
+                        {!isUnlocked ? (
+                          <span className="text-[10px] font-mono uppercase text-gb-2 border border-gb-3/35 px-1 py-0.5 shrink-0">
+                            Standby
+                          </span>
+                        ) : resident?.arrived ? (
+                          <span className="text-[10px] font-mono text-neon-green shrink-0">
+                            {resident.shortName}
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="text-xs text-gb-2 font-sans truncate">
+                        {isUnlocked ? station.summary : stationUnlocks[key].offlineTag}
+                      </div>
                     </div>
                   </button>
                 );
@@ -758,11 +878,11 @@ export const HomeBase: React.FC<Props> = ({
                   onClick={() => {
                     setArchivistTab('MASTERY');
                     setPlayerPos({ x: STATIONS.LORE.x, y: STATIONS.LORE.y });
-                    setActiveStation('LORE');
+                    openOrInspectStation('LORE');
                   }}
                   className="w-full min-h-9 py-1.5 px-2.5 border border-neon-cyan/70 text-neon-cyan hover:bg-neon-cyan hover:text-gb-0 text-[11px] font-black uppercase tracking-wider transition-colors"
                 >
-                  Open Mastery Readout
+                  {stationUnlocks.LORE.unlocked ? 'Open Mastery Readout' : 'Archivist Standby'}
                 </button>
               </div>
             );
@@ -803,7 +923,13 @@ export const HomeBase: React.FC<Props> = ({
                 />
               )}
 
-              {activeStation === 'UPGRADES' && <WorkbenchStation stats={stats} onUpgrade={onUpgrade} />}
+              {activeStation === 'UPGRADES' && (
+                <WorkbenchStation
+                  stats={stats}
+                  resident={getStationResident('UPGRADES', stats)}
+                  onUpgrade={onUpgrade}
+                />
+              )}
 
               {activeStation === 'LORE' && (
                 <ArchivistStation
@@ -811,6 +937,7 @@ export const HomeBase: React.FC<Props> = ({
                   sectorMastery={stats.sectorMastery}
                   maxExtractedFloor={stats.maxExtractedFloor}
                   initialTab={archivistTab}
+                  resident={getStationResident('LORE', stats)}
                 />
               )}
 
@@ -818,6 +945,7 @@ export const HomeBase: React.FC<Props> = ({
                 <GardenStation
                   lifetimeShardsExtracted={stats.lifetimeShardsExtracted}
                   sectorMastery={stats.sectorMastery}
+                  resident={getStationResident('GARDEN', stats)}
                 />
               )}
 
@@ -826,6 +954,7 @@ export const HomeBase: React.FC<Props> = ({
               {activeStation === 'TRAINING' && (
                 <SimulatorStation
                   stats={stats}
+                  resident={getStationResident('TRAINING', stats)}
                   onUnlockDemo={onUnlockDemo}
                   onRunSim={(variantId) => setActiveSimTier(variantId)}
                   onLaunchSignalSweep={(config) => setSignalSweepConfig(config)}

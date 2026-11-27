@@ -7,13 +7,16 @@ import {
   MAX_UPGRADE_LEVELS,
 } from '../../lib/dungeonLogic';
 import { BrainCircuit, Cpu, Heart, Settings } from 'lucide-react';
+import { CrewResidentStatus } from '../../lib/cradleUnlocks';
+import { CrewResidentBanner } from './CrewResidentBanner';
 
 interface Props {
   stats: PlayerStats;
+  resident?: CrewResidentStatus | null;
   onUpgrade: (type: 'hp' | 'fp' | 'hints' | 'buy_hint') => void;
 }
 
-export const WorkbenchStation: React.FC<Props> = ({ stats, onUpgrade }) => {
+export const WorkbenchStation: React.FC<Props> = ({ stats, resident, onUpgrade }) => {
   const hpCost = getUpgradeCost('hp', stats.upgrades.hp);
   const fpCost = getUpgradeCost('fp', stats.upgrades.fp);
   const hintsCost = getUpgradeCost('hints', stats.upgrades.hints);
@@ -27,6 +30,7 @@ export const WorkbenchStation: React.FC<Props> = ({ stats, onUpgrade }) => {
         <Settings className="w-5 h-5 shrink-0" />
         Workbench
       </h3>
+      {resident && <CrewResidentBanner resident={resident} />}
       <UpgradeItem
         title="Neural Integrity"
         desc="Increases Max HP (+20)"

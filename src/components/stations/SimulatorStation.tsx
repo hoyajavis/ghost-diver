@@ -8,9 +8,12 @@ import {
   SIGNAL_SWEEP_NODE_COUNT,
 } from '../../lib/signalSweepLogic';
 import { BrainCircuit, Clock, Lock, Play, Radio, Sparkles, Unlock } from 'lucide-react';
+import { CrewResidentStatus } from '../../lib/cradleUnlocks';
+import { CrewResidentBanner } from './CrewResidentBanner';
 
 interface Props {
   stats: PlayerStats;
+  resident?: CrewResidentStatus | null;
   onUnlockDemo: (variantId: string) => void;
   onRunSim: (variantId: string) => void;
   onLaunchSignalSweep: (options: { timed: boolean }) => void;
@@ -18,6 +21,7 @@ interface Props {
 
 export const SimulatorStation: React.FC<Props> = ({
   stats,
+  resident,
   onUnlockDemo,
   onRunSim,
   onLaunchSignalSweep,
@@ -44,6 +48,7 @@ export const SimulatorStation: React.FC<Props> = ({
         <BrainCircuit className="w-5 h-5 shrink-0" />
         Combat Simulator
       </h3>
+      {resident && <CrewResidentBanner resident={resident} />}
 
       {/* Two-Tab Navigation */}
       <div className="grid grid-cols-2 gap-1.5" role="tablist" aria-label="Simulator modes">

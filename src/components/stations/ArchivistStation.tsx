@@ -4,12 +4,15 @@ import { ENEMY_TIERS } from '../../lib/enemyData';
 import { getTierForFloor, MAX_TIER } from '../../lib/dungeonLogic';
 import { LORE_ENTRIES } from '../../lib/lore';
 import { BarChart3, Terminal } from 'lucide-react';
+import { CrewResidentStatus } from '../../lib/cradleUnlocks';
+import { CrewResidentBanner } from './CrewResidentBanner';
 
 interface Props {
   unlockedLore: string[];
   sectorMastery: SectorMasteryMap;
   maxExtractedFloor: number;
   initialTab?: 'MASTERY' | 'LOGS';
+  resident?: CrewResidentStatus | null;
 }
 
 export const ArchivistStation: React.FC<Props> = ({
@@ -17,6 +20,7 @@ export const ArchivistStation: React.FC<Props> = ({
   sectorMastery,
   maxExtractedFloor,
   initialTab = 'LOGS',
+  resident,
 }) => {
   const [activeTab, setActiveTab] = useState<'MASTERY' | 'LOGS'>(initialTab);
   const [showAllSectors, setShowAllSectors] = useState(false);
@@ -34,6 +38,7 @@ export const ArchivistStation: React.FC<Props> = ({
         <Terminal className="w-5 h-5 shrink-0" />
         Archivist Terminal
       </h3>
+      {resident && <CrewResidentBanner resident={resident} />}
 
       {/* 2-Tab Switcher */}
       <div className="grid grid-cols-2 gap-2" role="tablist" aria-label="Archivist views">

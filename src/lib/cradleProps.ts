@@ -1,5 +1,6 @@
 import { PlayerStats, Position } from '../types';
 import { calculateGardenRestoration } from './loadoutChips';
+import { countArrivedCrew, isStationUnlocked } from './cradleUnlocks';
 
 export const CRADLE_GRID_SIZE = 5;
 
@@ -176,7 +177,22 @@ export function getCradleFloorZone(x: number, y: number, stats: PlayerStats): Cr
   );
   const conduit = getConduitConnections(x, y);
   const hasConduit = conduit.north || conduit.south || conduit.east || conduit.west;
-  const conduitPowered = hasConduit && (stats.maxExtractedFloor >= 5 || restorationPercent >= 20);
+
+  let conduitPowered = false;
+  if (hasConduit) {
+    if (y === 2 && (x === 0 || x === 1)) {
+      conduitPowered = isStationUnlocked('UPGRADES', stats);
+    } else if ((y === 2 && (x === 3 || x === 4)) || (y === 0 && x === 1)) {
+      conduitPowered = isStationUnlocked('LORE', stats);
+    } else if (x === 2 && (y === 3 || y === 4)) {
+      conduitPowered = isStationUnlocked('GARDEN', stats);
+    } else if (y === 0 && x === 3) {
+      conduitPowered = isStationUnlocked('TRAINING', stats);
+    } else {
+      conduitPowered = stats.maxExtractedFloor >= 5 || restorationPercent >= 20;
+    }
+  }
+
   const mossStage = getMossStageAt(x, y, restorationPercent);
 
   let zoneLabel: CradleFloorZone['zoneLabel'] = 'FLOOR';
@@ -490,9 +506,14 @@ export function getCradleSysLines(stats: PlayerStats): string[] {
       'Watch for glowing green Data Logs and Blue Caches during dives—they hold the story of how this bunker was built.';
   }
 
-  // Line 3: Warm character beat
+  // Line 3: Warm character beat (reacts to Growing Crew arrivals)
+  const crewCount = countArrivedCrew(stats);
   const characterLine =
-    'I have been waiting in this quiet room for a long time. It is good to have a Diver walking these tiles again.';
+    crewCount >= 5
+      ? 'All five voices are back online in the Cradle. This quiet bunker finally feels like a real home base.'
+      : crewCount > 1
+        ? `${crewCount} of 5 Cradle voices are awake now. Keep pushing deeper to draw the rest of the crew home.`
+        : 'I have been waiting in this quiet room for a long time. It is good to have a Diver walking these tiles again.';
 
   // Line 4: Exploration nudge
   const tipLine =

@@ -55,11 +55,11 @@ As the Diver explores deeper strata and stabilizes the bunker, the Cradle grows 
 
 | Resident | Station / Tile | Arrival | Lore Anchor & Role |
 | :--- | :--- | :--- | :--- |
-| **`CRADLE_SYS`** | Center Hub `(2,2)` | **From Dive 1** *(Active — Slice 1)* | Analog bunker caretaker AI left running by the Unknown Engineer (`LOG_042`). Greets the Diver and reacts dynamically to depth, Neural Scars, Loadout Chips, Recon Buffs, Shards, and Green-Print restoration. |
-| **`DR_ARIS_THORNE`** | Workbench `(0,2)` | Future slice | Neural Scar specialist (`LOG_114`) who maintains rig upgrades, Neural Integrity, and scar calibration tools. |
-| **`DIVER_77`** | Archivist Terminal `(4,2)` | Future slice | Veteran Ghost Diver (`LOG_012`) who curates decrypted Data Logs and tracks Sector Mastery records. |
-| **`COMBAT_ANALYST_V`** | Combat Simulator `(4,0)` | Future slice | Sentinel tactician (`LOG_089`) who runs Signal Sweep recon drills and Sentinel cipher practice sims. |
-| **`BOTANIST_AI_CORE`** | The Green-Print `(2,4)` | Future slice | Garden caretaker AI (`LOG_201`) who tends the growing moss and flora tethered to lifetime extracted Shards and Sector Mastery. |
+| **`CRADLE_SYS`** | Center Hub `(2,2)` | **From Dive 1** *(Active — Slice 1)* | Analog bunker caretaker AI left running by the Unknown Engineer (`LOG_042`). Greets the Diver and reacts dynamically to depth, Neural Scars, Loadout Chips, Recon Buffs, Shards, Green-Print restoration, and crew arrivals. |
+| **`DR_ARIS_THORNE`** | Workbench `(0,2)` | **First Shards / Scar / Dive** *(Active — Slice 2)* | Neural Scar specialist (`LOG_114`) who maintains rig upgrades, Neural Integrity, and scar calibration tools. |
+| **`DIVER_77`** | Archivist Terminal `(4,2)` | **First Data Log or Floor 5** *(Active — Slice 2)* | Veteran Ghost Diver (`LOG_012`) who curates decrypted Data Logs and tracks Sector Mastery records. |
+| **`COMBAT_ANALYST_V`** | Combat Simulator `(4,0)` | **Floor 10 (Sector 2 Apex)** *(Active — Slice 2)* | Sentinel tactician (`LOG_089`) who runs Signal Sweep recon drills and Sentinel cipher practice sims (station usable in automated mode from Floor 5). |
+| **`BOTANIST_AI_CORE`** | The Green-Print `(2,4)` | **Floor 15 or 25% Restoration** *(Active — Slice 2)* | Garden caretaker AI (`LOG_201`) who tends the growing moss and flora tethered to lifetime extracted Shards and Sector Mastery (station usable in auto-growth mode from Floor 5). |
 
 ### Living Bunker Props & Architectural Floor Zones (`src/lib/cradleProps.ts`)
 

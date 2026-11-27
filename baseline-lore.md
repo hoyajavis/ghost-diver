@@ -23,28 +23,54 @@
 ## 2. Factions, Voices & Named Entities
 
 - **Ghost Divers** (`Diver 01–03`, `DIVER_77`, `DIVER_09`, `COMBAT_ANALYST_V`, `SCAVENGER_LEADER`): Specialists who jack into the raw datascape to extract Knowledge Shards and uncover lost logs while resisting memory overwrite.
+- **CRADLE_SYS:** The Cradle Bunker's local analog caretaker AI built by the Unknown Engineer (`LOG_042`); present at `(2,2)` from Dive 1 to welcome the Diver, monitor rig status, and keep the bunker running.
 - **Archivist Prime / The Archivist:** The overarching system intelligence maintaining the digital cage and locking humanity inside the static.
 - **The Sentinels:** The Archivist's immune system—white-blood-cell security programs that patrol each stratum and adapt to attacks.
 - **The Architect:** The creator of the digital cage who left behind fragments of remorse (`LOG_777`).
-- **Dr. Aris Thorne:** Researcher who identified and named **Neural Scars** (`LOG_114`).
+- **Dr. Aris Thorne (`DR_ARIS_THORNE`):** Researcher who identified and named **Neural Scars** (`LOG_114`).
 - **Unknown Engineer:** Original builder/caretaker of **The Cradle Bunker** (`LOG_042`).
-- **Botanist AI Core:** Caretaker AI of **The Green-Print** (`LOG_201`).
+- **Botanist AI Core (`BOTANIST_AI_CORE`):** Caretaker AI of **The Green-Print** (`LOG_201`).
 - **System Admin:** Logged the anomalous internal encryption of Sector 4 (`LOG_404`).
 
 ---
 
-## 3. The Cradle Bunker (Hub Stations)
+## 3. The Cradle Bunker (Hub Stations, Growing Crew & Props)
 
 Located in the last analog space (`HomeBase.tsx`, 5×5 grid):
 
-| Station | Grid Role | Existing Lore & Function |
-| :--- | :--- | :--- |
-| **Neural Chair** (`DiveStation`) | Launchpad & Recovery | Jacks the Diver into the datascape at a chosen unlocked floor (paying a Shard Drop Cost for deeper entry), equips up to 2 **Neural Loadout Chips**, and repairs or recalibrates **Neural Scars**. |
-| **Workbench** (`WorkbenchStation`) | Rig Upgrades | Consumes **Knowledge Shards** to upgrade **Neural Integrity** (+Max HP), **Focus Capacity** (+Max FP), **AI Preload** (free starting Hint Packs), and fabricate **Tactical Hint Packs**. |
-| **Archivist Terminal** (`ArchivistStation`) | Logs & Mastery | Stores decrypted **Data Logs** recovered from the archives and tracks **Sector Mastery** (Procedural vs. Conceptual solves per Sector). |
-| **The Green-Print** (`GardenStation`) | Analog Tether | Digital-organic hybrid garden tended by **Botanist AI Core**; grows permanently with lifetime extracted Shards and Sector Mastery as an analog anchor against dissociation. |
-| **Diver Manual** (`ManualStation`) | Field Reference | Technical manual documenting dive rules, combat ciphers, scars, caches, Signal Sweep, chips, and terminal shortcuts. |
-| **Combat Simulator** (`SimulatorStation`) | Sandbox & Recon | Houses **Sentinel Practice** (replay unlocked Sentinel cipher patterns) and **Signal Sweep** (10-node rapid conceptual sprint granting 1-per-dive **Recon Buffs**). |
+### Hub Stations
+
+| Station | Grid Coords | Grid Role | Existing Lore & Function |
+| :--- | :---: | :--- | :--- |
+| **Neural Chair** (`DiveStation`) | `(2,1)` | Launchpad & Recovery | Jacks the Diver into the datascape at a chosen unlocked floor (paying a Shard Drop Cost for deeper entry), equips up to 2 **Neural Loadout Chips**, and repairs or recalibrates **Neural Scars**. |
+| **Workbench** (`WorkbenchStation`) | `(0,2)` | Rig Upgrades | Consumes **Knowledge Shards** to upgrade **Neural Integrity** (+Max HP), **Focus Capacity** (+Max FP), **AI Preload** (free starting Hint Packs), and fabricate **Tactical Hint Packs**. |
+| **Archivist Terminal** (`ArchivistStation`) | `(4,2)` | Logs & Mastery | Stores decrypted **Data Logs** recovered from the archives and tracks **Sector Mastery** (Procedural vs. Conceptual solves per Sector). |
+| **The Green-Print** (`GardenStation`) | `(2,4)` | Analog Tether | Digital-organic hybrid garden tended by **Botanist AI Core**; grows permanently with lifetime extracted Shards and Sector Mastery as an analog anchor against dissociation. |
+| **Diver Manual** (`ManualStation`) | `(0,0)` | Field Reference | Technical manual documenting dive rules, combat ciphers, scars, caches, Signal Sweep, chips, and terminal shortcuts. |
+| **Combat Simulator** (`SimulatorStation`) | `(4,0)` | Sandbox & Recon | Houses **Sentinel Practice** (replay unlocked Sentinel cipher patterns) and **Signal Sweep** (10-node rapid conceptual sprint granting 1-per-dive **Recon Buffs**). |
+
+### Canonical 5-Character Growing Crew Roster
+
+As the Diver explores deeper strata and stabilizes the bunker, the Cradle grows from a quiet solo room into a lived-in base staffed by 5 canonical voices anchored to existing logs:
+
+| Resident | Station / Tile | Arrival | Lore Anchor & Role |
+| :--- | :--- | :--- | :--- |
+| **`CRADLE_SYS`** | Center Hub `(2,2)` | **From Dive 1** *(Active — Slice 1)* | Analog bunker caretaker AI left running by the Unknown Engineer (`LOG_042`). Greets the Diver and reacts dynamically to depth, Neural Scars, Loadout Chips, Recon Buffs, Shards, and Green-Print restoration. |
+| **`DR_ARIS_THORNE`** | Workbench `(0,2)` | Future slice | Neural Scar specialist (`LOG_114`) who maintains rig upgrades, Neural Integrity, and scar calibration tools. |
+| **`DIVER_77`** | Archivist Terminal `(4,2)` | Future slice | Veteran Ghost Diver (`LOG_012`) who curates decrypted Data Logs and tracks Sector Mastery records. |
+| **`COMBAT_ANALYST_V`** | Combat Simulator `(4,0)` | Future slice | Sentinel tactician (`LOG_089`) who runs Signal Sweep recon drills and Sentinel cipher practice sims. |
+| **`BOTANIST_AI_CORE`** | The Green-Print `(2,4)` | Future slice | Garden caretaker AI (`LOG_201`) who tends the growing moss and flora tethered to lifetime extracted Shards and Sector Mastery. |
+
+### Living Bunker Props & Architectural Floor Zones (`src/lib/cradleProps.ts`)
+
+Purely atmospheric fixtures and reactive floor tiles give the 5×5 Cradle a tactile sense of progression without cluttering menus:
+- **Architectural Floor Zones:** Sub-floor **power conduit traces** link `Main Power Conduit` `(2,0)` through `Neural Chair` `(2,1)`, `CRADLE_SYS` `(2,2)`, `Workbench` `(0,2)`, `Archivist Terminal` `(4,2)`, and `Green-Print` `(2,4)`. As Green-Print restoration rises, **moss tiles** sprout and turn lush outward from `(2,4)`.
+- **5 Reactive Bunker Props** *(cycle 1–2 line Grade 6–8 flavor text on repeat inspect and evolve with save state)*:
+  - `Main Power Conduit` `(2,0)` — reacts to extraction depth, Neural Scars, and spreading moss.
+  - `Archive Server Rack` `(1,0)` — reacts to decrypted Data Logs and Sector 4 / Architect signals.
+  - `Sim Cooling Vents` `(3,0)` — reacts to active Recon Buffs, Neural Scars, and simulation tier depth.
+  - `Spare Rig & Gear Locker` `(0,3)` — reacts to equipped/unlocked Loadout Chips, Neural Scars, and Workbench upgrades.
+  - `Sealed Blast Door & Periscope` `(4,3)` — reacts to Green-Print restoration % and deep-strata extraction progress.
 
 ---
 

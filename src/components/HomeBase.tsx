@@ -1,7 +1,19 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { NeuralChipId, PlayerStats, Position, ReconBuffType } from '../types';
 import { SignalSweepNodeOutcome } from '../lib/signalSweepLogic';
 import { ConceptOutcome } from '../lib/conceptSpacedRep';
+import {
+  CRADLE_GRID_SIZE,
+  CRADLE_SYS_META,
+  CradleAccent,
+  CradleInspectTargetId,
+  CradlePropId,
+  getCradleFloorGrid,
+  getCradlePropAt,
+  inspectCradleProp,
+  isCradleSysAt,
+  talkToCradleSys,
+} from '../lib/cradleProps';
 import { TrainingSim } from './TrainingSim';
 import { ScarCalibrationModal } from './ScarCalibrationModal';
 import { SignalSweep } from './SignalSweep';
@@ -28,6 +40,13 @@ import {
   Settings,
   BarChart3,
   X,
+  Bot,
+  Zap,
+  Server,
+  Wind,
+  Shield,
+  Eye,
+  ChevronRight,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -57,7 +76,43 @@ interface StationConfig {
   summary: string;
 }
 
-const GRID_SIZE = 5;
+const GRID_SIZE = CRADLE_GRID_SIZE;
+
+const PROP_ICONS: Record<CradlePropId, React.ReactNode> = {
+  MAIN_POWER_CONDUIT: <Zap className="w-4 h-4 text-neon-cyan" />,
+  ARCHIVE_SERVER_RACK: <Server className="w-4 h-4 text-neon-green" />,
+  SIM_COOLING_VENTS: <Wind className="w-4 h-4 text-purple-300" />,
+  SPARE_RIG_LOCKER: <Shield className="w-4 h-4 text-amber-400" />,
+  SEALED_BLAST_DOOR: <Eye className="w-4 h-4 text-neon-magenta" />,
+};
+
+const ACCENT_STYLES: Record<CradleAccent, { border: string; text: string; pill: string }> = {
+  cyan: {
+    border: 'border-neon-cyan/70',
+    text: 'text-neon-cyan',
+    pill: 'border-neon-cyan/50 text-neon-cyan',
+  },
+  green: {
+    border: 'border-neon-green/70',
+    text: 'text-neon-green',
+    pill: 'border-neon-green/50 text-neon-green',
+  },
+  amber: {
+    border: 'border-amber-400/70',
+    text: 'text-amber-400',
+    pill: 'border-amber-400/50 text-amber-400',
+  },
+  purple: {
+    border: 'border-purple-400/70',
+    text: 'text-purple-300',
+    pill: 'border-purple-400/50 text-purple-300',
+  },
+  magenta: {
+    border: 'border-neon-magenta/70',
+    text: 'text-neon-magenta',
+    pill: 'border-neon-magenta/50 text-neon-magenta',
+  },
+};
 
 const STATIONS: Record<Exclude<BaseStation, 'NONE'>, StationConfig> = {
   DIVE: {
@@ -131,6 +186,41 @@ export const HomeBase: React.FC<Props> = ({
   const [activeSimTier, setActiveSimTier] = useState<string | null>(null);
   const [calibratingScar, setCalibratingScar] = useState<string | null>(null);
   const [signalSweepConfig, setSignalSweepConfig] = useState<{ timed: boolean } | null>(null);
+  const [selectedInspectId, setSelectedInspectId] = useState<CradleInspectTargetId>('CRADLE_SYS');
+  const [inspectCounts, setInspectCounts] = useState<Partial<Record<CradleInspectTargetId, number>>>(
+    {}
+  );
+
+  const floorGrid = useMemo(() => getCradleFloorGrid(stats), [stats]);
+
+  const activeReadout = useMemo(() => {
+    const count = inspectCounts[selectedInspectId] ?? 0;
+    if (selectedInspectId === 'CRADLE_SYS') {
+      return talkToCradleSys(stats, count);
+    }
+    return inspectCradleProp(selectedInspectId, stats, count);
+  }, [selectedInspectId, inspectCounts, stats]);
+
+  const focusInspectTarget = useCallback(
+    (targetId: CradleInspectTargetId, advanceIfSame: boolean) => {
+      if (advanceIfSame && selectedInspectId === targetId) {
+        setInspectCounts((prev) => ({
+          ...prev,
+          [targetId]: (prev[targetId] ?? 0) + 1,
+        }));
+      } else {
+        setSelectedInspectId(targetId);
+      }
+    },
+    [selectedInspectId]
+  );
+
+  const cycleActiveReadout = useCallback(() => {
+    setInspectCounts((prev) => ({
+      ...prev,
+      [selectedInspectId]: (prev[selectedInspectId] ?? 0) + 1,
+    }));
+  }, [selectedInspectId]);
 
   const handleMove = useCallback((dx: number, dy: number) => {
     setPlayerPos((prev) => ({
@@ -138,6 +228,17 @@ export const HomeBase: React.FC<Props> = ({
       y: Math.max(0, Math.min(GRID_SIZE - 1, prev.y + dy)),
     }));
   }, []);
+
+  useEffect(() => {
+    if (isCradleSysAt(playerPos.x, playerPos.y)) {
+      setSelectedInspectId('CRADLE_SYS');
+      return;
+    }
+    const prop = getCradlePropAt(playerPos.x, playerPos.y);
+    if (prop) {
+      setSelectedInspectId(prop.id);
+    }
+  }, [playerPos.x, playerPos.y]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -180,6 +281,17 @@ export const HomeBase: React.FC<Props> = ({
           if (match) {
             e.preventDefault();
             setActiveStation(match[0] as BaseStation);
+            break;
+          }
+          if (isCradleSysAt(playerPos.x, playerPos.y)) {
+            e.preventDefault();
+            focusInspectTarget('CRADLE_SYS', true);
+            break;
+          }
+          const propMatch = getCradlePropAt(playerPos.x, playerPos.y);
+          if (propMatch) {
+            e.preventDefault();
+            focusInspectTarget(propMatch.id, true);
           }
           break;
         }
@@ -190,7 +302,16 @@ export const HomeBase: React.FC<Props> = ({
         handleMove(dx, dy);
       }
     },
-    [isOverlayOpen, activeSimTier, calibratingScar, signalSweepConfig, activeStation, playerPos, handleMove]
+    [
+      isOverlayOpen,
+      activeSimTier,
+      calibratingScar,
+      signalSweepConfig,
+      activeStation,
+      playerPos,
+      handleMove,
+      focusInspectTarget,
+    ]
   );
 
   useEffect(() => {
@@ -201,6 +322,9 @@ export const HomeBase: React.FC<Props> = ({
   const currentStationEntry = Object.entries(STATIONS).find(
     ([, pos]) => playerPos.x === pos.x && playerPos.y === pos.y
   );
+  const currentProp = getCradlePropAt(playerPos.x, playerPos.y);
+  const isStandingOnCradleSys = isCradleSysAt(playerPos.x, playerPos.y);
+  const readoutAccent = ACCENT_STYLES[activeReadout.accent];
 
   return (
     <div className="flex flex-col h-full bg-gb-0 text-gb-3 scanlines relative overflow-hidden terminal-text">
@@ -236,9 +360,9 @@ export const HomeBase: React.FC<Props> = ({
       {/* Main Content Split */}
       <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 wireframe-bg dither overflow-y-auto custom-scrollbar">
         {/* Navigable Room View */}
-        <div className="lg:col-span-8 flex flex-col items-center justify-center p-4 md:p-6 gap-3">
-          <div className="text-xs text-gb-2 text-center font-sans">
-            Move with WASD or Arrow keys, or click any station tile directly.
+        <div className="lg:col-span-8 flex flex-col items-center justify-center p-3 sm:p-4 md:p-6 gap-2.5 sm:gap-3">
+          <div className="text-[11px] sm:text-xs text-gb-2 text-center font-sans">
+            Move with WASD or Arrow keys, or tap any station, fixture, or CRADLE_SYS.
           </div>
 
           <div
@@ -246,27 +370,85 @@ export const HomeBase: React.FC<Props> = ({
             style={{
               gridTemplateColumns: `repeat(${GRID_SIZE}, minmax(0, 1fr))`,
               gridTemplateRows: `repeat(${GRID_SIZE}, minmax(0, 1fr))`,
-              width: 'min(88vw, 440px)',
-              height: 'min(88vw, 440px)',
+              width: 'min(86vw, 410px)',
+              height: 'min(86vw, 410px)',
             }}
           >
-            {Array.from({ length: GRID_SIZE * GRID_SIZE }).map((_, i) => {
-              const x = i % GRID_SIZE;
-              const y = Math.floor(i / GRID_SIZE);
+            {floorGrid.map((floorZone, i) => {
+              const { x, y } = floorZone;
               const isPlayer = playerPos.x === x && playerPos.y === y;
 
               const stationEntry = Object.entries(STATIONS).find(([, pos]) => pos.x === x && pos.y === y);
               const station = stationEntry ? stationEntry[1] : null;
               const stationKey = stationEntry ? (stationEntry[0] as BaseStation) : null;
+              const prop = !station ? getCradlePropAt(x, y) : null;
+              const isCradleSysTile = !station && !prop && isCradleSysAt(x, y);
+              const hasTileEntity = Boolean(station || prop || isCradleSysTile);
+
+              const conduitColor = floorZone.conduitPowered
+                ? 'bg-neon-cyan/45 shadow-[0_0_6px_rgba(0,243,255,0.35)]'
+                : 'bg-neon-cyan/20';
+
+              const mossBg =
+                floorZone.mossStage === 'LUSH'
+                  ? 'bg-neon-green/20'
+                  : floorZone.mossStage === 'SPROUT'
+                    ? 'bg-neon-green/10'
+                    : '';
 
               return (
                 <div
                   key={i}
-                  className={`relative border-r border-b border-gb-3/20 flex items-center justify-center transition-colors ${
+                  data-floor-zone={floorZone.zoneLabel}
+                  data-moss-stage={floorZone.mossStage}
+                  className={`relative border-r border-b border-gb-3/20 flex items-center justify-center transition-colors ${mossBg} ${
                     isPlayer ? 'bg-neon-cyan/10' : ''
                   } ${x === GRID_SIZE - 1 ? 'border-r-0' : ''} ${y === GRID_SIZE - 1 ? 'border-b-0' : ''}`}
                   onClick={() => setPlayerPos({ x, y })}
                 >
+                  {/* Architectural Floor Layer: Power Conduit Traces */}
+                  {floorZone.hasConduit && (
+                    <div aria-hidden="true" className="absolute inset-0 pointer-events-none z-0">
+                      {floorZone.conduit.north && (
+                        <span
+                          className={`absolute left-1/2 top-0 h-1/2 w-[2px] -translate-x-1/2 ${conduitColor}`}
+                        />
+                      )}
+                      {floorZone.conduit.south && (
+                        <span
+                          className={`absolute left-1/2 bottom-0 h-1/2 w-[2px] -translate-x-1/2 ${conduitColor}`}
+                        />
+                      )}
+                      {floorZone.conduit.west && (
+                        <span
+                          className={`absolute top-1/2 left-0 w-1/2 h-[2px] -translate-y-1/2 ${conduitColor}`}
+                        />
+                      )}
+                      {floorZone.conduit.east && (
+                        <span
+                          className={`absolute top-1/2 right-0 w-1/2 h-[2px] -translate-y-1/2 ${conduitColor}`}
+                        />
+                      )}
+                      <span
+                        className={`absolute left-1/2 top-1/2 w-1.5 h-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full ${conduitColor}`}
+                      />
+                    </div>
+                  )}
+
+                  {/* Architectural Floor Layer: Green-Print Moss Accents */}
+                  {floorZone.mossStage !== 'NONE' && (
+                    <div aria-hidden="true" className="absolute inset-0 pointer-events-none z-0">
+                      <span className="absolute bottom-1 left-1 w-1.5 h-1.5 rounded-full bg-neon-green/45" />
+                      {floorZone.mossStage === 'LUSH' && (
+                        <>
+                          <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-neon-green/55" />
+                          <span className="absolute bottom-1 right-2 w-1 h-1 rounded-full bg-neon-green/60" />
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Primary Station Tile */}
                   {station && stationKey ? (
                     <button
                       type="button"
@@ -297,12 +479,76 @@ export const HomeBase: React.FC<Props> = ({
                     </button>
                   ) : null}
 
+                  {/* CRADLE_SYS Caretaker Tile at (2,2) */}
+                  {isCradleSysTile ? (
+                    <button
+                      type="button"
+                      aria-label={`Talk to ${CRADLE_SYS_META.name}`}
+                      className="flex flex-col items-center justify-center gap-1 cursor-pointer transition-colors z-20 w-full h-full p-1 hover:bg-gb-0/45"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPlayerPos({ x, y });
+                        focusInspectTarget('CRADLE_SYS', true);
+                      }}
+                    >
+                      <div
+                        className={`relative p-1.5 rounded-sm border ${
+                          selectedInspectId === 'CRADLE_SYS'
+                            ? 'border-neon-cyan bg-gb-0/90 shadow-[0_0_10px_rgba(0,243,255,0.35)]'
+                            : 'border-neon-cyan/50 bg-gb-0/75'
+                        }`}
+                      >
+                        <Bot className="w-5 h-5 text-neon-cyan" />
+                        <span
+                          aria-hidden="true"
+                          className={`absolute -top-1 -right-1 w-2 h-2 rounded-full animate-pulse ${
+                            stats.neuralScars.length > 0 ? 'bg-amber-400' : 'bg-neon-green'
+                          }`}
+                        />
+                      </div>
+                      <span className="text-[10px] font-bold leading-none whitespace-nowrap text-neon-cyan">
+                        {CRADLE_SYS_META.shortLabel}
+                      </span>
+                    </button>
+                  ) : null}
+
+                  {/* Atmospheric Reactive Bunker Prop Tile */}
+                  {prop ? (
+                    <button
+                      type="button"
+                      aria-label={`Inspect ${prop.name}`}
+                      className="flex flex-col items-center justify-center gap-0.5 cursor-pointer transition-colors z-20 w-full h-full p-1 hover:bg-gb-0/40"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPlayerPos({ x, y });
+                        focusInspectTarget(prop.id, true);
+                      }}
+                    >
+                      <div
+                        className={`p-1 rounded-sm border ${
+                          selectedInspectId === prop.id
+                            ? `${ACCENT_STYLES[prop.accent].border} bg-gb-0/90`
+                            : 'border-gb-3/25 bg-gb-0/55'
+                        }`}
+                      >
+                        {PROP_ICONS[prop.id]}
+                      </div>
+                      <span
+                        className={`text-[10px] font-semibold leading-none whitespace-nowrap ${
+                          selectedInspectId === prop.id ? ACCENT_STYLES[prop.accent].text : 'text-gb-2'
+                        }`}
+                      >
+                        {prop.shortLabel}
+                      </span>
+                    </button>
+                  ) : null}
+
                   {isPlayer && (
                     <motion.div
                       layoutId="player"
                       className="absolute inset-1 border-2 border-neon-cyan pointer-events-none z-30 shadow-[0_0_12px_rgba(0,243,255,0.45)] flex items-center justify-center"
                     >
-                      {!station && <User className="w-6 h-6 text-neon-cyan" />}
+                      {!hasTileEntity && <User className="w-6 h-6 text-neon-cyan" />}
                     </motion.div>
                   )}
                 </div>
@@ -310,21 +556,80 @@ export const HomeBase: React.FC<Props> = ({
             })}
           </div>
 
+          {/* Compact In-Panel Inspector / CRADLE_SYS Readout (No Modal Spam) */}
+          <section
+            aria-label="Cradle Inspector Readout"
+            aria-live="polite"
+            className={`w-full max-w-[440px] bg-gb-0/95 border ${readoutAccent.border} px-3 py-2.5 gb-border-sm space-y-1.5`}
+          >
+            <div className="flex items-center justify-between gap-2 text-[10px] sm:text-[11px]">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className={`font-black uppercase tracking-wider truncate ${readoutAccent.text}`}>
+                  {activeReadout.speaker}
+                </span>
+                <span
+                  className={`px-1.5 py-0.5 border text-[9px] sm:text-[10px] font-bold uppercase tracking-wider shrink-0 ${readoutAccent.pill}`}
+                >
+                  {activeReadout.tag}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={cycleActiveReadout}
+                aria-label={`Next ${activeReadout.speaker} note`}
+                className="px-1.5 py-0.5 border border-gb-3/50 text-gb-2 hover:text-neon-cyan hover:border-neon-cyan text-[10px] font-bold uppercase tracking-wider flex items-center gap-0.5 shrink-0 transition-colors tabular-nums"
+              >
+                <span>
+                  {activeReadout.lineIndex + 1}/{activeReadout.totalLines}
+                </span>
+                <ChevronRight className="w-3 h-3" />
+              </button>
+            </div>
+            <p className="text-xs sm:text-sm text-gb-3 font-sans leading-snug">
+              {activeReadout.text}
+            </p>
+          </section>
+
           {/* Interaction Prompt (Clickable button!) */}
-          <div className="min-h-11 flex items-center justify-center">
-            <AnimatePresence>
-              {currentStationEntry && (
+          <div className="min-h-10 flex items-center justify-center">
+            <AnimatePresence mode="wait">
+              {currentStationEntry ? (
                 <motion.button
+                  key={`station-${currentStationEntry[0]}`}
                   type="button"
-                  initial={{ y: 8, opacity: 0 }}
+                  initial={{ y: 6, opacity: 0 }}
                   animate={{ y: 0, opacity: 1 }}
-                  exit={{ y: 8, opacity: 0 }}
+                  exit={{ y: 6, opacity: 0 }}
                   onClick={() => setActiveStation(currentStationEntry[0] as BaseStation)}
-                  className="min-h-11 px-5 py-2 bg-gb-3 text-gb-0 hover:bg-neon-cyan text-xs font-black uppercase tracking-wider gb-border-sm transition-colors"
+                  className="min-h-10 px-5 py-2 bg-gb-3 text-gb-0 hover:bg-neon-cyan text-xs font-black uppercase tracking-wider gb-border-sm transition-colors"
                 >
                   Open {currentStationEntry[1].label} [Space]
                 </motion.button>
-              )}
+              ) : isStandingOnCradleSys ? (
+                <motion.button
+                  key="cradle-sys-action"
+                  type="button"
+                  initial={{ y: 6, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: 6, opacity: 0 }}
+                  onClick={() => focusInspectTarget('CRADLE_SYS', true)}
+                  className="min-h-10 px-5 py-2 bg-gb-0 text-neon-cyan border border-neon-cyan hover:bg-neon-cyan hover:text-gb-0 text-xs font-black uppercase tracking-wider gb-border-sm transition-colors"
+                >
+                  Talk to {CRADLE_SYS_META.name} [Space]
+                </motion.button>
+              ) : currentProp ? (
+                <motion.button
+                  key={`prop-${currentProp.id}`}
+                  type="button"
+                  initial={{ y: 6, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: 6, opacity: 0 }}
+                  onClick={() => focusInspectTarget(currentProp.id, true)}
+                  className="min-h-10 px-5 py-2 bg-gb-0 text-gb-3 border border-gb-3 hover:border-neon-cyan hover:text-neon-cyan text-xs font-black uppercase tracking-wider gb-border-sm transition-colors"
+                >
+                  Inspect {currentProp.name} [Space]
+                </motion.button>
+              ) : null}
             </AnimatePresence>
           </div>
 
